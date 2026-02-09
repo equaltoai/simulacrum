@@ -69,6 +69,16 @@ a {
 	color: var(--gr-semantic-foreground-tertiary);
 }
 
+.shell__actions {
+	display: flex;
+	align-items: center;
+	gap: var(--gr-spacing-scale-3);
+}
+
+.shell__actions .gr-button {
+	min-height: 2.25rem;
+}
+
 .shell__body {
 	display: grid;
 	grid-template-columns: 240px minmax(0, 1fr);
@@ -143,4 +153,3 @@ a {
 		padding: var(--gr-spacing-scale-6);
 	}
 }
-

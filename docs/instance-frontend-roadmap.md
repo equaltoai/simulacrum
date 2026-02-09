@@ -98,6 +98,8 @@ Acceptance:
 - Login works end-to-end using auth-ui and returns a usable access token.
 - User can log out and re-login without clearing browser storage manually.
 
+Done (2026-02-09): Implemented OAuth + PKCE redirect to `/auth/login` and a callback handler at `/l/auth/callback` that exchanges `code` at `/oauth/token`, stores the access token in memory + `sessionStorage`, and supports logout/token clearing (with auto app registration via `POST /api/v1/apps` when no client id is configured).
+
 ### M3 — API Client Layer
 
 Deliverables:

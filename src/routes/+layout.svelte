@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { page } from '$app/stores';
+	import { onMount } from 'svelte';
 
 	import '$lib/styles/greater/tokens.css';
 	import '$lib/styles/greater/primitives.css';
@@ -9,8 +10,10 @@
 
 	import { IdProvider } from '$lib/greater/utils';
 	import favicon from '$lib/assets/favicon.svg';
+	import { authSession, clearAuthSession, initAuthFromStorage, startOAuthLogin } from '$lib/auth/session';
 
 	let { children } = $props();
+	let isLoggingIn = $state(false);
 
 	const navItems = [
 		{ label: 'Home', href: `${base}/` },
@@ -28,6 +31,27 @@
 
 		return pathname === href;
 	}
+
+	onMount(() => {
+		initAuthFromStorage();
+	});
+
+	async function handleLogin() {
+		if (isLoggingIn) return;
+		isLoggingIn = true;
+
+		try {
+			await startOAuthLogin({
+				returnTo: `${$page.url.pathname}${$page.url.search}${$page.url.hash}`,
+			});
+		} finally {
+			isLoggingIn = false;
+		}
+	}
+
+	function handleLogout() {
+		clearAuthSession();
+	}
 </script>
 
 <svelte:head>
@@ -44,6 +68,18 @@
 					<span>Instance client</span>
 				</span>
 			</a>
+
+			<div class="shell__actions">
+				{#if $authSession}
+					<button type="button" class="gr-button gr-button--outline" onclick={handleLogout}>
+						Log out
+					</button>
+				{:else}
+					<button type="button" class="gr-button gr-button--solid" onclick={handleLogin} disabled={isLoggingIn}>
+						Sign in
+					</button>
+				{/if}
+			</div>
 		</header>
 
 		<div class="shell__body">
