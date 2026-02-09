@@ -152,6 +152,8 @@ Deliverables:
 Acceptance:
 - `dev.simulacrum.greater.website/l/` serves latest app after deploy.
 
+Done (2026-02-09): Switched static output to `dist/` and externalized SvelteKit’s inline bootstrap for CSP safety, added `docs/runbook.md` + a receipt helper script, and deployed to `dev` via `lesser client deploy` (incl. CloudFront invalidation for `/l` + `/l/*`).
+
 ## Known Risks
 
 - OAuth client registration must exist for the simulacrum app.
