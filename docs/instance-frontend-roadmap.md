@@ -36,6 +36,38 @@ Acceptance:
 - A quick curl check list exists for `/`, `/l/`, `/auth/login`, `/api/graphql`.
 - We can reach GraphQL and auth UI on the instance domain.
 
+Curl checklist:
+```bash
+# M0 quick checks (stage)
+BASE='https://dev.simulacrum.greater.website'
+API='https://api.dev.simulacrum.greater.website'
+WS='https://ws.dev.simulacrum.greater.website'
+
+# Instance root + API health
+curl -sS -D - -o /dev/null "$BASE/" | sed -n '1,20p'
+curl -sS -D - -o /dev/null "$BASE/setup/status" | sed -n '1,25p'
+
+# Client base path (note: /l (no trailing slash) currently 403; /l/ is 200)
+curl -sS -D - -o /dev/null "$BASE/l/" | sed -n '1,40p'
+curl -sS -D - -o /dev/null "$BASE/l" | sed -n '1,20p'
+
+# Auth UI (note: /auth and /auth/login currently 403; index.html is reachable)
+curl -sS -D - -o /dev/null "$BASE/auth/index.html" | sed -n '1,20p'
+curl -sS -D - -o /dev/null "$BASE/auth/login" | sed -n '1,25p'
+curl -sS -D - -o /dev/null "$BASE/auth/login/index.html" | sed -n '1,25p'
+
+# GraphQL (unauth should return 401 + "authentication required")
+curl -sS -D - -o /dev/null -X POST "$BASE/api/graphql" -H 'content-type: application/json' \
+  --data '{"query":"query { __typename }"}' | sed -n '1,25p'
+curl -sS -X POST "$BASE/api/graphql" -H 'content-type: application/json' \
+  --data '{"query":"query { __typename }"}'
+
+# WS (should require Upgrade; 426 is ok)
+curl -sS -D - -o /dev/null "$WS/" | sed -n '1,25p'
+```
+
+Done (2026-02-09): Added curl checklist + recorded current stage behavior (CSP present; GraphQL reachable w/ auth required; auth-ui assets exist under `/auth/*` but directory index rewrites appear missing).
+
 ### M1 — Client Shell (SvelteKit + Greater)
 
 Deliverables:
@@ -122,4 +154,3 @@ Acceptance:
 - Complete one milestone at a time.
 - Commit + push after each milestone completion.
 - Update this file with a short “Done” note per milestone as work progresses.
-
