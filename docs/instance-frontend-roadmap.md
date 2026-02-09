@@ -128,6 +128,8 @@ Acceptance:
 - Post → see it in timeline without full page reload.
 - Notifications render and mark-as-read works.
 
+Done (2026-02-09): Wired Home/Local/Public timelines, added compose via `createNote`, implemented profile views (self + `/profile/[acct]`), added notifications feed with mark-as-read, and added `/status/[id]` detail view with replies via REST context.
+
 ### M5 — Settings + Admin
 
 Deliverables:

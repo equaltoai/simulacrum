@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { base } from '$app/paths';
 	import type { Status } from '$lib/types';
 	import ContentRenderer from './ContentRenderer.svelte';
 
@@ -18,6 +19,14 @@
 		class: className = '',
 		children,
 	}: Props = $props();
+
+	function profileHref(acct: string) {
+		return `${base}/profile/${encodeURIComponent(acct)}`;
+	}
+
+	function statusHref(id: string) {
+		return `${base}/status/${encodeURIComponent(id)}`;
+	}
 </script>
 
 <div class={`timeline-virtualized ${className}`}>
@@ -27,8 +36,15 @@
 		{#each items as item (item.id)}
 			<article class="timeline-virtualized__item">
 				<header class="timeline-virtualized__meta">
-					<h4 class="timeline-virtualized__author">{item.account.displayName || item.account.username}</h4>
-					<span class="timeline-virtualized__handle">@{item.account.acct}</span>
+					<div class="timeline-virtualized__byline">
+						<a class="timeline-virtualized__author" href={profileHref(item.account.acct)}>
+							{item.account.displayName || item.account.username}
+						</a>
+						<a class="timeline-virtualized__handle" href={profileHref(item.account.acct)}>
+							@{item.account.acct}
+						</a>
+					</div>
+					<a class="timeline-virtualized__status-link" href={statusHref(item.id)}>Open</a>
 				</header>
 
 				<ContentRenderer

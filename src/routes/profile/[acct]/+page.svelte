@@ -1,9 +1,11 @@
 <script lang="ts">
+	import { base } from '$app/paths';
+	import { page } from '$app/stores';
 	import { api } from '$lib/api';
 	import { authSession } from '$lib/auth/session';
-	import type { Account, Status } from '$lib/types';
 	import ContentRenderer from '$lib/components/ContentRenderer.svelte';
 	import TimelineVirtualizedReactive from '$lib/components/TimelineVirtualizedReactive.svelte';
+	import type { Account, Status } from '$lib/types';
 
 	let account = $state<Account | null>(null);
 	let items = $state<Status[]>([]);
@@ -12,26 +14,32 @@
 
 	$effect(() => {
 		const token = $authSession?.accessToken ?? null;
+		const acct = $page.params.acct;
 
 		account = null;
 		items = [];
 		error = null;
 		isLoading = false;
 
-		if (!token) return;
+		if (!token || !acct) return;
 
 		const controller = new AbortController();
 		isLoading = true;
 
 		void (async () => {
 			try {
-				const viewer = await api.fetchViewer({ signal: controller.signal });
-				account = viewer;
-
-				const timeline = await api.fetchActorTimeline({
-					actorId: viewer.id,
+				const actor = await api.fetchActorByUsername({
+					username: acct,
 					signal: controller.signal,
 				});
+
+				account = actor;
+
+				const timeline = await api.fetchActorTimeline({
+					actorId: actor.id,
+					signal: controller.signal,
+				});
+
 				items = timeline.items;
 			} catch (err) {
 				if (err instanceof DOMException && err.name === 'AbortError') return;
@@ -46,14 +54,18 @@
 </script>
 
 <svelte:head>
-	<title>Profile • Simulacrum</title>
+	<title>{$page.params.acct} • Profile • Simulacrum</title>
 </svelte:head>
 
 <section class="page">
 	<h1>Profile</h1>
 
+	<p class="page__meta">
+		<a href={`${base}/profile`}>Back to your profile</a>
+	</p>
+
 	{#if !$authSession}
-		<p>Sign in to load your profile.</p>
+		<p>Sign in to load profiles.</p>
 	{:else}
 		{#if account}
 			<header class="profile-card">
