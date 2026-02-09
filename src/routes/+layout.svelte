@@ -21,6 +21,7 @@
 		{ label: 'Notifications', href: `${base}/notifications` },
 		{ label: 'Profile', href: `${base}/profile` },
 		{ label: 'Settings', href: `${base}/settings` },
+		{ label: 'Admin', href: `${base}/admin` },
 	] as const;
 
 	function isActive(href: string) {

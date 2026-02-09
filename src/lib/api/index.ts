@@ -3,9 +3,12 @@ import {
 	ClearNotificationsDocument,
 	CreateNoteDocument,
 	DismissNotificationDocument,
+	UpdateProfileDocument,
 	NotificationsDocument,
 	ObjectByIdDocument,
 	TimelineDocument,
+	UpdateUserPreferencesDocument,
+	UserPreferencesDocument,
 	type ActorByUsernameQuery,
 	type ActorByUsernameQueryVariables,
 	type ClearNotificationsMutation,
@@ -21,6 +24,12 @@ import {
 	type TimelineQuery,
 	type TimelineQueryVariables,
 	type TimelineType,
+	type UpdateProfileMutation,
+	type UpdateProfileMutationVariables,
+	type UpdateUserPreferencesMutation,
+	type UpdateUserPreferencesMutationVariables,
+	type UserPreferencesQuery,
+	type UserPreferencesQueryVariables,
 	type Visibility,
 } from '$lib/greater/adapters/graphql';
 import type { Account, Notification, Status } from '$lib/types';
@@ -404,6 +413,110 @@ export async function fetchStatusContext({
 	};
 }
 
+export async function updateProfile({
+	input,
+	signal,
+}: {
+	input: UpdateProfileMutationVariables['input'];
+	signal?: AbortSignal;
+}): Promise<Account> {
+	const token = requireAccessToken();
+
+	const variables: UpdateProfileMutationVariables = { input };
+
+	const data = await graphqlRequest<UpdateProfileMutation, UpdateProfileMutationVariables>({
+		document: UpdateProfileDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return toAccount({
+		...data.updateProfile,
+		createdAt: data.updateProfile.updatedAt,
+	});
+}
+
+export type UserPreferences = UserPreferencesQuery['userPreferences'];
+
+export async function fetchUserPreferences({
+	signal,
+}: {
+	signal?: AbortSignal;
+} = {}): Promise<UserPreferences> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<UserPreferencesQuery, UserPreferencesQueryVariables>({
+		document: UserPreferencesDocument,
+		variables: {},
+		token,
+		signal,
+	});
+
+	return data.userPreferences;
+}
+
+export async function updateUserPreferences({
+	input,
+	signal,
+}: {
+	input: UpdateUserPreferencesMutationVariables['input'];
+	signal?: AbortSignal;
+}): Promise<UserPreferences> {
+	const token = requireAccessToken();
+
+	const variables: UpdateUserPreferencesMutationVariables = { input };
+
+	const data = await graphqlRequest<UpdateUserPreferencesMutation, UpdateUserPreferencesMutationVariables>({
+		document: UpdateUserPreferencesDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.updateUserPreferences;
+}
+
+type AdminReviewer = {
+	id: string;
+	username: string;
+	role: string;
+	totalReviews: number;
+	accurateReviews: number;
+	accuracyRate: number;
+	lastReviewAt?: string | null;
+};
+
+const ADMIN_REVIEWERS_QUERY = `
+query AdminModerationReviewers {
+	adminModerationReviewers {
+		id
+		username
+		role
+		totalReviews
+		accurateReviews
+		accuracyRate
+		lastReviewAt
+	}
+}
+`;
+
+export async function fetchAdminModerationReviewers({
+	signal,
+}: {
+	signal?: AbortSignal;
+} = {}): Promise<AdminReviewer[]> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ adminModerationReviewers: AdminReviewer[] }>({
+		document: ADMIN_REVIEWERS_QUERY,
+		token,
+		signal,
+	});
+
+	return data.adminModerationReviewers;
+}
+
 export const api = {
 	graphqlRequest,
 	restRequest,
@@ -420,4 +533,8 @@ export const api = {
 	clearNotifications,
 	fetchStatusById,
 	fetchStatusContext,
+	updateProfile,
+	fetchUserPreferences,
+	updateUserPreferences,
+	fetchAdminModerationReviewers,
 } as const;

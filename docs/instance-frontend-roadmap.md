@@ -140,6 +140,8 @@ Deliverables:
 Acceptance:
 - Settings mutation persists and survives reload.
 
+Done (2026-02-09): Implemented Settings page with profile updates via `updateProfile` (display name/bio/avatar/header), preferences via `updateUserPreferences` (language/visibility/media/spoilers + reblog filters), and added an Admin route gated by API authorization.
+
 ### M6 — Deploy + Automation
 
 Deliverables:
