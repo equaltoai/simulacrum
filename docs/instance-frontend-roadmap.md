@@ -113,6 +113,8 @@ Acceptance:
 - Timeline page renders from real GraphQL data (viewer + home timeline).
 - A single API module is used across the app.
 
+Done (2026-02-09): Added `src/lib/api/` (GraphQL + REST clients + model adapters) and wired the Home route to fetch `viewer` and render the HOME timeline from `/api/graphql` once authenticated.
+
 ### M4 — Core Social Features
 
 Deliverables:

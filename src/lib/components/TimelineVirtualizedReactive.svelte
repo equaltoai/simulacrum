@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { Status } from '$lib/types';
+	import ContentRenderer from './ContentRenderer.svelte';
 
 	interface Props {
 		items?: Status[];
@@ -25,9 +26,17 @@
 	{:else if items.length > 0}
 		{#each items as item (item.id)}
 			<article class="timeline-virtualized__item">
-				<h4>{item.account.displayName || item.account.username}</h4>
-				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-				<div>{@html item.content}</div>
+				<header class="timeline-virtualized__meta">
+					<h4 class="timeline-virtualized__author">{item.account.displayName || item.account.username}</h4>
+					<span class="timeline-virtualized__handle">@{item.account.acct}</span>
+				</header>
+
+				<ContentRenderer
+					content={item.content}
+					spoilerText={item.spoilerText}
+					mentions={item.mentions ?? []}
+					tags={item.tags ?? []}
+				/>
 			</article>
 		{/each}
 	{:else}
