@@ -80,6 +80,8 @@ Acceptance:
 - `pnpm build` succeeds and the app runs under `/l/` locally.
 - All assets are requested from `/l/_assets/...`.
 
+Done (2026-02-09): Added the `/l` client shell layout + placeholder routes (Home/Explore/Notifications/Profile/Settings), set `kit.appDir = '_assets'`, and removed inline styles from `app.html`.
+
 ### M2 — OAuth Login (Auth UI)
 
 Deliverables:

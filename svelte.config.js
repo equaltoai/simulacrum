@@ -6,9 +6,11 @@ const config = {
 		adapter: adapter({
 			fallback: 'index.html'
 		}),
+		appDir: '_assets',
 		paths: {
 			base: '/l'
-		}
+		},
+		inlineStyleThreshold: 0
 	}
 };
 
