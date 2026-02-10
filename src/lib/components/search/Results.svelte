@@ -53,7 +53,7 @@
 	{:else if hasResults}
 		{#if showActors && searchState.results.actors.length > 0}
 			<section class="search-results__section">
-				<h3 class="search-results__heading">People</h3>
+				<h3 class="search-results__heading">Accounts</h3>
 				<div class="search-results__list">
 					{#each searchState.results.actors as actor (actor.id)}
 						<ActorResult {actor} />
@@ -64,7 +64,7 @@
 
 		{#if showNotes && searchState.results.notes.length > 0}
 			<section class="search-results__section">
-				<h3 class="search-results__heading">Posts</h3>
+				<h3 class="search-results__heading">Statuses</h3>
 				<div class="search-results__list">
 					{#each searchState.results.notes as note (note.id)}
 						<NoteResult {note} />
@@ -75,7 +75,7 @@
 
 		{#if showTags && searchState.results.tags.length > 0}
 			<section class="search-results__section">
-				<h3 class="search-results__heading">Tags</h3>
+				<h3 class="search-results__heading">Hashtags</h3>
 				<div class="search-results__tags">
 					{#each searchState.results.tags as tag (tag.name)}
 						<TagResult {tag} />

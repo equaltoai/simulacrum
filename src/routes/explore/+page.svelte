@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { api } from '$lib/api';
 	import { authSession } from '$lib/auth/session';
 	import type { Status } from '$lib/types';
 	import TimelineVirtualizedReactive from '$lib/components/TimelineVirtualizedReactive.svelte';
+	import type { FollowedHashtag, TrendingLink, TrendingStatus, TrendingTag } from '$lib/api';
 
 	type Feed = 'local' | 'public';
 	let feed = $state<Feed>('local');
@@ -11,9 +13,31 @@
 	let isLoading = $state(false);
 	let error = $state<string | null>(null);
 
+	let trends = $state<{ tags: TrendingTag[]; links: TrendingLink[]; statuses: TrendingStatus[] } | null>(
+		null
+	);
+	let followedHashtags = $state<FollowedHashtag[]>([]);
+	let trendsLoading = $state(false);
+	let trendsError = $state<string | null>(null);
+
 	function setFeed(next: Feed) {
 		if (feed === next) return;
 		feed = next;
+	}
+
+	function tagHref(name: string) {
+		return `${base}/tags/${encodeURIComponent(name)}`;
+	}
+
+	function statusHref(id: string) {
+		return `${base}/status/${encodeURIComponent(id)}`;
+	}
+
+	function stripHtml(html: string): string {
+		if (typeof document === 'undefined') return html.replace(/<[^>]*>/g, '').trim();
+		const container = document.createElement('div');
+		container.innerHTML = html;
+		return (container.textContent ?? '').trim();
 	}
 
 	$effect(() => {
@@ -45,6 +69,39 @@
 
 		return () => controller.abort();
 	});
+
+	$effect(() => {
+		const token = $authSession?.accessToken ?? null;
+
+		trends = null;
+		followedHashtags = [];
+		trendsError = null;
+		trendsLoading = false;
+
+		if (!token) return;
+
+		const controller = new AbortController();
+		trendsLoading = true;
+
+		void (async () => {
+			try {
+				const [nextTrends, nextFollowed] = await Promise.all([
+					api.fetchTrends({ limit: 10, signal: controller.signal }),
+					api.fetchFollowedHashtags({ first: 50, signal: controller.signal }),
+				]);
+
+				trends = nextTrends;
+				followedHashtags = nextFollowed;
+			} catch (err) {
+				if (err instanceof DOMException && err.name === 'AbortError') return;
+				trendsError = err instanceof Error ? err.message : String(err);
+			} finally {
+				trendsLoading = false;
+			}
+		})();
+
+		return () => controller.abort();
+	});
 </script>
 
 <svelte:head>
@@ -55,8 +112,89 @@
 	<h1>Explore</h1>
 
 	{#if !$authSession}
-		<p>Sign in to explore local and public timelines.</p>
+		<p>Sign in to explore timelines, trends, and followed hashtags.</p>
 	{:else}
+		<section class="page__notice explore-discovery">
+			<div class="explore-discovery__links">
+				<a class="gr-button gr-button--outline" href={`${base}/search`}>Search</a>
+				<a class="gr-button gr-button--outline" href={`${base}/lists`}>Lists</a>
+			</div>
+
+			{#if trendsError}
+				<div class="page__notice page__notice--error" role="alert">{trendsError}</div>
+			{:else if trendsLoading}
+				<p>Loading trends…</p>
+			{:else if trends}
+				<div class="explore-trends">
+					<div class="explore-trends__section">
+						<strong>Trending hashtags</strong>
+						{#if trends.tags.length === 0}
+							<p>No trending hashtags.</p>
+						{:else}
+							<ul class="explore-trends__list">
+								{#each trends.tags as tag (tag.name)}
+									<li>
+										<a href={tagHref(tag.name)}>#{tag.name}</a>
+										<span class="explore-trends__meta">{tag.uses} uses</span>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+					</div>
+
+					<div class="explore-trends__section">
+						<strong>Trending links</strong>
+						{#if trends.links.length === 0}
+							<p>No trending links.</p>
+						{:else}
+							<ul class="explore-trends__list">
+								{#each trends.links as link (link.url)}
+									<li>
+										<a href={link.url} target="_blank" rel="noreferrer noopener">{link.title}</a>
+										<span class="explore-trends__meta">{link.shares} shares</span>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+					</div>
+
+					<div class="explore-trends__section">
+						<strong>Trending posts</strong>
+						{#if trends.statuses.length === 0}
+							<p>No trending posts.</p>
+						{:else}
+							<ul class="explore-trends__list">
+								{#each trends.statuses as status (status.id)}
+									<li>
+										<a href={statusHref(status.id)}>{stripHtml(status.content).slice(0, 80) || 'View post'}</a>
+										<span class="explore-trends__meta">{status.engagements} engagements</span>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+					</div>
+				</div>
+			{/if}
+		</section>
+
+		<section class="page__notice">
+			<strong>Followed hashtags</strong>
+			{#if followedHashtags.length === 0}
+				<p>No followed hashtags yet.</p>
+			{:else}
+				<ul class="followed-hashtags">
+					{#each followedHashtags as tag (tag.name)}
+						<li>
+							<a href={tagHref(tag.name)}>#{tag.name}</a>
+							{#if tag.notificationSettings?.muted}
+								<span class="followed-hashtags__meta">muted</span>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</section>
+
 		<div class="tabs" role="tablist" aria-label="Explore timelines">
 			<button
 				type="button"

@@ -2,8 +2,16 @@ import { print } from 'graphql';
 
 import {
 	ActorByUsernameDocument,
+	AddAccountsToListDocument,
 	ClearNotificationsDocument,
+	CreateListDocument,
+	DeleteListDocument,
+	FollowedHashtagsDocument,
+	FollowHashtagDocument,
 	DismissNotificationDocument,
+	ListDocument,
+	ListsDocument,
+	MuteHashtagDocument,
 	UpdateProfileDocument,
 	NotificationsDocument,
 	ObjectFieldsFragmentDoc,
@@ -11,40 +19,67 @@ import {
 	UnlikeObjectDocument,
 	BookmarkObjectDocument,
 	UnbookmarkObjectDocument,
+	RemoveAccountsFromListDocument,
+	SearchDocument,
 	ShareObjectDocument,
 	UnshareObjectDocument,
 	PinObjectDocument,
 	UnpinObjectDocument,
 	DeleteObjectDocument,
+	UnfollowHashtagDocument,
+	UpdateListDocument,
 	UpdateUserPreferencesDocument,
 	UserPreferencesDocument,
 	type ActorByUsernameQuery,
 	type ActorByUsernameQueryVariables,
+	type AddAccountsToListMutation,
+	type AddAccountsToListMutationVariables,
 	type BookmarkObjectMutation,
 	type BookmarkObjectMutationVariables,
 	type ClearNotificationsMutation,
 	type ClearNotificationsMutationVariables,
+	type CreateListMutation,
+	type CreateListMutationVariables,
 	type CreateNoteMutationVariables,
+	type DeleteListMutation,
+	type DeleteListMutationVariables,
 	type DeleteObjectMutation,
 	type DeleteObjectMutationVariables,
 	type DismissNotificationMutation,
 	type DismissNotificationMutationVariables,
+	type FollowedHashtagsQuery,
+	type FollowedHashtagsQueryVariables,
+	type FollowHashtagMutation,
+	type FollowHashtagMutationVariables,
 	type LikeObjectMutation,
 	type LikeObjectMutationVariables,
+	type ListQuery,
+	type ListQueryVariables,
+	type ListsQuery,
+	type ListsQueryVariables,
+	type MuteHashtagMutation,
+	type MuteHashtagMutationVariables,
 	type NotificationsQuery,
 	type NotificationsQueryVariables,
 	type ObjectByIdQueryVariables,
 	type ObjectFieldsFragment,
+	type NotificationLevel,
+	type HashtagNotificationSettingsInput,
 	type PinObjectMutation,
 	type PinObjectMutationVariables,
 	type ShareObjectMutation,
 	type ShareObjectMutationVariables,
+	type RepliesPolicy,
+	type SearchQuery,
+	type SearchQueryVariables,
 	type TimelineQueryVariables,
 	type TimelineType,
 	type UnlikeObjectMutation,
 	type UnlikeObjectMutationVariables,
 	type UnbookmarkObjectMutation,
 	type UnbookmarkObjectMutationVariables,
+	type UnfollowHashtagMutation,
+	type UnfollowHashtagMutationVariables,
 	type UnpinObjectMutation,
 	type UnpinObjectMutationVariables,
 	type UnshareObjectMutation,
@@ -53,6 +88,10 @@ import {
 	UploadMediaDocument,
 	type UploadMediaMutation,
 	type UploadMediaMutationVariables,
+	type RemoveAccountsFromListMutation,
+	type RemoveAccountsFromListMutationVariables,
+	type UpdateListMutation,
+	type UpdateListMutationVariables,
 	type UpdateProfileMutation,
 	type UpdateProfileMutationVariables,
 	type UpdateStatusInput,
@@ -289,12 +328,18 @@ async function fetchTimeline({
 	first = 20,
 	after,
 	actorId,
+	hashtag,
+	listId,
+	mediaOnly,
 	signal,
 }: {
 	type: TimelineType;
 	first?: number;
 	after?: string;
 	actorId?: string;
+	hashtag?: string;
+	listId?: string;
+	mediaOnly?: boolean;
 	signal?: AbortSignal;
 }): Promise<{
 	items: Status[];
@@ -307,6 +352,9 @@ async function fetchTimeline({
 		first,
 		after,
 		actorId,
+		hashtag,
+		listId,
+		mediaOnly,
 	};
 
 	const data = await graphqlRequest<
@@ -376,6 +424,613 @@ export async function fetchPublicTimeline({
 	pageInfo: { endCursor: string | null; hasNextPage: boolean };
 }> {
 	return fetchTimeline({ type: 'PUBLIC', first, after, signal });
+}
+
+export async function fetchHashtagTimeline({
+	hashtag,
+	first = 20,
+	after,
+	signal,
+}: {
+	hashtag: string;
+	first?: number;
+	after?: string;
+	signal?: AbortSignal;
+}): Promise<{
+	items: Status[];
+	pageInfo: { endCursor: string | null; hasNextPage: boolean };
+}> {
+	return fetchTimeline({ type: 'HASHTAG', hashtag, first, after, signal });
+}
+
+export async function fetchListTimeline({
+	listId,
+	first = 20,
+	after,
+	signal,
+}: {
+	listId: string;
+	first?: number;
+	after?: string;
+	signal?: AbortSignal;
+}): Promise<{
+	items: Status[];
+	pageInfo: { endCursor: string | null; hasNextPage: boolean };
+}> {
+	return fetchTimeline({ type: 'LIST', listId, first, after, signal });
+}
+
+export type SearchResults = {
+	accounts: Account[];
+	statuses: Status[];
+	hashtags: Array<{ name: string; url: string }>;
+};
+
+export async function search({
+	query,
+	type,
+	first = 20,
+	after,
+	signal,
+}: {
+	query: string;
+	type?: string;
+	first?: number;
+	after?: string;
+	signal?: AbortSignal;
+}): Promise<SearchResults> {
+	const token = requireAccessToken();
+
+	const variables: SearchQueryVariables = {
+		query,
+		type,
+		first,
+		after,
+	};
+
+	const data = await graphqlRequest<SearchQuery, SearchQueryVariables>({
+		document: SearchDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return {
+		accounts: data.search.accounts.map((account) => toAccount(account)),
+		statuses: data.search.statuses.map((status) => toStatus(status)),
+		hashtags: data.search.hashtags.map((tag) => ({ name: tag.name, url: tag.url })),
+	};
+}
+
+export async function searchAccounts({
+	query,
+	first = 20,
+	after,
+	signal,
+}: {
+	query: string;
+	first?: number;
+	after?: string;
+	signal?: AbortSignal;
+}): Promise<Account[]> {
+	const results = await search({ query, first, after, signal });
+	return results.accounts;
+}
+
+export type TrendingTag = {
+	name: string;
+	url: string;
+	uses: number;
+	accounts: number;
+	history: number[];
+};
+
+export type TrendingLink = {
+	url: string;
+	title: string;
+	description: string;
+	authorName: string;
+	shares: number;
+	image: string;
+	type: string;
+};
+
+export type TrendingStatus = {
+	id: string;
+	url: string;
+	content: string;
+	engagements: number;
+	publishedAt: string;
+	authorId: string;
+};
+
+const TRENDS_QUERY = `
+query ExploreTrends($limit: Int) {
+	trendingTags(limit: $limit) {
+		name
+		url
+		uses
+		accounts
+		history
+	}
+	trendingLinks(limit: $limit) {
+		url
+		title
+		description
+		authorName
+		shares
+		image
+		type
+	}
+	trendingStatuses(limit: $limit) {
+		id
+		url
+		content
+		engagements
+		publishedAt
+		authorId
+	}
+}
+`;
+
+export async function fetchTrends({
+	limit = 10,
+	signal,
+}: {
+	limit?: number;
+	signal?: AbortSignal;
+} = {}): Promise<{ tags: TrendingTag[]; links: TrendingLink[]; statuses: TrendingStatus[] }> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		{
+			trendingTags: TrendingTag[];
+			trendingLinks: TrendingLink[];
+			trendingStatuses: TrendingStatus[];
+		},
+		{ limit?: number }
+	>({
+		document: TRENDS_QUERY,
+		variables: { limit },
+		token,
+		signal,
+	});
+
+	return {
+		tags: data.trendingTags ?? [],
+		links: data.trendingLinks ?? [],
+		statuses: data.trendingStatuses ?? [],
+	};
+}
+
+export type HashtagNotificationSettings = {
+	level: NotificationLevel;
+	muted: boolean;
+	mutedUntil?: string | null;
+};
+
+export type HashtagInfo = {
+	name: string;
+	displayName: string;
+	url: string;
+	isFollowing: boolean;
+	followedAt?: string | null;
+	followerCount: number;
+	postCount: number;
+	trendingScore: number;
+	notificationSettings?: HashtagNotificationSettings | null;
+	relatedHashtags: Array<{ name: string; url: string }>;
+};
+
+const HASHTAG_QUERY = `
+query HashtagPage($name: String!) {
+	hashtag(name: $name) {
+		name
+		displayName
+		url
+		isFollowing
+		followedAt
+		followerCount
+		postCount
+		trendingScore
+		notificationSettings {
+			level
+			muted
+			mutedUntil
+		}
+		relatedHashtags {
+			name
+			url
+		}
+	}
+}
+`;
+
+export async function fetchHashtag({
+	name,
+	signal,
+}: {
+	name: string;
+	signal?: AbortSignal;
+}): Promise<HashtagInfo | null> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ hashtag?: HashtagInfo | null }, { name: string }>({
+		document: HASHTAG_QUERY,
+		variables: { name },
+		token,
+		signal,
+	});
+
+	return data.hashtag ?? null;
+}
+
+export type FollowedHashtag = {
+	name: string;
+	url: string;
+	isFollowing: boolean;
+	followedAt?: string | null;
+	notificationSettings?: HashtagNotificationSettings | null;
+};
+
+export async function fetchFollowedHashtags({
+	first = 20,
+	after,
+	signal,
+}: {
+	first?: number;
+	after?: string;
+	signal?: AbortSignal;
+} = {}): Promise<FollowedHashtag[]> {
+	const token = requireAccessToken();
+
+	const variables: FollowedHashtagsQueryVariables = { first, after };
+
+	const data = await graphqlRequest<FollowedHashtagsQuery, FollowedHashtagsQueryVariables>({
+		document: FollowedHashtagsDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.followedHashtags.edges.map((edge) => ({
+		name: edge.node.name,
+		url: edge.node.url,
+		isFollowing: edge.node.isFollowing,
+		followedAt: edge.node.followedAt ?? null,
+		notificationSettings: edge.node.notificationSettings
+			? {
+					level: edge.node.notificationSettings.level,
+					muted: edge.node.notificationSettings.muted,
+					mutedUntil: edge.node.notificationSettings.mutedUntil ?? null,
+				}
+			: null,
+	}));
+}
+
+export async function followHashtag({
+	hashtag,
+	notifyLevel,
+	signal,
+}: {
+	hashtag: string;
+	notifyLevel?: NotificationLevel;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const variables: FollowHashtagMutationVariables = { hashtag, notifyLevel };
+
+	const data = await graphqlRequest<FollowHashtagMutation, FollowHashtagMutationVariables>({
+		document: FollowHashtagDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.followHashtag.success;
+}
+
+export async function unfollowHashtag({
+	hashtag,
+	signal,
+}: {
+	hashtag: string;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const variables: UnfollowHashtagMutationVariables = { hashtag };
+
+	const data = await graphqlRequest<UnfollowHashtagMutation, UnfollowHashtagMutationVariables>({
+		document: UnfollowHashtagDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.unfollowHashtag.success;
+}
+
+export async function muteHashtag({
+	hashtag,
+	until,
+	signal,
+}: {
+	hashtag: string;
+	until?: string;
+	signal?: AbortSignal;
+}): Promise<{ success: boolean; mutedUntil?: string | null }> {
+	const token = requireAccessToken();
+
+	const variables: MuteHashtagMutationVariables = { hashtag, until };
+
+	const data = await graphqlRequest<MuteHashtagMutation, MuteHashtagMutationVariables>({
+		document: MuteHashtagDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return { success: data.muteHashtag.success, mutedUntil: data.muteHashtag.mutedUntil ?? null };
+}
+
+const UPDATE_HASHTAG_NOTIFICATIONS_MUTATION = `
+mutation UpdateHashtagNotifications($hashtag: String!, $settings: HashtagNotificationSettingsInput!) {
+	updateHashtagNotifications(hashtag: $hashtag, settings: $settings) {
+		success
+		settings {
+			level
+			muted
+			mutedUntil
+		}
+	}
+}
+`;
+
+export async function updateHashtagNotifications({
+	hashtag,
+	settings,
+	signal,
+}: {
+	hashtag: string;
+	settings: HashtagNotificationSettingsInput;
+	signal?: AbortSignal;
+}): Promise<{ success: boolean; settings?: HashtagNotificationSettings | null }> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		{
+			updateHashtagNotifications: {
+				success: boolean;
+				settings: HashtagNotificationSettings;
+			};
+		},
+		{ hashtag: string; settings: HashtagNotificationSettingsInput }
+	>({
+		document: UPDATE_HASHTAG_NOTIFICATIONS_MUTATION,
+		variables: { hashtag, settings },
+		token,
+		signal,
+	});
+
+	return {
+		success: data.updateHashtagNotifications.success,
+		settings: data.updateHashtagNotifications.settings,
+	};
+}
+
+export async function unmuteHashtag({
+	hashtag,
+	level = 'ALL',
+	signal,
+}: {
+	hashtag: string;
+	level?: NotificationLevel;
+	signal?: AbortSignal;
+}): Promise<{ success: boolean; settings?: HashtagNotificationSettings | null }> {
+	return updateHashtagNotifications({
+		hashtag,
+		settings: {
+			level,
+			muted: false,
+			mutedUntil: null,
+		},
+		signal,
+	});
+}
+
+export type LesserList = {
+	id: string;
+	title: string;
+	repliesPolicy: RepliesPolicy;
+	exclusive: boolean;
+	accountCount: number;
+	createdAt: string;
+	updatedAt: string;
+	accounts?: Account[];
+};
+
+function toLesserListSummary(list: {
+	id: string;
+	title: string;
+	repliesPolicy: RepliesPolicy;
+	exclusive: boolean;
+	accountCount: number;
+	createdAt: string;
+	updatedAt: string;
+}): LesserList {
+	return {
+		id: list.id,
+		title: list.title,
+		repliesPolicy: list.repliesPolicy,
+		exclusive: list.exclusive,
+		accountCount: list.accountCount,
+		createdAt: list.createdAt,
+		updatedAt: list.updatedAt,
+	};
+}
+
+export async function fetchLists({
+	signal,
+}: {
+	signal?: AbortSignal;
+} = {}): Promise<LesserList[]> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<ListsQuery, ListsQueryVariables>({
+		document: ListsDocument,
+		token,
+		signal,
+	});
+
+	return data.lists.map((list) => toLesserListSummary(list));
+}
+
+export async function fetchList({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<LesserList | null> {
+	const token = requireAccessToken();
+
+	const variables: ListQueryVariables = { id };
+
+	const data = await graphqlRequest<ListQuery, ListQueryVariables>({
+		document: ListDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	if (!data.list) return null;
+
+	return {
+		...toLesserListSummary(data.list),
+		accounts: data.list.accounts.map((account) => toAccount(account)),
+	};
+}
+
+export async function createList({
+	input,
+	signal,
+}: {
+	input: CreateListMutationVariables['input'];
+	signal?: AbortSignal;
+}): Promise<LesserList> {
+	const token = requireAccessToken();
+
+	const variables: CreateListMutationVariables = { input };
+
+	const data = await graphqlRequest<CreateListMutation, CreateListMutationVariables>({
+		document: CreateListDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return toLesserListSummary(data.createList);
+}
+
+export async function updateList({
+	id,
+	input,
+	signal,
+}: {
+	id: string;
+	input: UpdateListMutationVariables['input'];
+	signal?: AbortSignal;
+}): Promise<LesserList> {
+	const token = requireAccessToken();
+
+	const variables: UpdateListMutationVariables = { id, input };
+
+	const data = await graphqlRequest<UpdateListMutation, UpdateListMutationVariables>({
+		document: UpdateListDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return toLesserListSummary(data.updateList);
+}
+
+export async function deleteList({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const variables: DeleteListMutationVariables = { id };
+
+	const data = await graphqlRequest<DeleteListMutation, DeleteListMutationVariables>({
+		document: DeleteListDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.deleteList;
+}
+
+export async function addAccountsToList({
+	id,
+	accountIds,
+	signal,
+}: {
+	id: string;
+	accountIds: string[];
+	signal?: AbortSignal;
+}): Promise<{ accountCount: number; accounts: Account[] }> {
+	const token = requireAccessToken();
+
+	const variables: AddAccountsToListMutationVariables = { id, accountIds };
+
+	const data = await graphqlRequest<AddAccountsToListMutation, AddAccountsToListMutationVariables>({
+		document: AddAccountsToListDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return {
+		accountCount: data.addAccountsToList.accountCount,
+		accounts: data.addAccountsToList.accounts.map((account) => toAccount(account)),
+	};
+}
+
+export async function removeAccountsFromList({
+	id,
+	accountIds,
+	signal,
+}: {
+	id: string;
+	accountIds: string[];
+	signal?: AbortSignal;
+}): Promise<{ accountCount: number; accounts: Account[] }> {
+	const token = requireAccessToken();
+
+	const variables: RemoveAccountsFromListMutationVariables = { id, accountIds };
+
+	const data = await graphqlRequest<
+		RemoveAccountsFromListMutation,
+		RemoveAccountsFromListMutationVariables
+	>({
+		document: RemoveAccountsFromListDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return {
+		accountCount: data.removeAccountsFromList.accountCount,
+		accounts: data.removeAccountsFromList.accounts.map((account) => toAccount(account)),
+	};
 }
 
 export async function createNote({
@@ -1123,6 +1778,25 @@ export const api = {
 	fetchHomeTimeline,
 	fetchLocalTimeline,
 	fetchPublicTimeline,
+	fetchHashtagTimeline,
+	fetchListTimeline,
+	search,
+	searchAccounts,
+	fetchTrends,
+	fetchHashtag,
+	fetchFollowedHashtags,
+	followHashtag,
+	unfollowHashtag,
+	muteHashtag,
+	updateHashtagNotifications,
+	unmuteHashtag,
+	fetchLists,
+	fetchList,
+	createList,
+	updateList,
+	deleteList,
+	addAccountsToList,
+	removeAccountsFromList,
 	createNote,
 	updateStatus,
 	uploadMedia,

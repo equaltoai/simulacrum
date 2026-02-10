@@ -19,9 +19,9 @@
 
 	const filters: Array<{ id: SearchResultType; label: string; getCount: () => number }> = [
 		{ id: 'all', label: 'All', getCount: () => searchState.results.total },
-		{ id: 'actors', label: 'People', getCount: () => searchState.results.actors.length },
-		{ id: 'notes', label: 'Posts', getCount: () => searchState.results.notes.length },
-		{ id: 'tags', label: 'Tags', getCount: () => searchState.results.tags.length },
+		{ id: 'actors', label: 'Accounts', getCount: () => searchState.results.actors.length },
+		{ id: 'notes', label: 'Statuses', getCount: () => searchState.results.notes.length },
+		{ id: 'tags', label: 'Hashtags', getCount: () => searchState.results.tags.length },
 	];
 </script>
 

@@ -17,7 +17,9 @@
 
 	const navItems = [
 		{ label: 'Home', href: `${base}/` },
+		{ label: 'Search', href: `${base}/search` },
 		{ label: 'Explore', href: `${base}/explore` },
+		{ label: 'Lists', href: `${base}/lists` },
 		{ label: 'Notifications', href: `${base}/notifications` },
 		{ label: 'Profile', href: `${base}/profile` },
 		{ label: 'Settings', href: `${base}/settings` },

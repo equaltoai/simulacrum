@@ -97,6 +97,8 @@ Acceptance:
 - Follow a hashtag and see it in followed hashtags list.
 - Create a list and view its timeline.
 
+Done (2026-02-10): Added a Search page with tabs (accounts/statuses/hashtags) backed by GraphQL `Query.search`, expanded Explore with GraphQL trends (tags/links/statuses) plus a followed-hashtags section, implemented hashtag pages with timelines + follow/unfollow + notification settings + mute, and added list CRUD + membership management with list timelines.
+
 ### M10 — Realtime + conversations + push
 
 Deliverables:
