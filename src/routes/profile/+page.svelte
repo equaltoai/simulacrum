@@ -90,7 +90,7 @@
 		{#if isLoading}
 			<div class="page__notice">Loading profile…</div>
 		{:else}
-			<TimelineVirtualizedReactive {items} />
+			<TimelineVirtualizedReactive {items} viewerId={account?.id ?? undefined} />
 		{/if}
 	{/if}
 </section>

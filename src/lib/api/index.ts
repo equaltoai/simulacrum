@@ -7,23 +7,50 @@ import {
 	NotificationsDocument,
 	ObjectByIdDocument,
 	TimelineDocument,
+	LikeObjectDocument,
+	UnlikeObjectDocument,
+	BookmarkObjectDocument,
+	UnbookmarkObjectDocument,
+	ShareObjectDocument,
+	UnshareObjectDocument,
+	PinObjectDocument,
+	UnpinObjectDocument,
+	DeleteObjectDocument,
 	UpdateUserPreferencesDocument,
 	UserPreferencesDocument,
 	type ActorByUsernameQuery,
 	type ActorByUsernameQueryVariables,
+	type BookmarkObjectMutation,
+	type BookmarkObjectMutationVariables,
 	type ClearNotificationsMutation,
 	type ClearNotificationsMutationVariables,
 	type CreateNoteMutation,
 	type CreateNoteMutationVariables,
+	type DeleteObjectMutation,
+	type DeleteObjectMutationVariables,
 	type DismissNotificationMutation,
 	type DismissNotificationMutationVariables,
+	type LikeObjectMutation,
+	type LikeObjectMutationVariables,
 	type NotificationsQuery,
 	type NotificationsQueryVariables,
 	type ObjectByIdQuery,
 	type ObjectByIdQueryVariables,
+	type PinObjectMutation,
+	type PinObjectMutationVariables,
+	type ShareObjectMutation,
+	type ShareObjectMutationVariables,
 	type TimelineQuery,
 	type TimelineQueryVariables,
 	type TimelineType,
+	type UnlikeObjectMutation,
+	type UnlikeObjectMutationVariables,
+	type UnbookmarkObjectMutation,
+	type UnbookmarkObjectMutationVariables,
+	type UnpinObjectMutation,
+	type UnpinObjectMutationVariables,
+	type UnshareObjectMutation,
+	type UnshareObjectMutationVariables,
 	type UpdateProfileMutation,
 	type UpdateProfileMutationVariables,
 	type UpdateUserPreferencesMutation,
@@ -198,10 +225,12 @@ export async function fetchPublicTimeline({
 export async function createNote({
 	content,
 	visibility = 'PUBLIC',
+	inReplyToId,
 	signal,
 }: {
 	content: string;
 	visibility?: Visibility;
+	inReplyToId?: string;
 	signal?: AbortSignal;
 }): Promise<Status> {
 	const token = requireAccessToken();
@@ -210,6 +239,7 @@ export async function createNote({
 		input: {
 			content,
 			visibility,
+			...(inReplyToId ? { inReplyToId } : {}),
 		},
 	};
 
@@ -221,6 +251,195 @@ export async function createNote({
 	});
 
 	return toStatus(data.createNote.object);
+}
+
+export async function likeObject({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<LikeObjectMutation['likeObject']> {
+	const token = requireAccessToken();
+
+	const variables: LikeObjectMutationVariables = { id };
+
+	const data = await graphqlRequest<LikeObjectMutation, LikeObjectMutationVariables>({
+		document: LikeObjectDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.likeObject;
+}
+
+export async function unlikeObject({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const variables: UnlikeObjectMutationVariables = { id };
+
+	const data = await graphqlRequest<UnlikeObjectMutation, UnlikeObjectMutationVariables>({
+		document: UnlikeObjectDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.unlikeObject;
+}
+
+export async function bookmarkObject({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<Status> {
+	const token = requireAccessToken();
+
+	const variables: BookmarkObjectMutationVariables = { id };
+
+	const data = await graphqlRequest<BookmarkObjectMutation, BookmarkObjectMutationVariables>({
+		document: BookmarkObjectDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return toStatus(data.bookmarkObject);
+}
+
+export async function unbookmarkObject({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const variables: UnbookmarkObjectMutationVariables = { id };
+
+	const data = await graphqlRequest<UnbookmarkObjectMutation, UnbookmarkObjectMutationVariables>({
+		document: UnbookmarkObjectDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.unbookmarkObject;
+}
+
+export async function shareObject({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<Status> {
+	const token = requireAccessToken();
+
+	const variables: ShareObjectMutationVariables = { id };
+
+	const data = await graphqlRequest<ShareObjectMutation, ShareObjectMutationVariables>({
+		document: ShareObjectDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return toStatus(data.shareObject);
+}
+
+export async function unshareObject({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<Status> {
+	const token = requireAccessToken();
+
+	const variables: UnshareObjectMutationVariables = { id };
+
+	const data = await graphqlRequest<UnshareObjectMutation, UnshareObjectMutationVariables>({
+		document: UnshareObjectDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return toStatus(data.unshareObject);
+}
+
+export async function pinObject({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<Status> {
+	const token = requireAccessToken();
+
+	const variables: PinObjectMutationVariables = { id };
+
+	const data = await graphqlRequest<PinObjectMutation, PinObjectMutationVariables>({
+		document: PinObjectDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return toStatus(data.pinObject);
+}
+
+export async function unpinObject({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const variables: UnpinObjectMutationVariables = { id };
+
+	const data = await graphqlRequest<UnpinObjectMutation, UnpinObjectMutationVariables>({
+		document: UnpinObjectDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.unpinObject;
+}
+
+export async function deleteObject({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const variables: DeleteObjectMutationVariables = { id };
+
+	const data = await graphqlRequest<DeleteObjectMutation, DeleteObjectMutationVariables>({
+		document: DeleteObjectDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.deleteObject;
 }
 
 export async function fetchActorByUsername({
@@ -525,6 +744,15 @@ export const api = {
 	fetchLocalTimeline,
 	fetchPublicTimeline,
 	createNote,
+	likeObject,
+	unlikeObject,
+	bookmarkObject,
+	unbookmarkObject,
+	shareObject,
+	unshareObject,
+	pinObject,
+	unpinObject,
+	deleteObject,
 	fetchActorByUsername,
 	fetchActorTimeline,
 	fetchObjectById,

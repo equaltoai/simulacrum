@@ -59,6 +59,8 @@ Notes:
   - GraphQL for lists + REST hydration per-status, or
   - Switch timelines to REST for parity and keep GraphQL for mutations.
 
+Done (2026-02-10): Added action UI (reply/boost/favorite/bookmark/pin/share/delete) to timelines + status detail using GraphQL mutations with optimistic count/state updates. First-render action state on GraphQL timelines is still limited pending Lesser viewer interaction fields (lesser#62) and greater-components fragment coverage for `Object.boosted`/`contentHash` (greater-components#168).
+
 ### M8 — Composer parity (media/polls/CW/visibility/emoji)
 
 Deliverables:

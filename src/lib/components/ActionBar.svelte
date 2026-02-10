@@ -4,6 +4,9 @@
 		ReplyIcon as Reply,
 		RepeatIcon as Boost,
 		FavoriteIcon as Favorite,
+		BookmarkIcon as Bookmark,
+		MapPinIcon as Pin,
+		Trash2Icon as Trash,
 		ShareIcon as Share,
 		RepeatIcon as Unboost,
 		UnfavoriteIcon as Unfavorite,
@@ -18,17 +21,21 @@
 	}
 
 	interface ActionStates {
-		boosted?: boolean;
-		favorited?: boolean;
-		bookmarked?: boolean;
+		boosted?: boolean | null;
+		favorited?: boolean | null;
+		bookmarked?: boolean | null;
+		pinned?: boolean | null;
 	}
 
 	interface ActionHandlers {
 		onReply?: () => Promise<void> | void;
 		onBoost?: () => Promise<void> | void;
 		onFavorite?: () => Promise<void> | void;
+		onBookmark?: () => Promise<void> | void;
+		onPin?: () => Promise<void> | void;
 		onShare?: () => Promise<void> | void;
 		onQuote?: () => Promise<void> | void;
+		onDelete?: () => Promise<void> | void;
 	}
 
 	interface Props {
@@ -94,13 +101,22 @@
 	let boostLoading = $state(false);
 	let quoteLoading = $state(false);
 	let favoriteLoading = $state(false);
+	let bookmarkLoading = $state(false);
+	let pinLoading = $state(false);
 	let shareLoading = $state(false);
+	let deleteLoading = $state(false);
 
 	const quotesCount = $derived(counts.quotes ?? 0);
 
 	// Derived state for action states
-	const isBoosted = $derived(states.boosted ?? false);
-	const isFavorited = $derived(states.favorited ?? false);
+	const isBoosted = $derived(states.boosted === true);
+	const isFavorited = $derived(states.favorited === true);
+	const isBookmarked = $derived(states.bookmarked === true);
+	const isPinned = $derived(states.pinned === true);
+
+	function ariaPressed(value: boolean | null | undefined): boolean | undefined {
+		return typeof value === 'boolean' ? value : undefined;
+	}
 
 	// Format count display (e.g., 1K for 1000)
 	function formatCount(count: number): string {
@@ -150,6 +166,32 @@
 		}
 	}
 
+	async function handleBookmark() {
+		if (readonly || bookmarkLoading || !handlers.onBookmark) return;
+
+		bookmarkLoading = true;
+		try {
+			await handlers.onBookmark();
+		} catch (error) {
+			console.error('Bookmark action failed:', error);
+		} finally {
+			bookmarkLoading = false;
+		}
+	}
+
+	async function handlePin() {
+		if (readonly || pinLoading || !handlers.onPin) return;
+
+		pinLoading = true;
+		try {
+			await handlers.onPin();
+		} catch (error) {
+			console.error('Pin action failed:', error);
+		} finally {
+			pinLoading = false;
+		}
+	}
+
 	async function handleShare() {
 		if (readonly || shareLoading) return;
 
@@ -177,6 +219,19 @@
 			console.error('Share action failed:', error);
 		} finally {
 			shareLoading = false;
+		}
+	}
+
+	async function handleDelete() {
+		if (readonly || deleteLoading || !handlers.onDelete) return;
+
+		deleteLoading = true;
+		try {
+			await handlers.onDelete();
+		} catch (error) {
+			console.error('Delete action failed:', error);
+		} finally {
+			deleteLoading = false;
 		}
 	}
 
@@ -231,7 +286,7 @@
 			: counts.boosts > 0
 				? `Boost this post. ${counts.boosts} boosts`
 				: 'Boost this post'}
-		aria-pressed={isBoosted}
+		aria-pressed={ariaPressed(states.boosted)}
 		id={`${idPrefix}-boost`}
 	>
 		{#snippet prefix()}
@@ -302,7 +357,7 @@
 			: counts.favorites > 0
 				? `Add to favorites. ${counts.favorites} favorites`
 				: 'Add to favorites'}
-		aria-pressed={isFavorited}
+		aria-pressed={ariaPressed(states.favorited)}
 		id={`${idPrefix}-favorite`}
 	>
 		{#snippet prefix()}
@@ -320,6 +375,44 @@
 		{/if}
 	</Button>
 
+	<!-- Bookmark Button -->
+	{#if handlers.onBookmark}
+		<Button
+			variant="ghost"
+			{size}
+			disabled={readonly || bookmarkLoading}
+			loading={bookmarkLoading}
+			onclick={handleBookmark}
+			class={`gr-action-bar__button gr-action-bar__button--bookmark${isBookmarked ? ' gr-action-bar__button--active' : ''}`}
+			aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark this post'}
+			aria-pressed={ariaPressed(states.bookmarked)}
+			id={`${idPrefix}-bookmark`}
+		>
+			{#snippet prefix()}
+				<Bookmark size={size === 'sm' ? 16 : size === 'md' ? 18 : 20} />
+			{/snippet}
+		</Button>
+	{/if}
+
+	<!-- Pin Button -->
+	{#if handlers.onPin}
+		<Button
+			variant="ghost"
+			{size}
+			disabled={readonly || pinLoading}
+			loading={pinLoading}
+			onclick={handlePin}
+			class={`gr-action-bar__button gr-action-bar__button--pin${isPinned ? ' gr-action-bar__button--active' : ''}`}
+			aria-label={isPinned ? 'Unpin this post' : 'Pin this post'}
+			aria-pressed={ariaPressed(states.pinned)}
+			id={`${idPrefix}-pin`}
+		>
+			{#snippet prefix()}
+				<Pin size={size === 'sm' ? 16 : size === 'md' ? 18 : 20} />
+			{/snippet}
+		</Button>
+	{/if}
+
 	<!-- Share Button -->
 	<Button
 		variant="ghost"
@@ -335,6 +428,24 @@
 			<Share size={size === 'sm' ? 16 : size === 'md' ? 18 : 20} />
 		{/snippet}
 	</Button>
+
+	<!-- Delete Button -->
+	{#if handlers.onDelete}
+		<Button
+			variant="ghost"
+			{size}
+			disabled={readonly || deleteLoading}
+			loading={deleteLoading}
+			onclick={handleDelete}
+			class="gr-action-bar__button gr-action-bar__button--delete"
+			aria-label="Delete this post"
+			id={`${idPrefix}-delete`}
+		>
+			{#snippet prefix()}
+				<Trash size={size === 'sm' ? 16 : size === 'md' ? 18 : 20} />
+			{/snippet}
+		</Button>
+	{/if}
 
 	<!-- Extensions slot for additional actions -->
 	{#if extensions}

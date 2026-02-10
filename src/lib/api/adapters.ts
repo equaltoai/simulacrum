@@ -158,6 +158,7 @@ export function toStatus(object: ObjectLike, depth = 0): Status {
 			: undefined;
 
 	const editedAt = object.updatedAt !== object.createdAt ? object.updatedAt : undefined;
+	const reblogged = 'boosted' in object && typeof object.boosted === 'boolean' ? object.boosted : undefined;
 
 	return {
 		id: object.id,
@@ -173,6 +174,7 @@ export function toStatus(object: ObjectLike, depth = 0): Status {
 		repliesCount: object.repliesCount,
 		reblogsCount: object.sharesCount,
 		favouritesCount: object.likesCount,
+		reblogged,
 		reblog,
 		mediaAttachments: object.attachments.map(toMediaAttachment),
 		mentions: object.mentions.map(toMention),
