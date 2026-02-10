@@ -3,7 +3,6 @@ import { print } from 'graphql';
 import {
 	ActorByUsernameDocument,
 	ClearNotificationsDocument,
-	CreateNoteDocument,
 	DismissNotificationDocument,
 	UpdateProfileDocument,
 	NotificationsDocument,
@@ -25,7 +24,6 @@ import {
 	type BookmarkObjectMutationVariables,
 	type ClearNotificationsMutation,
 	type ClearNotificationsMutationVariables,
-	type CreateNoteMutation,
 	type CreateNoteMutationVariables,
 	type DeleteObjectMutation,
 	type DeleteObjectMutationVariables,
@@ -51,13 +49,19 @@ import {
 	type UnpinObjectMutationVariables,
 	type UnshareObjectMutation,
 	type UnshareObjectMutationVariables,
+	type UploadMediaInput,
+	UploadMediaDocument,
+	type UploadMediaMutation,
+	type UploadMediaMutationVariables,
 	type UpdateProfileMutation,
 	type UpdateProfileMutationVariables,
+	type UpdateStatusInput,
 	type UpdateUserPreferencesMutation,
 	type UpdateUserPreferencesMutationVariables,
 	type UserPreferencesQuery,
 	type UserPreferencesQueryVariables,
 	type Visibility,
+	type Poll as GraphQLPoll,
 } from '$lib/greater/adapters/graphql';
 import type { Account, Notification, Status } from '$lib/types';
 import { getAccessToken } from './auth';
@@ -128,6 +132,29 @@ type ObjectWithViewerState = ObjectFieldsFragment &
 
 const OBJECT_FIELDS_FRAGMENT = print(ObjectFieldsFragmentDoc);
 
+type ObjectWithViewerStateAndPoll = ObjectWithViewerState & {
+	poll?: GraphQLPoll | null;
+	boostedObject?: (NonNullable<ObjectWithViewerState['boostedObject']> & { poll?: GraphQLPoll | null }) | null;
+};
+
+const POLL_FIELDS = `
+poll {
+	id
+	expiresAt
+	expired
+	multiple
+	voted
+	ownVotes
+	votersCount
+	votesCount
+	hideTotals
+	options {
+		title
+		votesCount
+	}
+}
+`;
+
 const TIMELINE_WITH_VIEWER_STATE_QUERY = `
 ${OBJECT_FIELDS_FRAGMENT}
 query TimelineWithViewerState(
@@ -144,10 +171,12 @@ query TimelineWithViewerState(
 			cursor
 			node {
 				...ObjectFields
+				${POLL_FIELDS}
 				viewerFavourited
 				viewerBookmarked
 				viewerPinned
 				boostedObject {
+					${POLL_FIELDS}
 					viewerFavourited
 					viewerBookmarked
 					viewerPinned
@@ -168,10 +197,12 @@ ${OBJECT_FIELDS_FRAGMENT}
 query ObjectByIdWithViewerState($id: ID!) {
 	object(id: $id) {
 		...ObjectFields
+		${POLL_FIELDS}
 		viewerFavourited
 		viewerBookmarked
 		viewerPinned
 		boostedObject {
+			${POLL_FIELDS}
 			viewerFavourited
 			viewerBookmarked
 			viewerPinned
@@ -186,10 +217,12 @@ query ThreadContextWithPosts($noteId: ID!) {
 	threadContext(noteId: $noteId) {
 		rootNote {
 			...ObjectFields
+			${POLL_FIELDS}
 			viewerFavourited
 			viewerBookmarked
 			viewerPinned
 			boostedObject {
+				${POLL_FIELDS}
 				viewerFavourited
 				viewerBookmarked
 				viewerPinned
@@ -197,10 +230,12 @@ query ThreadContextWithPosts($noteId: ID!) {
 		}
 		ancestors {
 			...ObjectFields
+			${POLL_FIELDS}
 			viewerFavourited
 			viewerBookmarked
 			viewerPinned
 			boostedObject {
+				${POLL_FIELDS}
 				viewerFavourited
 				viewerBookmarked
 				viewerPinned
@@ -208,10 +243,12 @@ query ThreadContextWithPosts($noteId: ID!) {
 		}
 		descendants {
 			...ObjectFields
+			${POLL_FIELDS}
 			viewerFavourited
 			viewerBookmarked
 			viewerPinned
 			boostedObject {
+				${POLL_FIELDS}
 				viewerFavourited
 				viewerBookmarked
 				viewerPinned
@@ -275,7 +312,7 @@ async function fetchTimeline({
 	const data = await graphqlRequest<
 		{
 			timeline: {
-				edges: Array<{ cursor: string; node: ObjectWithViewerState }>;
+				edges: Array<{ cursor: string; node: ObjectWithViewerStateAndPoll }>;
 				pageInfo: { endCursor?: string | null; hasNextPage: boolean };
 			};
 		},
@@ -345,11 +382,21 @@ export async function createNote({
 	content,
 	visibility = 'PUBLIC',
 	inReplyToId,
+	quoteId,
+	poll,
+	sensitive,
+	spoilerText,
+	attachmentIds,
 	signal,
 }: {
 	content: string;
 	visibility?: Visibility;
 	inReplyToId?: string;
+	quoteId?: string;
+	poll?: CreateNoteMutationVariables['input']['poll'];
+	sensitive?: boolean;
+	spoilerText?: string;
+	attachmentIds?: string[];
 	signal?: AbortSignal;
 }): Promise<Status> {
 	const token = requireAccessToken();
@@ -359,17 +406,194 @@ export async function createNote({
 			content,
 			visibility,
 			...(inReplyToId ? { inReplyToId } : {}),
+			...(quoteId ? { quoteId } : {}),
+			...(poll ? { poll } : {}),
+			...(typeof sensitive === 'boolean' ? { sensitive } : {}),
+			...(typeof spoilerText === 'string' ? { spoilerText } : {}),
+			...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
 		},
 	};
 
-	const data = await graphqlRequest<CreateNoteMutation, CreateNoteMutationVariables>({
-		document: CreateNoteDocument,
+	const data = await graphqlRequest<
+		{ createNote: { object: ObjectWithViewerStateAndPoll } },
+		CreateNoteMutationVariables
+	>({
+		document: `
+${OBJECT_FIELDS_FRAGMENT}
+mutation CreateNoteWithExtras($input: CreateNoteInput!) {
+	createNote(input: $input) {
+		object {
+			...ObjectFields
+			${POLL_FIELDS}
+			viewerFavourited
+			viewerBookmarked
+			viewerPinned
+			boostedObject {
+				${POLL_FIELDS}
+				viewerFavourited
+				viewerBookmarked
+				viewerPinned
+			}
+		}
+	}
+}
+`,
 		variables,
 		token,
 		signal,
 	});
 
 	return toStatus(data.createNote.object);
+}
+
+export async function updateStatus({
+	id,
+	input,
+	signal,
+}: {
+	id: string;
+	input: UpdateStatusInput;
+	signal?: AbortSignal;
+}): Promise<Status> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		{ updateStatus: ObjectWithViewerStateAndPoll },
+		{ id: string; input: UpdateStatusInput }
+	>({
+		document: `
+${OBJECT_FIELDS_FRAGMENT}
+mutation UpdateStatusWithExtras($id: ID!, $input: UpdateStatusInput!) {
+	updateStatus(id: $id, input: $input) {
+		...ObjectFields
+		${POLL_FIELDS}
+		viewerFavourited
+		viewerBookmarked
+		viewerPinned
+		boostedObject {
+			${POLL_FIELDS}
+			viewerFavourited
+			viewerBookmarked
+			viewerPinned
+		}
+	}
+}
+`,
+		variables: { id, input },
+		token,
+		signal,
+	});
+
+	return toStatus(data.updateStatus);
+}
+
+export async function uploadMedia({
+	input,
+	signal,
+}: {
+	input: UploadMediaInput;
+	signal?: AbortSignal;
+}): Promise<UploadMediaMutation['uploadMedia']> {
+	const token = requireAccessToken();
+
+	const { file, ...rest } = input;
+
+	const inferredFilename =
+		(typeof rest.filename === 'string' && rest.filename.trim().length > 0 ? rest.filename : undefined) ??
+		(typeof File !== 'undefined' && file instanceof File ? file.name : undefined) ??
+		'upload.bin';
+
+	const operations: { query: string; variables: UploadMediaMutationVariables } = {
+		query: print(UploadMediaDocument),
+		variables: {
+			input: {
+				...rest,
+				filename:
+					rest.filename ??
+					(typeof File !== 'undefined' && file instanceof File ? file.name : undefined),
+				sensitive: rest.sensitive ?? false,
+				spoilerText: rest.spoilerText ?? null,
+				mediaType: rest.mediaType ?? null,
+				file: null,
+			} as unknown as UploadMediaMutationVariables['input'],
+		},
+	};
+
+	const formData = new FormData();
+	formData.append('operations', JSON.stringify(operations));
+	formData.append('map', JSON.stringify({ 0: ['variables.input.file'] }));
+	formData.append('0', file as unknown as Blob, inferredFilename);
+
+	const response = await fetch('/api/graphql', {
+		method: 'POST',
+		headers: {
+			accept: 'application/json',
+			authorization: `Bearer ${token}`,
+		},
+		body: formData,
+		signal,
+	});
+
+	const payload = (await response.json().catch(() => null)) as {
+		data?: UploadMediaMutation;
+		errors?: Array<{ message: string }>;
+	} | null;
+
+	if (!response.ok) {
+		const message = payload?.errors?.[0]?.message ?? `Upload failed (${response.status})`;
+		throw new Error(message);
+	}
+
+	if (payload?.errors?.length) {
+		throw new Error(payload.errors.map((error) => error.message).join('; '));
+	}
+
+	const uploadPayload = payload?.data?.uploadMedia;
+	if (!uploadPayload) {
+		throw new Error('Upload media mutation returned no payload.');
+	}
+
+	return uploadPayload;
+}
+
+type CustomEmoji = {
+	id: string;
+	shortcode: string;
+	url: string;
+	staticUrl: string;
+	category?: string | null;
+	visibleInPicker: boolean;
+	domain?: string | null;
+};
+
+const CUSTOM_EMOJIS_QUERY = `
+query CustomEmojis {
+	customEmojis {
+		id
+		shortcode
+		url
+		staticUrl
+		category
+		visibleInPicker
+		domain
+	}
+}
+`;
+
+export async function fetchCustomEmojis({
+	signal,
+}: {
+	signal?: AbortSignal;
+} = {}): Promise<CustomEmoji[]> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ customEmojis: CustomEmoji[] }>({
+		document: CUSTOM_EMOJIS_QUERY,
+		token,
+		signal,
+	});
+
+	return data.customEmojis;
 }
 
 export async function likeObject({
@@ -615,7 +839,7 @@ export async function fetchObjectById({
 	const variables: ObjectByIdQueryVariables = { id };
 
 	const data = await graphqlRequest<
-		{ object?: ObjectWithViewerState | null },
+		{ object?: ObjectWithViewerStateAndPoll | null },
 		ObjectByIdQueryVariables
 	>({
 		document: OBJECT_BY_ID_WITH_VIEWER_STATE_QUERY,
@@ -639,9 +863,9 @@ export async function fetchThreadContext({
 	const data = await graphqlRequest<
 		{
 			threadContext?: {
-				rootNote: ObjectWithViewerState;
-				ancestors: ObjectWithViewerState[];
-				descendants: ObjectWithViewerState[];
+				rootNote: ObjectWithViewerStateAndPoll;
+				ancestors: ObjectWithViewerStateAndPoll[];
+				descendants: ObjectWithViewerStateAndPoll[];
 			} | null;
 		},
 		{ noteId: string }
@@ -900,6 +1124,9 @@ export const api = {
 	fetchLocalTimeline,
 	fetchPublicTimeline,
 	createNote,
+	updateStatus,
+	uploadMedia,
+	fetchCustomEmojis,
 	likeObject,
 	unlikeObject,
 	bookmarkObject,

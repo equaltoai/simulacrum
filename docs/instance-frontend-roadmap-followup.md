@@ -77,6 +77,8 @@ Acceptance:
 - Create a post with media, a post with a poll, and a CW/sensitive post.
 - Reply and quote compose share the same composer surface.
 
+Done (2026-02-10): Implemented a shared `Composer` surface used for posting, replying, quoting, and editing. Added GraphQL `uploadMedia` integration for attachments, poll drafting via `createNote(poll)`, CW/sensitive/spoiler support, visibility selection, and a custom emoji picker backed by GraphQL `customEmojis`. Updated timelines and status threads to render media attachments, polls, and quote previews.
+
 ### M9 — Discovery: search, trends, hashtags, lists
 
 Deliverables:

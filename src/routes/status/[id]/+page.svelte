@@ -4,7 +4,11 @@
 	import { api } from '$lib/api';
 	import { authSession } from '$lib/auth/session';
 	import ActionBar from '$lib/components/ActionBar.svelte';
+	import Composer from '$lib/components/Composer.svelte';
 	import ContentRenderer from '$lib/components/ContentRenderer.svelte';
+	import MediaAttachments from '$lib/components/MediaAttachments.svelte';
+	import PollCard from '$lib/components/PollCard.svelte';
+	import QuotePreview from '$lib/components/QuotePreview.svelte';
 	import type { Status } from '$lib/types';
 
 	let viewerId = $state<string | null>(null);
@@ -14,10 +18,7 @@
 	let isLoading = $state(false);
 	let error = $state<string | null>(null);
 
-	let isReplying = $state(false);
-	let replyDraft = $state('');
-	let replyError = $state<string | null>(null);
-	let replyTextarea = $state<HTMLTextAreaElement | null>(null);
+	let composerMode = $state<'reply' | 'quote' | 'edit' | null>(null);
 
 	function statusHref(id: string) {
 		return `${base}/status/${encodeURIComponent(id)}`;
@@ -33,12 +34,25 @@
 		return `action-${encodeURIComponent(id)}`;
 	}
 
-	function focusReply() {
-		replyTextarea?.focus();
-	}
-
 	function profileHref(acct: string) {
 		return `${base}/profile/${encodeURIComponent(acct)}`;
+	}
+
+	function openComposer(mode: 'reply' | 'quote' | 'edit') {
+		composerMode = mode;
+	}
+
+	function closeComposer() {
+		composerMode = null;
+	}
+
+	function htmlToText(html: string): string {
+		if (typeof window === 'undefined') {
+			return html.replace(/<[^>]*>/g, '').trim();
+		}
+		const div = document.createElement('div');
+		div.innerHTML = html;
+		return (div.textContent ?? '').trim();
 	}
 
 	$effect(() => {
@@ -51,9 +65,7 @@
 		descendants = [];
 		error = null;
 		isLoading = false;
-		isReplying = false;
-		replyDraft = '';
-		replyError = null;
+		composerMode = null;
 
 		if (!token || !id) return;
 
@@ -219,28 +231,6 @@
 		}
 	}
 
-	async function handleReplySubmit(event: SubmitEvent) {
-		event.preventDefault();
-		if (!status) return;
-
-		const content = replyDraft.trim();
-		if (!content) return;
-
-		isReplying = true;
-		replyError = null;
-
-		try {
-			const reply = await api.createNote({ content, inReplyToId: status.id });
-			replyDraft = '';
-			isReplying = false;
-
-			status = { ...status, repliesCount: Math.max(0, status.repliesCount + 1) };
-			descendants = [reply, ...descendants];
-		} catch (err) {
-			replyError = err instanceof Error ? err.message : String(err);
-			isReplying = false;
-		}
-	}
 </script>
 
 <svelte:head>
@@ -276,6 +266,16 @@
 								<span class="status-card__handle">@{item.account.acct}</span>
 							</header>
 							<ContentRenderer content={item.content} spoilerText={item.spoilerText} />
+							<QuotePreview quoteUrl={item.quoteUrl} quoteContext={item.quoteContext} />
+							{#if item.mediaAttachments && item.mediaAttachments.length > 0}
+								<MediaAttachments
+									attachments={item.mediaAttachments}
+									sensitive={item.sensitive ?? false}
+								/>
+							{/if}
+							{#if item.poll}
+								<PollCard poll={item.poll} />
+							{/if}
 						</article>
 					{/each}
 				</div>
@@ -294,6 +294,13 @@
 					mentions={status.mentions ?? []}
 					tags={status.tags ?? []}
 				/>
+				<QuotePreview quoteUrl={status.quoteUrl} quoteContext={status.quoteContext} />
+				{#if status.mediaAttachments && status.mediaAttachments.length > 0}
+					<MediaAttachments attachments={status.mediaAttachments} sensitive={status.sensitive ?? false} />
+				{/if}
+				{#if status.poll}
+					<PollCard poll={status.poll} />
+				{/if}
 
 				<ActionBar
 					counts={{
@@ -309,8 +316,9 @@
 						pinned: status.pinned ?? null,
 					}}
 					handlers={{
-						onReply: focusReply,
+						onReply: () => openComposer('reply'),
 						onBoost: toggleBoost,
+						onQuote: () => openComposer('quote'),
 						onFavorite: toggleFavorite,
 						onBookmark: toggleBookmark,
 						onPin: togglePin,
@@ -319,33 +327,54 @@
 					shareUrl={shareUrl(status.id)}
 					shareTitle={`Post by ${status.account.displayName || status.account.username}`}
 					idPrefix={idPrefix(status.id)}
-				/>
-
-				<form class="compose" onsubmit={handleReplySubmit}>
-					<label class="compose__label" for="reply-content">Reply</label>
-					<textarea
-						id="reply-content"
-						class="compose__input"
-						placeholder="Write a reply…"
-						autocomplete="off"
-						rows={3}
-						bind:this={replyTextarea}
-						bind:value={replyDraft}
-						disabled={isReplying}
-					></textarea>
-					<div class="compose__actions">
-						{#if replyError}
-							<span class="compose__error" role="alert">{replyError}</span>
+				>
+					{#snippet extensions()}
+						{#if status && viewerId && status.account.id === viewerId}
+							<button
+								type="button"
+								class="gr-button gr-button--outline"
+								onclick={() => openComposer('edit')}
+							>
+								Edit
+							</button>
 						{/if}
-						<button
-							type="submit"
-							class="gr-button gr-button--solid"
-							disabled={isReplying || replyDraft.trim().length === 0}
-						>
-							{isReplying ? 'Posting…' : 'Reply'}
-						</button>
-					</div>
-				</form>
+					{/snippet}
+				</ActionBar>
+
+				{#if composerMode === 'reply'}
+					<Composer
+						mode="reply"
+						inReplyToId={status.id}
+						onCancel={closeComposer}
+						onSubmitted={(reply) => {
+							if (!status) return;
+							status = { ...status, repliesCount: Math.max(0, status.repliesCount + 1) };
+							descendants = [reply, ...descendants];
+						}}
+					/>
+				{:else if composerMode === 'quote'}
+					<Composer
+						mode="quote"
+						quoteId={status.id}
+						onCancel={closeComposer}
+						onSubmitted={() => {
+							if (!status) return;
+							status = { ...status, quoteCount: (status.quoteCount ?? 0) + 1 };
+						}}
+					/>
+				{:else if composerMode === 'edit'}
+					<Composer
+						mode="edit"
+						editId={status.id}
+						initialContent={htmlToText(status.content)}
+						initialSpoilerText={status.spoilerText ?? ''}
+						initialSensitive={status.sensitive ?? false}
+						onCancel={closeComposer}
+						onSubmitted={(updated) => {
+							status = { ...status, ...updated };
+						}}
+					/>
+				{/if}
 			</article>
 
 			<div class="thread">
@@ -362,6 +391,16 @@
 								<span class="status-card__handle">@{item.account.acct}</span>
 							</header>
 							<ContentRenderer content={item.content} spoilerText={item.spoilerText} />
+							<QuotePreview quoteUrl={item.quoteUrl} quoteContext={item.quoteContext} />
+							{#if item.mediaAttachments && item.mediaAttachments.length > 0}
+								<MediaAttachments
+									attachments={item.mediaAttachments}
+									sensitive={item.sensitive ?? false}
+								/>
+							{/if}
+							{#if item.poll}
+								<PollCard poll={item.poll} />
+							{/if}
 						</article>
 					{/each}
 				{/if}

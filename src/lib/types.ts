@@ -266,6 +266,7 @@ export interface Poll {
 	expiresAt?: string | Date;
 	expired: boolean;
 	multiple: boolean;
+	hideTotals?: boolean;
 	votesCount: number;
 	votersCount?: number;
 	voted?: boolean;

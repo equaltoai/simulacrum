@@ -6,6 +6,10 @@
 	import type { Status } from '$lib/types';
 	import ContentRenderer from './ContentRenderer.svelte';
 	import ActionBar from './ActionBar.svelte';
+	import Composer from './Composer.svelte';
+	import MediaAttachments from './MediaAttachments.svelte';
+	import PollCard from './PollCard.svelte';
+	import QuotePreview from './QuotePreview.svelte';
 
 	interface Props {
 		items?: Status[];
@@ -35,10 +39,8 @@
 		displayItems = items;
 	});
 
-	let replyingToId = $state<string | null>(null);
-	let replyDraft = $state('');
-	let isReplyPosting = $state(false);
-	let replyError = $state<string | null>(null);
+	let composerForId = $state<string | null>(null);
+	let composerMode = $state<'reply' | 'quote' | 'edit' | null>(null);
 
 	function profileHref(acct: string) {
 		return `${base}/profile/${encodeURIComponent(acct)}`;
@@ -73,48 +75,23 @@
 		return item.reblog ?? item;
 	}
 
-	function openReply(displayId: string) {
-		replyingToId = displayId;
-		replyDraft = '';
-		replyError = null;
+	function openComposer(displayId: string, mode: 'reply' | 'quote' | 'edit') {
+		composerForId = displayId;
+		composerMode = mode;
 	}
 
-	function closeReply() {
-		replyingToId = null;
-		replyDraft = '';
-		replyError = null;
-		isReplyPosting = false;
+	function closeComposer() {
+		composerForId = null;
+		composerMode = null;
 	}
 
-	async function handleReplySubmit(event: SubmitEvent, displayId: string) {
-		event.preventDefault();
-		if (!$authSession?.accessToken) return;
-		if (isReplyPosting) return;
-
-		const displayItem = displayItems.find((item) => item.id === displayId);
-		if (!displayItem) return;
-
-		const target = getActionStatus(displayItem);
-		const content = replyDraft.trim();
-		if (!content) return;
-
-		isReplyPosting = true;
-		replyError = null;
-
-		try {
-			await api.createNote({ content, inReplyToId: target.id });
-			updateItem(displayId, (item) =>
-				updateActionTarget(item, (status) => ({
-					...status,
-					repliesCount: Math.max(0, status.repliesCount + 1),
-				}))
-			);
-			closeReply();
-		} catch (err) {
-			replyError = err instanceof Error ? err.message : String(err);
-		} finally {
-			isReplyPosting = false;
+	function htmlToText(html: string): string {
+		if (typeof window === 'undefined') {
+			return html.replace(/<[^>]*>/g, '').trim();
 		}
+		const div = document.createElement('div');
+		div.innerHTML = html;
+		return (div.textContent ?? '').trim();
 	}
 
 	async function toggleBoost(displayId: string) {
@@ -312,6 +289,15 @@
 					tags={status.tags ?? []}
 				/>
 
+				<QuotePreview quoteUrl={status.quoteUrl} quoteContext={status.quoteContext} />
+
+				{#if status.mediaAttachments && status.mediaAttachments.length > 0}
+					<MediaAttachments attachments={status.mediaAttachments} sensitive={status.sensitive ?? false} />
+				{/if}
+				{#if status.poll}
+					<PollCard poll={status.poll} />
+				{/if}
+
 				<ActionBar
 					counts={{
 						replies: status.repliesCount,
@@ -326,8 +312,9 @@
 						pinned: status.pinned ?? null,
 					}}
 					handlers={{
-						onReply: () => openReply(item.id),
+						onReply: () => openComposer(item.id, 'reply'),
 						onBoost: () => toggleBoost(item.id),
+						onQuote: () => openComposer(item.id, 'quote'),
 						onFavorite: () => toggleFavorite(item.id),
 						onBookmark: () => toggleBookmark(item.id),
 						onPin: () => togglePin(item.id),
@@ -336,36 +323,70 @@
 					shareUrl={shareUrl(status.id)}
 					shareTitle={`Post by ${status.account.displayName || status.account.username}`}
 					idPrefix={idPrefix(item.id)}
-				/>
-
-				{#if replyingToId === item.id}
-					<form class="compose" onsubmit={(event) => handleReplySubmit(event, item.id)}>
-						<label class="compose__label" for={`reply-content-${encodeURIComponent(item.id)}`}>Reply</label>
-						<textarea
-							id={`reply-content-${encodeURIComponent(item.id)}`}
-							class="compose__input"
-							placeholder="Write a reply…"
-							autocomplete="off"
-							rows={3}
-							bind:value={replyDraft}
-							disabled={isReplyPosting}
-						></textarea>
-						<div class="compose__actions">
-							{#if replyError}
-								<span class="compose__error" role="alert">{replyError}</span>
-							{/if}
-							<button type="button" class="gr-button gr-button--outline" onclick={closeReply} disabled={isReplyPosting}>
-								Cancel
-							</button>
+				>
+					{#snippet extensions()}
+						{#if viewerId && status.account.id === viewerId}
 							<button
-								type="submit"
-								class="gr-button gr-button--solid"
-								disabled={isReplyPosting || replyDraft.trim().length === 0}
+								type="button"
+								class="gr-button gr-button--outline"
+								onclick={() => openComposer(item.id, 'edit')}
 							>
-								{isReplyPosting ? 'Posting…' : 'Reply'}
+								Edit
 							</button>
-						</div>
-					</form>
+						{/if}
+					{/snippet}
+				</ActionBar>
+
+				{#if composerForId === item.id && composerMode === 'reply'}
+					<Composer
+						mode="reply"
+						inReplyToId={status.id}
+						onCancel={closeComposer}
+						onSubmitted={() => {
+							updateItem(item.id, (current) =>
+								updateActionTarget(current, (target) => ({
+									...target,
+									repliesCount: Math.max(0, target.repliesCount + 1),
+								}))
+							);
+						}}
+					/>
+				{:else if composerForId === item.id && composerMode === 'quote'}
+					<Composer
+						mode="quote"
+						quoteId={status.id}
+						onCancel={closeComposer}
+						onSubmitted={() => {
+							updateItem(item.id, (current) =>
+								updateActionTarget(current, (target) => ({
+									...target,
+									quoteCount: (target.quoteCount ?? 0) + 1,
+								}))
+							);
+						}}
+					/>
+				{:else if composerForId === item.id && composerMode === 'edit'}
+					<Composer
+						mode="edit"
+						editId={status.id}
+						initialContent={htmlToText(status.content)}
+						initialSpoilerText={status.spoilerText ?? ''}
+						initialSensitive={status.sensitive ?? false}
+						onCancel={closeComposer}
+						onSubmitted={(updated) => {
+							updateItem(item.id, (current) =>
+								updateActionTarget(current, (target) => ({
+									...target,
+									content: updated.content,
+									spoilerText: updated.spoilerText,
+									sensitive: updated.sensitive,
+									editedAt: updated.editedAt,
+									mediaAttachments: updated.mediaAttachments,
+									poll: updated.poll,
+								}))
+							);
+						}}
+					/>
 				{/if}
 			</article>
 		{/each}

@@ -4,6 +4,7 @@ import type {
 	CommunityNoteFieldsFragment,
 	MentionFieldsFragment,
 	ObjectFieldsFragment,
+	Poll as GraphQLPoll,
 	QuoteContextFieldsFragment,
 	QuotePermission,
 	Visibility,
@@ -14,6 +15,7 @@ import type {
 	MediaAttachment,
 	Mention,
 	Notification,
+	Poll,
 	Status,
 	Tag,
 } from '$lib/types';
@@ -147,7 +149,27 @@ function toMediaAttachment(attachment: AttachmentFieldsFragment): MediaAttachmen
 	};
 }
 
-type ObjectLike = ObjectFieldsFragment | Omit<ObjectFieldsFragment, 'boostedObject'>;
+function toPoll(poll: GraphQLPoll): Poll {
+	return {
+		id: poll.id,
+		expiresAt: poll.expiresAt ?? undefined,
+		expired: poll.expired,
+		multiple: poll.multiple,
+		hideTotals: poll.hideTotals,
+		votesCount: poll.votesCount,
+		votersCount: poll.votersCount,
+		voted: poll.voted,
+		ownVotes: poll.ownVotes ? [...poll.ownVotes] : undefined,
+		options: poll.options.map((option) => ({
+			title: option.title,
+			votesCount: option.votesCount,
+		})),
+	};
+}
+
+type ObjectLike = (ObjectFieldsFragment | Omit<ObjectFieldsFragment, 'boostedObject'>) & {
+	poll?: GraphQLPoll | null;
+};
 
 export function toStatus(object: ObjectLike, depth = 0): Status {
 	const boostedObject = 'boostedObject' in object ? object.boostedObject : undefined;
@@ -169,6 +191,7 @@ export function toStatus(object: ObjectLike, depth = 0): Status {
 			: undefined;
 	const viewerPinned =
 		'viewerPinned' in object && typeof object.viewerPinned === 'boolean' ? object.viewerPinned : undefined;
+	const poll = object.poll ? toPoll(object.poll) : undefined;
 
 	return {
 		id: object.id,
@@ -190,6 +213,7 @@ export function toStatus(object: ObjectLike, depth = 0): Status {
 		pinned: viewerPinned,
 		reblog,
 		mediaAttachments: object.attachments.map(toMediaAttachment),
+		poll,
 		mentions: object.mentions.map(toMention),
 		tags: object.tags.map(toTag),
 		inReplyToId: object.inReplyTo?.id ?? undefined,
