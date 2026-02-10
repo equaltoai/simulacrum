@@ -134,6 +134,8 @@ Acceptance:
 - Report a status and see it reflected in the admin surface (M12).
 - Add a community note to a status and vote on it.
 
+Done (2026-02-10): Added inline moderation menus (report/mute/block) for statuses + profiles using GraphQL `flagObject`/`muteActor`/`blockActor`, exposed community notes (add/vote/display) in timelines + status detail, added profile trust signals (reputation + vouches + trust graph), added a translation toggle via `translateStatus`, and completed quote UX (view quotes, quote compose gating, quote permissions editor).
+
 ### M12 — Admin console (real moderation + instance ops)
 
 Deliverables:

@@ -19,7 +19,18 @@
 	import { type Snippet } from 'svelte';
 	import { createMenu } from '$lib/greater/headless/menu';
 	import { createModal } from '$lib/greater/headless/modal';
-	import type { ActivityPubActor, GenericStatus } from '../generics/index.js';
+
+	type TargetAccountLike = {
+		name?: string;
+		displayName?: string;
+		preferredUsername?: string;
+		username?: string;
+		acct?: string;
+	};
+
+	type TargetStatusLike = {
+		id: string;
+	};
 
 	export type ModerationType = 'block' | 'mute' | 'report' | 'hide' | 'addNote';
 	export type ModerationTarget = 'account' | 'status' | 'domain';
@@ -111,12 +122,12 @@
 		/**
 		 * Target account (for display)
 		 */
-		targetAccount?: ActivityPubActor;
+		targetAccount?: TargetAccountLike;
 
 		/**
 		 * Target status (for display)
 		 */
-		targetStatus?: GenericStatus;
+		targetStatus?: TargetStatusLike;
 
 		/**
 		 * Configuration
@@ -330,7 +341,10 @@
 	 */
 	function getTargetName(): string {
 		if (targetAccount?.name) return targetAccount.name;
+		if (targetAccount?.displayName) return targetAccount.displayName;
 		if (targetAccount?.preferredUsername) return `@${targetAccount.preferredUsername}`;
+		if (targetAccount?.username) return `@${targetAccount.username}`;
+		if (targetAccount?.acct) return `@${targetAccount.acct}`;
 		return targetId;
 	}
 </script>
@@ -588,6 +602,10 @@
 </div>
 
 <style>
+	.moderation-tools {
+		position: relative;
+	}
+
 	/* Trigger (menu mode) */
 	.moderation-tools__trigger {
 		display: flex;

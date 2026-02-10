@@ -16,8 +16,10 @@ import type {
 	Mention,
 	Notification,
 	Poll,
+	Reputation,
 	Status,
 	Tag,
+	Vouch,
 } from '$lib/types';
 
 type ActorLike = {
@@ -36,13 +38,92 @@ type ActorLike = {
 	readonly updatedAt: string;
 	readonly trustScore: number;
 	readonly createdAt?: string | null;
+	readonly reputation?: ReputationLike | null;
+	readonly vouches?: ReadonlyArray<VouchLike>;
+};
+
+type ReputationLike = {
+	readonly actorId: string;
+	readonly instance: string;
+	readonly totalScore: number;
+	readonly trustScore: number;
+	readonly activityScore: number;
+	readonly moderationScore: number;
+	readonly communityScore: number;
+	readonly calculatedAt: string;
+	readonly version: string;
+	readonly signature?: string | null;
+	readonly evidence: {
+		readonly totalPosts: number;
+		readonly totalFollowers: number;
+		readonly accountAge: number;
+		readonly vouchCount: number;
+		readonly trustingActors: number;
+		readonly averageTrustScore: number;
+	};
+};
+
+type VouchLike = {
+	readonly id: string;
+	readonly from: ActorLike;
+	readonly to: ActorLike;
+	readonly confidence: number;
+	readonly context: string;
+	readonly voucherReputation: number;
+	readonly createdAt: string;
+	readonly expiresAt: string;
+	readonly active: boolean;
+	readonly revoked: boolean;
+	readonly revokedAt?: string | null;
 };
 
 function toAccountAcct(username: string, domain?: string | null): string {
 	return domain ? `${username}@${domain}` : username;
 }
 
+function toReputation(reputation: ReputationLike): Reputation {
+	return {
+		actorId: reputation.actorId,
+		instance: reputation.instance,
+		totalScore: reputation.totalScore,
+		trustScore: reputation.trustScore,
+		activityScore: reputation.activityScore,
+		moderationScore: reputation.moderationScore,
+		communityScore: reputation.communityScore,
+		calculatedAt: reputation.calculatedAt,
+		version: reputation.version,
+		evidence: {
+			totalPosts: reputation.evidence.totalPosts,
+			totalFollowers: reputation.evidence.totalFollowers,
+			accountAge: reputation.evidence.accountAge,
+			vouchCount: reputation.evidence.vouchCount,
+			trustingActors: reputation.evidence.trustingActors,
+			averageTrustScore: reputation.evidence.averageTrustScore,
+		},
+		signature: reputation.signature ?? undefined,
+	};
+}
+
+function toVouch(vouch: VouchLike): Vouch {
+	return {
+		id: vouch.id,
+		from: toAccount(vouch.from),
+		to: toAccount(vouch.to),
+		confidence: vouch.confidence,
+		context: vouch.context,
+		voucherReputation: vouch.voucherReputation,
+		createdAt: vouch.createdAt,
+		expiresAt: vouch.expiresAt,
+		active: vouch.active,
+		revoked: vouch.revoked,
+		revokedAt: vouch.revokedAt ?? undefined,
+	};
+}
+
 export function toAccount(actor: ActorLike): Account {
+	const reputation = actor.reputation ? toReputation(actor.reputation) : undefined;
+	const vouches = actor.vouches ? actor.vouches.map(toVouch) : undefined;
+
 	return {
 		id: actor.id,
 		username: actor.username,
@@ -59,6 +140,8 @@ export function toAccount(actor: ActorLike): Account {
 		locked: actor.locked,
 		createdAt: actor.createdAt ?? actor.updatedAt,
 		trustScore: actor.trustScore,
+		reputation,
+		vouches,
 	};
 }
 

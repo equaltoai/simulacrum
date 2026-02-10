@@ -4,21 +4,32 @@
 	import { api } from '$lib/api';
 	import { authSession } from '$lib/auth/session';
 	import ActionBar from '$lib/components/ActionBar.svelte';
+	import CommunityNotesPanel from '$lib/components/CommunityNotesPanel.svelte';
 	import Composer from '$lib/components/Composer.svelte';
 	import ContentRenderer from '$lib/components/ContentRenderer.svelte';
 	import MediaAttachments from '$lib/components/MediaAttachments.svelte';
 	import PollCard from '$lib/components/PollCard.svelte';
 	import QuotePreview from '$lib/components/QuotePreview.svelte';
+	import TranslationPanel from '$lib/components/TranslationPanel.svelte';
+	import ModerationTools from '$lib/patterns/ModerationTools.svelte';
 	import type { Status } from '$lib/types';
 
 	let viewerId = $state<string | null>(null);
 	let status = $state<Status | null>(null);
 	let ancestors = $state<Status[]>([]);
 	let descendants = $state<Status[]>([]);
+	let quotes = $state<Status[]>([]);
+	let quotesLoading = $state(false);
+	let quotesError = $state<string | null>(null);
 	let isLoading = $state(false);
 	let error = $state<string | null>(null);
 
 	let composerMode = $state<'reply' | 'quote' | 'edit' | null>(null);
+	let quotePermissionsOpen = $state(false);
+	let quoteableDraft = $state<boolean>(true);
+	let quotePermissionDraft = $state<'EVERYONE' | 'FOLLOWERS' | 'NONE'>('EVERYONE');
+	let quotePermissionsSaving = $state(false);
+	let quotePermissionsError = $state<string | null>(null);
 
 	function statusHref(id: string) {
 		return `${base}/status/${encodeURIComponent(id)}`;
@@ -63,9 +74,15 @@
 		status = null;
 		ancestors = [];
 		descendants = [];
+		quotes = [];
+		quotesLoading = false;
+		quotesError = null;
 		error = null;
 		isLoading = false;
 		composerMode = null;
+		quotePermissionsOpen = false;
+		quotePermissionsSaving = false;
+		quotePermissionsError = null;
 
 		if (!token || !id) return;
 
@@ -91,6 +108,29 @@
 				status = thread.rootNote;
 				ancestors = thread.ancestors;
 				descendants = thread.descendants;
+
+				quoteableDraft = thread.rootNote.quoteable ?? true;
+				quotePermissionDraft = (thread.rootNote.quotePermissions ?? 'EVERYONE') as
+					| 'EVERYONE'
+					| 'FOLLOWERS'
+					| 'NONE';
+
+				quotesLoading = true;
+				quotesError = null;
+				try {
+					const quotesPayload = await api.fetchObjectWithQuotes({
+						id: thread.rootNote.id,
+						first: 50,
+						signal: controller.signal,
+					});
+					quotes = quotesPayload?.quotes ?? [];
+				} catch (err) {
+					if (!(err instanceof DOMException && err.name === 'AbortError')) {
+						quotesError = err instanceof Error ? err.message : String(err);
+					}
+				} finally {
+					quotesLoading = false;
+				}
 			} catch (err) {
 				if (err instanceof DOMException && err.name === 'AbortError') return;
 				error = err instanceof Error ? err.message : String(err);
@@ -101,6 +141,41 @@
 
 		return () => controller.abort();
 	});
+
+	async function refreshRootStatus() {
+		if (!status) return;
+		try {
+			const refreshed = await api.fetchObjectById({ id: status.id });
+			if (!refreshed) return;
+			status = refreshed;
+		} catch (err) {
+			console.error('Failed to refresh status:', err);
+		}
+	}
+
+	async function saveQuotePermissions() {
+		if (!status) return;
+		if (!viewerId || status.account.id !== viewerId) return;
+		if (quotePermissionsSaving) return;
+
+		quotePermissionsSaving = true;
+		quotePermissionsError = null;
+
+		try {
+			const result = await api.updateQuotePermissions({
+				noteId: status.id,
+				quoteable: quoteableDraft,
+				permission: quotePermissionDraft,
+			});
+			status = result.note;
+			quoteableDraft = result.note.quoteable ?? true;
+			quotePermissionDraft = (result.note.quotePermissions ?? 'EVERYONE') as 'EVERYONE' | 'FOLLOWERS' | 'NONE';
+		} catch (err) {
+			quotePermissionsError = err instanceof Error ? err.message : String(err);
+		} finally {
+			quotePermissionsSaving = false;
+		}
+	}
 
 	async function toggleBoost() {
 		if (!status) return;
@@ -318,7 +393,7 @@
 					handlers={{
 						onReply: () => openComposer('reply'),
 						onBoost: toggleBoost,
-						onQuote: () => openComposer('quote'),
+						onQuote: status.quoteable ? () => openComposer('quote') : undefined,
 						onFavorite: toggleFavorite,
 						onBookmark: toggleBookmark,
 						onPin: togglePin,
@@ -337,9 +412,83 @@
 							>
 								Edit
 							</button>
+							<button
+								type="button"
+								class="gr-button gr-button--outline"
+								onclick={() => (quotePermissionsOpen = !quotePermissionsOpen)}
+							>
+								Quote permissions
+							</button>
 						{/if}
 					{/snippet}
 				</ActionBar>
+
+				{#if status && viewerId && status.account.id === viewerId && quotePermissionsOpen}
+					<section class="quote-permissions" aria-label="Quote permissions">
+						<h3 class="quote-permissions__title">Quote permissions</h3>
+						{#if quotePermissionsError}
+							<div class="page__notice page__notice--error" role="alert">{quotePermissionsError}</div>
+						{/if}
+						<div class="quote-permissions__fields">
+							<label class="quote-permissions__field">
+								<input type="checkbox" bind:checked={quoteableDraft} disabled={quotePermissionsSaving} />
+								<span>Allow quoting</span>
+							</label>
+							<label class="quote-permissions__field">
+								<span>Who can quote</span>
+								<select bind:value={quotePermissionDraft} disabled={quotePermissionsSaving || !quoteableDraft}>
+									<option value="EVERYONE">Everyone</option>
+									<option value="FOLLOWERS">Followers</option>
+									<option value="NONE">No one</option>
+								</select>
+							</label>
+							<button
+								type="button"
+								class="gr-button gr-button--solid"
+								onclick={saveQuotePermissions}
+								disabled={quotePermissionsSaving}
+							>
+								{quotePermissionsSaving ? 'Saving…' : 'Save'}
+							</button>
+						</div>
+					</section>
+				{/if}
+
+				<TranslationPanel statusId={status.id} />
+
+				<ModerationTools
+					targetType="status"
+					targetId={status.id}
+					targetAccount={status.account}
+					targetStatus={status}
+					config={{ actions: ['report', 'addNote', 'mute', 'block'], mode: 'menu' }}
+					disabled={!$authSession?.accessToken}
+					handlers={{
+						onReport: async (_targetType, _targetId, reason) => {
+							await api.flagObject({ input: { objectId: status!.id, reason } });
+						},
+						onBlock: async () => {
+							await api.blockActor({ id: status!.account.id });
+						},
+						onMute: async () => {
+							await api.muteActor({ id: status!.account.id });
+						},
+						onAddNote: async (objectId, content) => {
+							await api.addCommunityNote({ input: { objectId, content } });
+							await refreshRootStatus();
+						},
+					}}
+				/>
+
+				{#if (status.communityNotes ?? []).length > 0}
+					<CommunityNotesPanel
+						notes={status.communityNotes ?? []}
+						onVote={async (noteId, helpful) => {
+							await api.voteCommunityNote({ id: noteId, helpful });
+							await refreshRootStatus();
+						}}
+					/>
+				{/if}
 
 				{#if composerMode === 'reply'}
 					<Composer
@@ -383,6 +532,40 @@
 					<div class="page__notice">No replies yet.</div>
 				{:else}
 					{#each descendants as item (item.id)}
+						<article class="status-card status-card--reply">
+							<header class="status-card__meta">
+								<a class="status-card__author" href={profileHref(item.account.acct)}>
+									{item.account.displayName || item.account.username}
+								</a>
+								<span class="status-card__handle">@{item.account.acct}</span>
+							</header>
+							<ContentRenderer content={item.content} spoilerText={item.spoilerText} />
+							<QuotePreview quoteUrl={item.quoteUrl} quoteContext={item.quoteContext} />
+							{#if item.mediaAttachments && item.mediaAttachments.length > 0}
+								<MediaAttachments
+									attachments={item.mediaAttachments}
+									sensitive={item.sensitive ?? false}
+								/>
+							{/if}
+							{#if item.poll}
+								<PollCard poll={item.poll} />
+							{/if}
+						</article>
+					{/each}
+				{/if}
+			</div>
+
+			<div class="thread" id="quotes">
+				<h2 class="thread__heading">Quotes</h2>
+				{#if quotesError}
+					<div class="page__notice page__notice--error" role="alert">{quotesError}</div>
+				{/if}
+				{#if quotesLoading}
+					<div class="page__notice">Loading quotes…</div>
+				{:else if quotes.length === 0}
+					<div class="page__notice">No quotes yet.</div>
+				{:else}
+					{#each quotes as item (item.id)}
 						<article class="status-card status-card--reply">
 							<header class="status-card__meta">
 								<a class="status-card__author" href={profileHref(item.account.acct)}>

@@ -10,6 +10,9 @@
 	import MediaAttachments from './MediaAttachments.svelte';
 	import PollCard from './PollCard.svelte';
 	import QuotePreview from './QuotePreview.svelte';
+	import ModerationTools from '$lib/patterns/ModerationTools.svelte';
+	import CommunityNotesPanel from '$lib/components/CommunityNotesPanel.svelte';
+	import TranslationPanel from '$lib/components/TranslationPanel.svelte';
 
 	interface Props {
 		items?: Status[];
@@ -69,6 +72,25 @@
 
 	function updateItem(displayId: string, updater: (current: Status) => Status) {
 		displayItems = displayItems.map((item) => (item.id === displayId ? updater(item) : item));
+	}
+
+	async function refreshStatus(displayId: string, statusId: string) {
+		try {
+			const refreshed = await api.fetchObjectById({ id: statusId });
+			if (!refreshed) return;
+
+			updateItem(displayId, (current) =>
+				updateActionTarget(current, (target) => ({
+					...target,
+					communityNotes: refreshed.communityNotes,
+					quoteCount: refreshed.quoteCount,
+					quoteable: refreshed.quoteable,
+					quotePermissions: refreshed.quotePermissions,
+				}))
+			);
+		} catch (err) {
+			console.error('Failed to refresh status:', err);
+		}
 	}
 
 	function getActionStatus(item: Status): Status {
@@ -279,7 +301,32 @@
 							@{status.account.acct}
 						</a>
 					</div>
-					<a class="timeline-virtualized__status-link" href={statusHref(status.id)}>Open</a>
+					<div class="timeline-virtualized__meta-actions">
+						<a class="timeline-virtualized__status-link" href={statusHref(status.id)}>Open</a>
+						<ModerationTools
+							targetType="status"
+							targetId={status.id}
+							targetAccount={status.account}
+							targetStatus={status}
+							config={{ actions: ['report', 'addNote', 'mute', 'block'], mode: 'menu' }}
+							disabled={!$authSession?.accessToken}
+							handlers={{
+								onReport: async (_targetType, _targetId, reason) => {
+									await api.flagObject({ input: { objectId: status.id, reason } });
+								},
+								onBlock: async () => {
+									await api.blockActor({ id: status.account.id });
+								},
+								onMute: async () => {
+									await api.muteActor({ id: status.account.id });
+								},
+								onAddNote: async (objectId, content) => {
+									await api.addCommunityNote({ input: { objectId, content } });
+									await refreshStatus(item.id, status.id);
+								},
+							}}
+						/>
+					</div>
 				</header>
 
 				<ContentRenderer
@@ -289,6 +336,8 @@
 					tags={status.tags ?? []}
 				/>
 
+				<TranslationPanel statusId={status.id} />
+
 				<QuotePreview quoteUrl={status.quoteUrl} quoteContext={status.quoteContext} />
 
 				{#if status.mediaAttachments && status.mediaAttachments.length > 0}
@@ -296,6 +345,16 @@
 				{/if}
 				{#if status.poll}
 					<PollCard poll={status.poll} />
+				{/if}
+
+				{#if (status.communityNotes ?? []).length > 0}
+					<CommunityNotesPanel
+						notes={status.communityNotes ?? []}
+						onVote={async (noteId, helpful) => {
+							await api.voteCommunityNote({ id: noteId, helpful });
+							await refreshStatus(item.id, status.id);
+						}}
+					/>
 				{/if}
 
 				<ActionBar
@@ -314,7 +373,7 @@
 					handlers={{
 						onReply: () => openComposer(item.id, 'reply'),
 						onBoost: () => toggleBoost(item.id),
-						onQuote: () => openComposer(item.id, 'quote'),
+						onQuote: status.quoteable ? () => openComposer(item.id, 'quote') : undefined,
 						onFavorite: () => toggleFavorite(item.id),
 						onBookmark: () => toggleBookmark(item.id),
 						onPin: () => togglePin(item.id),

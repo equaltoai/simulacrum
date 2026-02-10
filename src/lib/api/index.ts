@@ -2,17 +2,23 @@ import { print } from 'graphql';
 
 import {
 	ActorByUsernameDocument,
+	AddCommunityNoteDocument,
 	AddAccountsToListDocument,
+	BlockActorDocument,
 	ClearNotificationsDocument,
 	CreateListDocument,
 	DeleteListDocument,
+	FlagObjectDocument,
 	FollowedHashtagsDocument,
 	FollowHashtagDocument,
 	DismissNotificationDocument,
 	ListDocument,
 	ListsDocument,
+	MuteActorDocument,
 	MuteHashtagDocument,
+	ObjectWithQuotesDocument,
 	UpdateProfileDocument,
+	UpdateQuotePermissionsDocument,
 	NotificationsDocument,
 	ObjectFieldsFragmentDoc,
 	LikeObjectDocument,
@@ -26,14 +32,20 @@ import {
 	PinObjectDocument,
 	UnpinObjectDocument,
 	DeleteObjectDocument,
+	TrustGraphDocument,
 	UnfollowHashtagDocument,
 	UpdateListDocument,
 	UpdateUserPreferencesDocument,
 	UserPreferencesDocument,
+	VoteCommunityNoteDocument,
 	type ActorByUsernameQuery,
 	type ActorByUsernameQueryVariables,
+	type AddCommunityNoteMutation,
+	type AddCommunityNoteMutationVariables,
 	type AddAccountsToListMutation,
 	type AddAccountsToListMutationVariables,
+	type BlockActorMutation,
+	type BlockActorMutationVariables,
 	type BookmarkObjectMutation,
 	type BookmarkObjectMutationVariables,
 	type ClearNotificationsMutation,
@@ -47,6 +59,8 @@ import {
 	type DeleteObjectMutationVariables,
 	type DismissNotificationMutation,
 	type DismissNotificationMutationVariables,
+	type FlagObjectMutation,
+	type FlagObjectMutationVariables,
 	type FollowedHashtagsQuery,
 	type FollowedHashtagsQueryVariables,
 	type FollowHashtagMutation,
@@ -57,10 +71,14 @@ import {
 	type ListQueryVariables,
 	type ListsQuery,
 	type ListsQueryVariables,
+	type MuteActorMutation,
+	type MuteActorMutationVariables,
 	type MuteHashtagMutation,
 	type MuteHashtagMutationVariables,
 	type NotificationsQuery,
 	type NotificationsQueryVariables,
+	type ObjectWithQuotesQuery,
+	type ObjectWithQuotesQueryVariables,
 	type ObjectByIdQueryVariables,
 	type ObjectFieldsFragment,
 	type NotificationLevel,
@@ -74,6 +92,9 @@ import {
 	type SearchQueryVariables,
 	type TimelineQueryVariables,
 	type TimelineType,
+	type TrustCategory,
+	type TrustGraphQuery,
+	type TrustGraphQueryVariables,
 	type UnlikeObjectMutation,
 	type UnlikeObjectMutationVariables,
 	type UnbookmarkObjectMutation,
@@ -84,6 +105,8 @@ import {
 	type UnpinObjectMutationVariables,
 	type UnshareObjectMutation,
 	type UnshareObjectMutationVariables,
+	type UpdateQuotePermissionsMutation,
+	type UpdateQuotePermissionsMutationVariables,
 	type UploadMediaInput,
 	UploadMediaDocument,
 	type UploadMediaMutation,
@@ -100,6 +123,8 @@ import {
 	type UserPreferencesQuery,
 	type UserPreferencesQueryVariables,
 	type Visibility,
+	type VoteCommunityNoteMutation,
+	type VoteCommunityNoteMutationVariables,
 	type Poll as GraphQLPoll,
 } from '$lib/greater/adapters/graphql';
 import type { Account, Notification, Status } from '$lib/types';
@@ -1731,6 +1756,375 @@ export async function updateUserPreferences({
 	return data.updateUserPreferences;
 }
 
+// ============================================================================
+// Trust + moderation (user-facing)
+// ============================================================================
+
+export async function blockActor({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<BlockActorMutation['blockActor']> {
+	const token = requireAccessToken();
+
+	const variables: BlockActorMutationVariables = { id };
+
+	const data = await graphqlRequest<BlockActorMutation, BlockActorMutationVariables>({
+		document: BlockActorDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.blockActor;
+}
+
+export async function muteActor({
+	id,
+	notifications,
+	signal,
+}: {
+	id: string;
+	notifications?: boolean;
+	signal?: AbortSignal;
+}): Promise<MuteActorMutation['muteActor']> {
+	const token = requireAccessToken();
+
+	const variables: MuteActorMutationVariables = { id, notifications };
+
+	const data = await graphqlRequest<MuteActorMutation, MuteActorMutationVariables>({
+		document: MuteActorDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.muteActor;
+}
+
+export async function flagObject({
+	input,
+	signal,
+}: {
+	input: FlagObjectMutationVariables['input'];
+	signal?: AbortSignal;
+}): Promise<FlagObjectMutation['flagObject']> {
+	const token = requireAccessToken();
+
+	const variables: FlagObjectMutationVariables = { input };
+
+	const data = await graphqlRequest<FlagObjectMutation, FlagObjectMutationVariables>({
+		document: FlagObjectDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.flagObject;
+}
+
+export async function addCommunityNote({
+	input,
+	signal,
+}: {
+	input: AddCommunityNoteMutationVariables['input'];
+	signal?: AbortSignal;
+}): Promise<AddCommunityNoteMutation['addCommunityNote']> {
+	const token = requireAccessToken();
+
+	const variables: AddCommunityNoteMutationVariables = { input };
+
+	const data = await graphqlRequest<AddCommunityNoteMutation, AddCommunityNoteMutationVariables>({
+		document: AddCommunityNoteDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.addCommunityNote;
+}
+
+export async function voteCommunityNote({
+	id,
+	helpful,
+	signal,
+}: {
+	id: string;
+	helpful: boolean;
+	signal?: AbortSignal;
+}): Promise<VoteCommunityNoteMutation['voteCommunityNote']> {
+	const token = requireAccessToken();
+
+	const variables: VoteCommunityNoteMutationVariables = { id, helpful };
+
+	const data = await graphqlRequest<VoteCommunityNoteMutation, VoteCommunityNoteMutationVariables>({
+		document: VoteCommunityNoteDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.voteCommunityNote;
+}
+
+export type StatusTranslation = {
+	content: string;
+	detectedLanguage: string;
+	provider: string;
+	spoilerText?: string | null;
+};
+
+const TRANSLATE_STATUS_QUERY = `
+query TranslateStatus($id: ID!, $targetLanguage: String) {
+	translateStatus(id: $id, targetLanguage: $targetLanguage) {
+		content
+		detectedLanguage
+		provider
+		spoilerText
+	}
+}
+`;
+
+export async function translateStatus({
+	id,
+	targetLanguage,
+	signal,
+}: {
+	id: string;
+	targetLanguage?: string;
+	signal?: AbortSignal;
+}): Promise<StatusTranslation> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ translateStatus: StatusTranslation }, { id: string; targetLanguage?: string }>({
+		document: TRANSLATE_STATUS_QUERY,
+		variables: { id, targetLanguage },
+		token,
+		signal,
+	});
+
+	return data.translateStatus;
+}
+
+export async function fetchTrustGraph({
+	actorId,
+	category,
+	signal,
+}: {
+	actorId: string;
+	category?: TrustCategory;
+	signal?: AbortSignal;
+}): Promise<Array<{ category: TrustCategory; score: number; updatedAt: string; from: Account; to: Account }>> {
+	const token = requireAccessToken();
+
+	const variables: TrustGraphQueryVariables = { actorId, category };
+
+	const data = await graphqlRequest<TrustGraphQuery, TrustGraphQueryVariables>({
+		document: TrustGraphDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return data.trustGraph.map((edge) => ({
+		category: edge.category,
+		score: edge.score,
+		updatedAt: edge.updatedAt,
+		from: toAccount(edge.from),
+		to: toAccount(edge.to),
+	}));
+}
+
+export async function fetchObjectWithQuotes({
+	id,
+	first = 20,
+	after,
+	signal,
+}: {
+	id: string;
+	first?: number;
+	after?: string;
+	signal?: AbortSignal;
+}): Promise<{
+	object: Status;
+	quotes: Status[];
+	pageInfo: { endCursor: string | null; hasNextPage: boolean };
+	totalCount: number;
+} | null> {
+	const token = requireAccessToken();
+
+	const variables: ObjectWithQuotesQueryVariables = { id, first, after };
+
+	const data = await graphqlRequest<ObjectWithQuotesQuery, ObjectWithQuotesQueryVariables>({
+		document: ObjectWithQuotesDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	if (!data.object) return null;
+
+	return {
+		object: toStatus(data.object),
+		quotes: data.object.quotes.edges.map((edge) => toStatus(edge.node)),
+		pageInfo: {
+			endCursor: data.object.quotes.pageInfo.endCursor ?? null,
+			hasNextPage: data.object.quotes.pageInfo.hasNextPage,
+		},
+		totalCount: data.object.quotes.totalCount,
+	};
+}
+
+export async function updateQuotePermissions({
+	noteId,
+	quoteable,
+	permission,
+	signal,
+}: {
+	noteId: string;
+	quoteable: boolean;
+	permission: 'EVERYONE' | 'FOLLOWERS' | 'NONE';
+	signal?: AbortSignal;
+}): Promise<{ note: Status; success: boolean; affectedQuotes: number }> {
+	const token = requireAccessToken();
+
+	const variables: UpdateQuotePermissionsMutationVariables = { noteId, quoteable, permission };
+
+	const data = await graphqlRequest<UpdateQuotePermissionsMutation, UpdateQuotePermissionsMutationVariables>({
+		document: UpdateQuotePermissionsDocument,
+		variables,
+		token,
+		signal,
+	});
+
+	return {
+		note: toStatus(data.updateQuotePermissions.note),
+		success: data.updateQuotePermissions.success,
+		affectedQuotes: data.updateQuotePermissions.affectedQuotes,
+	};
+}
+
+const ACTOR_PROFILE_QUERY = `
+query ActorProfile($id: ID, $username: String) {
+	actor(id: $id, username: $username) {
+		id
+		username
+		domain
+		displayName
+		summary
+		avatar
+		header
+		followers
+		following
+		statusesCount
+		bot
+		locked
+		createdAt
+		updatedAt
+		trustScore
+		reputation {
+			actorId
+			instance
+			totalScore
+			trustScore
+			activityScore
+			moderationScore
+			communityScore
+			calculatedAt
+			version
+			signature
+			evidence {
+				totalPosts
+				totalFollowers
+				accountAge
+				vouchCount
+				trustingActors
+				averageTrustScore
+			}
+		}
+		vouches {
+			id
+			confidence
+			context
+			voucherReputation
+			createdAt
+			expiresAt
+			active
+			revoked
+			revokedAt
+			from {
+				id
+				username
+				domain
+				displayName
+				summary
+				avatar
+				header
+				followers
+				following
+				statusesCount
+				bot
+				locked
+				createdAt
+				updatedAt
+				trustScore
+			}
+			to {
+				id
+				username
+				domain
+				displayName
+				summary
+				avatar
+				header
+				followers
+				following
+				statusesCount
+				bot
+				locked
+				createdAt
+				updatedAt
+				trustScore
+			}
+		}
+	}
+}
+`;
+
+export async function fetchActorProfile({
+	id,
+	username,
+	signal,
+}: {
+	id?: string;
+	username?: string;
+	signal?: AbortSignal;
+}): Promise<Account> {
+	if (!id && !username) {
+		throw new Error('fetchActorProfile requires an id or username');
+	}
+
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		{ actor?: Parameters<typeof toAccount>[0] | null },
+		{ id?: string; username?: string }
+	>({
+		document: ACTOR_PROFILE_QUERY,
+		variables: { id, username },
+		token,
+		signal,
+	});
+
+	if (!data.actor) {
+		throw new Error('Account not found');
+	}
+
+	return toAccount(data.actor);
+}
+
 type AdminReviewer = {
 	id: string;
 	username: string;
@@ -1840,6 +2234,16 @@ export const api = {
 	updateProfile,
 	fetchUserPreferences,
 	updateUserPreferences,
+	blockActor,
+	muteActor,
+	flagObject,
+	addCommunityNote,
+	voteCommunityNote,
+	translateStatus,
+	fetchTrustGraph,
+	fetchObjectWithQuotes,
+	updateQuotePermissions,
+	fetchActorProfile,
 	fetchAdminModerationReviewers,
 	fetchInstanceVapidKey,
 } as const;
