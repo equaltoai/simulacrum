@@ -146,25 +146,6 @@
 		uniqueActorCount = positioned.length;
 	}
 
-	function normalizeEdges(result: Awaited<ReturnType<typeof context.config.adapter.getTrustGraph>> | null) {
-		if (!result) return [];
-		return result.map((edge) => ({
-			from: {
-				id: edge.from.id,
-				username: edge.from.username,
-				displayName: edge.from.displayName ?? undefined,
-			},
-			to: {
-				id: edge.to.id,
-				username: edge.to.username,
-				displayName: edge.to.displayName ?? undefined,
-			},
-			category: edge.category,
-			score: edge.score,
-			updatedAt: edge.updatedAt,
-		}));
-	}
-
 	async function loadGraph() {
 		if (!context.state.rootActorId) return;
 		loading = true;
@@ -174,7 +155,7 @@
 				context.state.rootActorId,
 				context.config.category
 			);
-			edges = normalizeEdges(result);
+			edges = (result ?? []).map((edge) => edge as unknown as TrustEdge);
 			buildGraphLayout(edges);
 		} catch (err) {
 			error = err instanceof Error ? err : new Error('Failed to load trust graph');

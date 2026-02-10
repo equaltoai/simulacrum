@@ -16,7 +16,7 @@ deepfake detection, and moderation recommendations.
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { getInsightsContext } from './context.js';
-	import type { AIAnalysis } from '$lib/types';
+	import type { AIAnalysis } from '$lib/greater/adapters';
 
 	interface Props {
 		/**
@@ -215,7 +215,7 @@ deepfake detection, and moderation recommendations.
 							{formatPercent(analysis.imageAnalysis.violenceScore)}
 						</dd>
 
-						{#if analysis.imageAnalysis.deepfakeScore !== undefined && analysis.imageAnalysis.deepfakeScore > 0.5}
+						{#if analysis.imageAnalysis.deepfakeScore > 0.5}
 							<dt>Deepfake:</dt>
 							<dd class="ai-analysis__warning">
 								Possible ({formatPercent(analysis.imageAnalysis.deepfakeScore)} confidence)

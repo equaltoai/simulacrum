@@ -18,7 +18,7 @@
 
 	const { state: listsState, updateList } = getListsContext();
 
-	const currentList = $derived.by(() => listsState.selectedList);
+	const currentList = $derived(listsState.selectedList);
 
 	// Settings state
 	let visibility = $state<'public' | 'private'>('private');
@@ -153,18 +153,14 @@
 				<div class="list-settings__info-item">
 					<span class="list-settings__info-label">Created</span>
 					<span class="list-settings__info-value">
-						{currentList.createdAt
-							? new Date(currentList.createdAt).toLocaleDateString()
-							: '—'}
+						{currentList.createdAt ? new Date(currentList.createdAt).toLocaleDateString() : '—'}
 					</span>
 				</div>
 
 				<div class="list-settings__info-item">
 					<span class="list-settings__info-label">Last updated</span>
 					<span class="list-settings__info-value">
-						{currentList.updatedAt
-							? new Date(currentList.updatedAt).toLocaleDateString()
-							: '—'}
+						{currentList.updatedAt ? new Date(currentList.updatedAt).toLocaleDateString() : '—'}
 					</span>
 				</div>
 

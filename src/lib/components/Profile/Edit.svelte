@@ -321,7 +321,7 @@
 								type="text"
 								class="profile-edit__field-input"
 								bind:value={field.name}
-								oninput={(e: Event) =>
+								oninput={(e) =>
 									updateField(index, 'name', (e.currentTarget as HTMLInputElement).value)}
 								placeholder="Label"
 								disabled={profileState.loading}
@@ -331,7 +331,7 @@
 								type="text"
 								class="profile-edit__field-input"
 								bind:value={field.value}
-								oninput={(e: Event) =>
+								oninput={(e) =>
 									updateField(index, 'value', (e.currentTarget as HTMLInputElement).value)}
 								placeholder="Value"
 								disabled={profileState.loading}

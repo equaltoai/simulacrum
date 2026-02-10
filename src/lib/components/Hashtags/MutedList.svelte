@@ -3,10 +3,9 @@ Hashtags.MutedList - List of Muted Hashtags
 -->
 
 <script lang="ts">
-import { onMount } from 'svelte';
-import { getHashtagsContext } from './context.js';
-
-type NotificationLevel = 'ALL' | 'FOLLOWING' | 'MUTUALS' | 'NONE';
+	import { onMount } from 'svelte';
+	import { getHashtagsContext } from './context.js';
+	import type { NotificationLevel } from '$lib/greater/adapters';
 
 	interface Props {
 		class?: string;
@@ -37,16 +36,17 @@ type NotificationLevel = 'ALL' | 'FOLLOWING' | 'MUTUALS' | 'NONE';
 		loading = true;
 		try {
 			const result = await context.config.adapter.getFollowedHashtags();
-			const nodes = (result?.edges ?? []).map((edge) => ({
+			const nodes: FollowedHashtag[] = (result?.edges ?? []).map((edge) => ({
 				name: edge.node.name,
 				notificationSettings: edge.node.notificationSettings
 					? {
 							level: edge.node.notificationSettings.level,
 							muted: edge.node.notificationSettings.muted,
-							mutedUntil: edge.node.notificationSettings.mutedUntil ?? null,
+							mutedUntil: edge.node.notificationSettings.mutedUntil,
 						}
 					: undefined,
 			}));
+
 			mutedHashtags = nodes.filter((node) => node.notificationSettings?.muted === true);
 		} finally {
 			loading = false;

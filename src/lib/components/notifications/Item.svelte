@@ -16,7 +16,7 @@ Displays a single notification with type-specific rendering.
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { Notification } from './types.js';
+	import type { Notification, NotificationType } from './types.js';
 	import { getNotificationsContext } from './context.svelte.js';
 
 	interface Props {
@@ -39,48 +39,52 @@ Displays a single notification with type-specific rendering.
 	let { notification, children, class: className = '' }: Props = $props();
 
 	const context = getNotificationsContext();
-	const createdAtIso = $derived.by(() =>
-		notification.createdAt ? new Date(notification.createdAt).toISOString() : ''
-	);
-	const notificationStatus = $derived.by(() =>
-		'status' in notification ? notification.status : null
-	);
 
 	/**
 	 * Get notification icon based on type
 	 */
-	const icon = $derived(
-		{
-			follow: '👤',
-			mention: '@',
-			reblog: '🔁',
-			favourite: '⭐',
-			poll: '📊',
-			follow_request: '👥',
-			status: '📝',
-			update: '✏️',
-			'admin.sign_up': '🎉',
-			'admin.report': '⚠️',
-		}[notification.type] || '🔔'
-	);
+	const iconMap: Partial<Record<NotificationType, string>> = {
+		follow: '👤',
+		mention: '@',
+		reblog: '🔁',
+		favourite: '⭐',
+		poll: '📊',
+		follow_request: '👥',
+		status: '📝',
+		update: '✏️',
+		'admin.sign_up': '🎉',
+		'admin.report': '⚠️',
+		quote: '💬',
+		community_note: '📝',
+		trust_update: '🔒',
+		cost_alert: '💸',
+		moderation_action: '🛡️',
+	};
+
+	const icon = $derived(iconMap[notification.type] ?? '🔔');
 
 	/**
 	 * Get notification title based on type
 	 */
-	const title = $derived(
-		{
-			follow: 'followed you',
-			mention: 'mentioned you',
-			reblog: 'boosted your post',
-			favourite: 'favorited your post',
-			poll: 'poll ended',
-			follow_request: 'requested to follow you',
-			status: 'posted',
-			update: 'edited a post',
-			'admin.sign_up': 'signed up',
-			'admin.report': 'reported',
-		}[notification.type] || 'sent a notification'
-	);
+	const titleMap: Partial<Record<NotificationType, string>> = {
+		follow: 'followed you',
+		mention: 'mentioned you',
+		reblog: 'boosted your post',
+		favourite: 'favorited your post',
+		poll: 'poll ended',
+		follow_request: 'requested to follow you',
+		status: 'posted',
+		update: 'edited a post',
+		'admin.sign_up': 'signed up',
+		'admin.report': 'reported',
+		quote: 'quoted your post',
+		community_note: 'added a community note',
+		trust_update: 'updated your trust score',
+		cost_alert: 'sent a cost alert',
+		moderation_action: 'performed a moderation action',
+	};
+
+	const title = $derived(titleMap[notification.type] ?? 'sent a notification');
 
 	/**
 	 * Handle notification click
@@ -149,15 +153,19 @@ Displays a single notification with type-specific rendering.
 				</p>
 
 				{#if context.config.showTimestamps && notification.createdAt}
-					<time class="notification-item__timestamp" datetime={createdAtIso}>
+					{@const createdAt = notification.createdAt}
+					<time
+						class="notification-item__timestamp"
+						datetime={typeof createdAt === 'string' ? createdAt : createdAt.toISOString()}
+					>
 						{new Date(notification.createdAt).toLocaleDateString()}
 					</time>
 				{/if}
 
-				{#if notificationStatus}
+				{#if notification.status}
 					<div class="notification-item__status">
 						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-						<div class="notification-item__status-content">{@html notificationStatus.content}</div>
+						<div class="notification-item__status-content">{@html notification.status.content}</div>
 					</div>
 				{/if}
 			</div>

@@ -69,7 +69,7 @@ Provides context for child components and handles root-level interactions.
 		if (!tombstoneDeletedAt) return null;
 		return formatDateTime(tombstoneDeletedAt);
 	});
-	const accountLabel = $derived(account ? account.displayName || account.username : 'Deleted post');
+	const accountLabel = $derived(account.displayName || account.username || 'Deleted post');
 
 	// Create context for child components
 	// Create context for child components

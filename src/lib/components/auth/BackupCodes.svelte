@@ -335,13 +335,14 @@
 {#if regenerateModal.state.open}
 	<div class="backup-codes-modal" role="dialog" aria-labelledby="modal-title" aria-modal="true">
 		<button
+			use:regenerateModal.actions.backdrop
 			class="backup-codes-modal__backdrop"
 			onclick={() => regenerateModal.helpers.close()}
 			onkeydown={(e) => e.key === 'Escape' && regenerateModal.helpers.close()}
 			aria-label="Close modal"
 			type="button"
 		></button>
-		<div class="backup-codes-modal__content">
+		<div class="backup-codes-modal__content" use:regenerateModal.actions.content>
 			<h3 id="modal-title" class="backup-codes-modal__title">Regenerate Backup Codes?</h3>
 			<p class="backup-codes-modal__text">
 				This will invalidate all your existing backup codes. Any codes you've saved will no longer

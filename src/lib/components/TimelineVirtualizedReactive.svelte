@@ -9,14 +9,18 @@
 		adapter?: unknown;
 		view?: Record<string, unknown> | null;
 		enableRealtime?: boolean;
+		virtualScrolling?: boolean;
+		estimateSize?: number;
 		density?: 'compact' | 'comfortable';
 		class?: string;
+		empty?: Snippet;
 		children?: Snippet;
 	}
 
 	let {
 		items = [],
 		class: className = '',
+		empty,
 		children,
 	}: Props = $props();
 
@@ -56,6 +60,10 @@
 			</article>
 		{/each}
 	{:else}
-		<div class="timeline-virtualized__empty">No items yet.</div>
+		{#if empty}
+			{@render empty()}
+		{:else}
+			<div class="timeline-virtualized__empty">No items yet.</div>
+		{/if}
 	{/if}
 </div>

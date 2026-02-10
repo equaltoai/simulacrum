@@ -4,7 +4,7 @@
   Interface for managing list membership by adding and removing accounts.
 -->
 <script lang="ts">
-	import { getListsContext, type ListMember } from './context.js';
+	import { getListsContext, type ListActor } from './context.js';
 
 	interface Props {
 		/**
@@ -15,26 +15,14 @@
 
 	let { class: className = '' }: Props = $props();
 
-	const { state: listsState, handlers } = getListsContext();
+	const { state: listsState, handlers, addMember, removeMember } = getListsContext();
 
 	let searchQuery = $state('');
-	let searchResults = $state<ListMember[]>([]);
+	let searchResults = $state<ListActor[]>([]);
 	let searching = $state(false);
 
-	const currentList = $derived.by(() => listsState.selectedList);
-	const currentMembers = $derived.by(() => listsState.members || []);
-
-	function getMemberDisplayName(member: ListMember): string {
-		return member.displayName || member.actor?.displayName || member.actor?.username || 'Unknown';
-	}
-
-	function getMemberUsername(member: ListMember): string {
-		return member.username || member.actor?.username || '';
-	}
-
-	function getMemberAvatar(member: ListMember): string | undefined {
-		return member.avatar || member.actor?.avatar;
-	}
+	const currentList = $derived(listsState.selectedList);
+	const currentMembers = $derived(listsState.members);
 
 	async function handleSearch() {
 		if (!searchQuery.trim() || !currentList || searching) return;
@@ -46,6 +34,8 @@
 			const results = await handlers.onSearchAccounts?.(searchQuery.trim());
 			if (results) {
 				searchResults = results;
+			} else {
+				searchResults = [];
 			}
 		} catch (error) {
 			console.error('Search failed:', error);
@@ -54,32 +44,28 @@
 		}
 	}
 
-	async function handleAddMember(member: ListMember) {
+	async function handleAddMember(actor: ListActor) {
 		if (!currentList) return;
-
 		try {
-			await handlers.onAddListMember?.(currentList.id, member.id);
-			// Refresh list to get updated members
-			await handlers.onFetchList?.(currentList.id);
+			await addMember(actor.id);
 		} catch (error) {
 			console.error('Failed to add member:', error);
 		}
 	}
 
-	async function handleRemoveMember(memberId: string) {
+	async function handleRemoveMember(actorId: string) {
 		if (!currentList) return;
-
+		const membership = currentMembers.find((member) => member.actor.id === actorId);
+		if (!membership) return;
 		try {
-			await handlers.onRemoveListMember?.(currentList.id, memberId);
-			// Refresh list to get updated members
-			await handlers.onFetchList?.(currentList.id);
+			await removeMember(membership.id);
 		} catch (error) {
 			console.error('Failed to remove member:', error);
 		}
 	}
 
 	function isMember(accountId: string): boolean {
-		return currentMembers.some((member: ListMember) => member.id === accountId);
+		return currentMembers.some((member) => member.actor.id === accountId);
 	}
 
 	// Debounced search
@@ -114,7 +100,7 @@
 		<div class="member-picker__header">
 			<h3 class="member-picker__title">Manage Members</h3>
 			<p class="member-picker__subtitle">
-				{currentMembers.length} member{currentMembers.length === 1 ? '' : 's'}
+				{currentList.membersCount} member{currentList.membersCount === 1 ? '' : 's'}
 			</p>
 		</div>
 
@@ -142,21 +128,17 @@
 				<div class="member-picker__results-header">Search Results</div>
 				{#each searchResults as result (result.id)}
 					<div class="member-picker__result">
-						{#if getMemberAvatar(result)}
-							<img
-								src={getMemberAvatar(result)}
-								alt={getMemberDisplayName(result)}
-								class="member-picker__avatar"
-							/>
+						{#if result.avatar}
+							<img src={result.avatar} alt={result.displayName} class="member-picker__avatar" />
 						{:else}
 							<div class="member-picker__avatar-placeholder">
-								{getMemberDisplayName(result).charAt(0).toUpperCase()}
+								{result.displayName.charAt(0).toUpperCase()}
 							</div>
 						{/if}
 
 						<div class="member-picker__info">
-							<div class="member-picker__name">{getMemberDisplayName(result)}</div>
-							<div class="member-picker__username">@{getMemberUsername(result)}</div>
+							<div class="member-picker__name">{result.displayName}</div>
+							<div class="member-picker__username">@{result.username}</div>
 						</div>
 
 						{#if isMember(result.id)}
@@ -195,28 +177,28 @@
 				<div class="member-picker__members-header">Current Members</div>
 				{#each currentMembers as member (member.id)}
 					<div class="member-picker__member">
-						{#if getMemberAvatar(member)}
+						{#if member.actor.avatar}
 							<img
-								src={getMemberAvatar(member)}
-								alt={getMemberDisplayName(member)}
+								src={member.actor.avatar}
+								alt={member.actor.displayName}
 								class="member-picker__avatar"
 							/>
 						{:else}
 							<div class="member-picker__avatar-placeholder">
-								{getMemberDisplayName(member).charAt(0).toUpperCase()}
+								{member.actor.displayName.charAt(0).toUpperCase()}
 							</div>
 						{/if}
 
 						<div class="member-picker__info">
-							<div class="member-picker__name">{getMemberDisplayName(member)}</div>
-							<div class="member-picker__username">@{getMemberUsername(member)}</div>
+							<div class="member-picker__name">{member.actor.displayName}</div>
+							<div class="member-picker__username">@{member.actor.username}</div>
 						</div>
 
 						<button
 							class="member-picker__remove-button"
-							onclick={() => handleRemoveMember(member.id)}
+							onclick={() => handleRemoveMember(member.actor.id)}
 							title="Remove from list"
-							aria-label={`Remove ${getMemberDisplayName(member)} from list`}
+							aria-label={`Remove ${member.actor.displayName} from list`}
 						>
 							<svg viewBox="0 0 24 24" fill="currentColor">
 								<path

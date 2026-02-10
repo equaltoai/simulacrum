@@ -13,6 +13,7 @@
 -->
 <script lang="ts">
 	import { createTabs } from '$lib/greater/headless/tabs';
+	import { untrack } from 'svelte';
 	import { getProfileContext } from './context.js';
 
 	interface Props {
@@ -26,35 +27,35 @@
 
 	const { state: profileState, setActiveTab } = getProfileContext();
 
-	const initialTabIndex = profileState.tabs.findIndex((tab) => tab.id === profileState.activeTab);
+	const activeTabIndex = $derived.by(() => {
+		const index = profileState.tabs.findIndex((tab) => tab.id === profileState.activeTab);
+		return index >= 0 ? index : 0;
+	});
 
 	const tabs = createTabs({
-		defaultTab: initialTabIndex >= 0 ? initialTabIndex : 0,
-		onChange: (tabIndex) => {
-			const tab = profileState.tabs[tabIndex];
-			if (tab) {
-				setActiveTab(tab.id);
-			}
+		defaultTab: untrack(() => activeTabIndex),
+		onChange: (index) => {
+			const tabId = profileState.tabs[index]?.id;
+			if (!tabId) return;
+			setActiveTab(tabId);
 		},
 	});
 
 	$effect(() => {
-		const activeIndex = profileState.tabs.findIndex((tab) => tab.id === profileState.activeTab);
-		if (activeIndex >= 0 && tabs.state.activeTab !== activeIndex) {
-			tabs.helpers.setActiveTab(activeIndex);
+		if (tabs.state.activeTab !== activeTabIndex) {
+			tabs.helpers.setActiveTab(activeTabIndex);
 		}
 	});
 </script>
 
 <div class={`profile-tabs ${className}`}>
-	<div class="profile-tabs__list" use:tabs.actions.tabList role="tablist">
+	<div class="profile-tabs__list" use:tabs.actions.tabList>
 		{#each profileState.tabs as tab, index (tab.id)}
 			<button
 				class="profile-tabs__tab"
-				class:profile-tabs__tab--active={profileState.activeTab === tab.id}
+				class:profile-tabs__tab--active={tabs.state.activeTab === index}
 				use:tabs.actions.tab={{ index }}
-				role="tab"
-				aria-selected={profileState.activeTab === tab.id}
+				type="button"
 			>
 				{#if tab.icon}
 					<svg class="profile-tabs__icon" viewBox="0 0 24 24" fill="currentColor">

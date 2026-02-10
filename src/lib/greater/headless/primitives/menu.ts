@@ -167,7 +167,10 @@ export interface MenuActions {
 	/**
 	 * Action for menu items
 	 */
-	item: Action<HTMLElement, MenuItemOptions | string>;
+	item: (
+		node: HTMLElement,
+		options?: string | { value?: string; disabled?: boolean; onClick?: () => void }
+	) => { destroy: () => void };
 
 	/**
 	 * Action for menu separator
@@ -223,12 +226,6 @@ export interface MenuHelpers {
 	 * Set active index
 	 */
 	setActiveIndex: (index: number) => void;
-}
-
-export interface MenuItemOptions {
-	value?: string;
-	disabled?: boolean;
-	onClick?: () => void;
 }
 
 /**
@@ -635,21 +632,21 @@ export function createMenu(config: MenuConfig = {}) {
 	/**
 	 * Menu item action
 	 */
-	function item(node: HTMLElement, options: MenuItemOptions | string = {}) {
-		const normalized =
-			typeof options === 'string'
-				? ({ value: options } satisfies MenuItemOptions)
-				: (options ?? {});
-		const { disabled = false, onClick: onClickHandler, value = '' } = normalized;
+	function item(
+		node: HTMLElement,
+		options: string | { value?: string; disabled?: boolean; onClick?: () => void } = {}
+	) {
+		const normalizedOptions = typeof options === 'string' ? { value: options } : options;
+		const { value = '', disabled = false, onClick: onClickHandler } = normalizedOptions;
 
 		// Check if item already exists and update it
 		const existingIndex = menuItems.findIndex((item) => item.element === node);
 		if (existingIndex !== -1) {
 			const existingItem = menuItems[existingIndex];
 			if (existingItem) {
+				existingItem.value = value;
 				existingItem.disabled = disabled;
 				existingItem.onClick = onClickHandler;
-				existingItem.value = value;
 			}
 			if (disabled) {
 				node.setAttribute('aria-disabled', 'true');
@@ -674,9 +671,7 @@ export function createMenu(config: MenuConfig = {}) {
 			if (itemData.disabled) return;
 
 			itemData.onClick?.();
-			if (itemData.value) {
-				_onSelect?.(itemData.value);
-			}
+			_onSelect?.(itemData.value);
 
 			if (state.closeOnSelect) {
 				close();

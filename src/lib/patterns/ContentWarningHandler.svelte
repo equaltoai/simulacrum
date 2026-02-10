@@ -148,7 +148,7 @@
 		return text;
 	}
 
-	const preview = $derived.by(() => getPreview(htmlContent));
+	const preview = $derived(getPreview(htmlContent));
 	const sanitizedHtmlContent = $derived.by(() =>
 		htmlContent
 			? sanitizeHtml(htmlContent, {

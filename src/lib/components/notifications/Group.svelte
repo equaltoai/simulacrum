@@ -16,7 +16,7 @@ Displays multiple similar notifications grouped together.
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { NotificationGroup } from './types.js';
+	import type { NotificationGroup, NotificationType } from './types.js';
 	import { getNotificationsContext } from './context.svelte.js';
 
 	interface Props {
@@ -39,18 +39,11 @@ Displays multiple similar notifications grouped together.
 	let { group, children, class: className = '' }: Props = $props();
 
 	const context = getNotificationsContext();
-	const firstNotification = $derived.by(() => group.notifications[0]);
-	const firstCreatedAtIso = $derived.by(() =>
-		firstNotification?.createdAt ? new Date(firstNotification.createdAt).toISOString() : ''
-	);
-	const firstStatus = $derived.by(() =>
-		firstNotification && 'status' in firstNotification ? firstNotification.status : null
-	);
 
 	/**
 	 * Get group icon based on type
 	 */
-	const iconMap: Record<string, string> = {
+	const iconMap: Partial<Record<NotificationType, string>> = {
 		follow: '👤',
 		mention: '@',
 		reblog: '🔁',
@@ -63,18 +56,18 @@ Displays multiple similar notifications grouped together.
 		'admin.report': '⚠️',
 		quote: '💬',
 		community_note: '📝',
-		trust_update: '🛡️',
+		trust_update: '🔒',
 		cost_alert: '💸',
-		moderation_action: '🚨',
+		moderation_action: '🛡️',
 	};
-	const icon = $derived.by(() => iconMap[group.type] ?? '🔔');
+
+	const icon = $derived(iconMap[group.type] ?? '🔔');
 
 	/**
 	 * Get group title based on type and count
 	 */
 	const title = $derived.by(() => {
-		const count = group.notifications.length;
-		const titleMap: Record<string, string> = {
+		const baseTitleMap: Partial<Record<NotificationType, string>> = {
 			follow: 'followed you',
 			mention: 'mentioned you',
 			reblog: 'boosted your post',
@@ -87,12 +80,12 @@ Displays multiple similar notifications grouped together.
 			'admin.report': 'reported',
 			quote: 'quoted your post',
 			community_note: 'added a community note',
-			trust_update: 'updated trust score',
-			cost_alert: 'cost alert',
-			moderation_action: 'moderation action',
+			trust_update: 'updated your trust score',
+			cost_alert: 'sent a cost alert',
+			moderation_action: 'performed a moderation action',
 		};
 
-		const baseTitle = titleMap[group.type] ?? 'sent notifications';
+		const baseTitle = baseTitleMap[group.type] ?? 'sent notifications';
 
 		return baseTitle;
 	});
@@ -174,15 +167,19 @@ Displays multiple similar notifications grouped together.
 					<span class="notification-group__action">{title}</span>
 				</p>
 
-				{#if context.config.showTimestamps && firstNotification?.createdAt}
-					<time class="notification-group__timestamp" datetime={firstCreatedAtIso}>
-						{new Date(firstNotification.createdAt).toLocaleDateString()}
+				{#if context.config.showTimestamps && group.notifications[0]?.createdAt}
+					{@const createdAt = group.notifications[0].createdAt}
+					<time
+						class="notification-group__timestamp"
+						datetime={typeof createdAt === 'string' ? createdAt : createdAt.toISOString()}
+					>
+						{new Date(createdAt).toLocaleDateString()}
 					</time>
 				{/if}
 
-				{#if firstStatus}
+				{#if group.notifications[0]?.status}
 					<div class="notification-group__status">
-						{sanitizeContent(firstStatus.content)}
+						{sanitizeContent(group.notifications[0].status.content)}
 					</div>
 				{/if}
 			</div>

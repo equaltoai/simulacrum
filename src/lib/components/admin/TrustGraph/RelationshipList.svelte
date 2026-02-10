@@ -16,8 +16,8 @@ Tabular view of trust relationships and scores.
 	import { getTrustGraphContext } from './context.js';
 
 	interface TrustEdge {
-		from: { id: string; username: string; displayName: string };
-		to: { id: string; username: string; displayName: string };
+		from: { id: string; username: string; displayName?: string };
+		to: { id: string; username: string; displayName?: string };
 		category: string;
 		score: number;
 		updatedAt: string;
@@ -37,25 +37,6 @@ Tabular view of trust relationships and scores.
 	let loading = $state(false);
 	let error = $state<Error | null>(null);
 
-	function normalizeEdges(result: Awaited<ReturnType<typeof context.config.adapter.getTrustGraph>> | null) {
-		if (!result) return [];
-		return result.map((edge) => ({
-			from: {
-				id: edge.from.id,
-				username: edge.from.username,
-				displayName: edge.from.displayName ?? edge.from.username,
-			},
-			to: {
-				id: edge.to.id,
-				username: edge.to.username,
-				displayName: edge.to.displayName ?? edge.to.username,
-			},
-			category: edge.category,
-			score: edge.score,
-			updatedAt: edge.updatedAt,
-		}));
-	}
-
 	async function loadRelationships() {
 		if (!context.state.rootActorId) return;
 
@@ -66,7 +47,7 @@ Tabular view of trust relationships and scores.
 				context.state.rootActorId,
 				context.config.category
 			);
-			relationships = normalizeEdges(result);
+			relationships = (result ?? []).map((edge) => edge as unknown as TrustEdge);
 		} catch (err) {
 			error = err instanceof Error ? err : new Error('Failed to load trust relationships');
 		} finally {

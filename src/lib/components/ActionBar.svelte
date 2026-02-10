@@ -64,6 +64,16 @@
 		 * ID prefix for accessibility
 		 */
 		idPrefix?: string;
+
+		/**
+		 * URL to share/copy when no custom onShare handler is provided.
+		 */
+		shareUrl?: string;
+
+		/**
+		 * Title used by the Web Share API (when available).
+		 */
+		shareTitle?: string;
 	}
 
 	let {
@@ -75,6 +85,8 @@
 		class: className = '',
 		extensions,
 		idPrefix = 'action',
+		shareUrl,
+		shareTitle,
 	}: Props = $props();
 
 	// Loading states for each action
@@ -139,11 +151,28 @@
 	}
 
 	async function handleShare() {
-		if (readonly || shareLoading || !handlers.onShare) return;
+		if (readonly || shareLoading) return;
 
 		shareLoading = true;
 		try {
-			await handlers.onShare();
+			if (handlers.onShare) {
+				await handlers.onShare();
+				return;
+			}
+
+			if (!shareUrl) return;
+
+			if (typeof navigator !== 'undefined' && 'share' in navigator) {
+				const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+				if (nav.share) {
+					await nav.share({ url: shareUrl, title: shareTitle });
+					return;
+				}
+			}
+
+			if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+				await navigator.clipboard.writeText(shareUrl);
+			}
 		} catch (error) {
 			console.error('Share action failed:', error);
 		} finally {
@@ -295,7 +324,7 @@
 	<Button
 		variant="ghost"
 		{size}
-		disabled={readonly || shareLoading}
+		disabled={readonly || shareLoading || (!handlers.onShare && !shareUrl)}
 		loading={shareLoading}
 		onclick={handleShare}
 		class="gr-action-bar__button gr-action-bar__button--share"

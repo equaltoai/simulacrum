@@ -332,14 +332,14 @@
 	/**
 	 * Paginate bookmarks
 	 */
-	const paginatedBookmarks = $derived.by(() =>
+	const paginatedBookmarks = $derived(
 		filteredBookmarks.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 	);
 
 	/**
 	 * Total pages
 	 */
-	const totalPages = $derived.by(() => Math.ceil(filteredBookmarks.length / itemsPerPage));
+	const totalPages = $derived(Math.ceil(filteredBookmarks.length / itemsPerPage));
 
 	/**
 	 * Toggle bookmark selection
@@ -1063,7 +1063,6 @@
 		font-size: 0.875rem;
 		color: var(--text-primary, #0f1419);
 		display: -webkit-box;
-		line-clamp: 2;
 		-webkit-line-clamp: 2;
 		-webkit-box-orient: vertical;
 		overflow: hidden;

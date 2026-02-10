@@ -28,62 +28,39 @@ export interface ActivityPubActor<TExtensions = Record<string, unknown>> {
 	name?: string;
 
 	/**
+	 * Display name (UI-friendly alias)
+	 */
+	displayName?: string;
+
+	/**
 	 * Preferred username (handle)
 	 */
 	preferredUsername?: string;
 
 	/**
-	 * Mastodon-compatible display name
-	 */
-	displayName?: string;
-
-	/**
-	 * Mastodon-compatible username
+	 * Username (UI-friendly alias)
 	 */
 	username?: string;
 
 	/**
-	 * Mastodon-compatible account handle
+	 * Account identifier (e.g. `user@example.com`)
 	 */
 	acct?: string;
 
 	/**
-	 * Mastodon-compatible avatar URL
+	 * Bot account indicator (UI-friendly alias)
+	 */
+	bot?: boolean;
+
+	/**
+	 * Avatar URL (UI-friendly alias)
 	 */
 	avatar?: string;
 
 	/**
-	 * Mastodon-compatible static avatar URL
-	 */
-	avatarStatic?: string;
-
-	/**
-	 * Mastodon-compatible header image URL
+	 * Header/banner URL (UI-friendly alias)
 	 */
 	header?: string;
-
-	/**
-	 * Mastodon-compatible static header URL
-	 */
-	headerStatic?: string;
-
-	/**
-	 * Mastodon-compatible profile note/bio
-	 */
-	note?: string;
-
-	/**
-	 * Mastodon-compatible account stats
-	 */
-	followersCount?: number;
-	followingCount?: number;
-	statusesCount?: number;
-
-	/**
-	 * Mastodon-compatible flags
-	 */
-	bot?: boolean;
-	locked?: boolean;
 
 	/**
 	 * Actor summary/bio
@@ -144,12 +121,10 @@ export interface ActivityPubActor<TExtensions = Record<string, unknown>> {
  * ActivityPub Image/Document
  */
 export interface ActivityPubImage {
-	id?: string;
-	type: 'Image' | 'Document' | 'image' | 'video' | 'audio' | 'gifv' | string;
+	type: 'Image' | 'Document';
 	url: string;
 	mediaType?: string;
 	name?: string; // Alt text
-	description?: string;
 	previewUrl?: string;
 	width?: number;
 	height?: number;
@@ -256,10 +231,6 @@ export interface ActivityPubTag {
 	type: 'Mention' | 'Hashtag' | 'Emoji' | string;
 	name: string;
 	href?: string;
-	url?: string;
-	id?: string;
-	username?: string;
-	acct?: string;
 	icon?: ActivityPubImage;
 }
 
@@ -338,11 +309,6 @@ export interface GenericStatus<T extends ActivityPubObject = ActivityPubObject> 
 	contentWarning?: string;
 
 	/**
-	 * Mastodon-compatible spoiler text alias
-	 */
-	spoilerText?: string | null;
-
-	/**
 	 * Is sensitive content
 	 */
 	sensitive: boolean;
@@ -361,11 +327,6 @@ export interface GenericStatus<T extends ActivityPubObject = ActivityPubObject> 
 	 * Hashtags
 	 */
 	hashtags: ActivityPubTag[];
-
-	/**
-	 * Mastodon-compatible tags alias
-	 */
-	tags?: ActivityPubTag[];
 
 	/**
 	 * Custom emojis
