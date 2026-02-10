@@ -1,3 +1,5 @@
+import { print } from 'graphql';
+
 import {
 	ActorByUsernameDocument,
 	ClearNotificationsDocument,
@@ -5,8 +7,7 @@ import {
 	DismissNotificationDocument,
 	UpdateProfileDocument,
 	NotificationsDocument,
-	ObjectByIdDocument,
-	TimelineDocument,
+	ObjectFieldsFragmentDoc,
 	LikeObjectDocument,
 	UnlikeObjectDocument,
 	BookmarkObjectDocument,
@@ -34,13 +35,12 @@ import {
 	type LikeObjectMutationVariables,
 	type NotificationsQuery,
 	type NotificationsQueryVariables,
-	type ObjectByIdQuery,
 	type ObjectByIdQueryVariables,
+	type ObjectFieldsFragment,
 	type PinObjectMutation,
 	type PinObjectMutationVariables,
 	type ShareObjectMutation,
 	type ShareObjectMutationVariables,
-	type TimelineQuery,
 	type TimelineQueryVariables,
 	type TimelineType,
 	type UnlikeObjectMutation,
@@ -115,6 +115,117 @@ query Viewer {
 }
 `;
 
+type ViewerObjectState = {
+	viewerFavourited?: boolean;
+	viewerBookmarked?: boolean;
+	viewerPinned?: boolean;
+};
+
+type ObjectWithViewerState = ObjectFieldsFragment &
+	ViewerObjectState & {
+		boostedObject?: (NonNullable<ObjectFieldsFragment['boostedObject']> & ViewerObjectState) | null;
+	};
+
+const OBJECT_FIELDS_FRAGMENT = print(ObjectFieldsFragmentDoc);
+
+const TIMELINE_WITH_VIEWER_STATE_QUERY = `
+${OBJECT_FIELDS_FRAGMENT}
+query TimelineWithViewerState(
+	$type: TimelineType!
+	$first: Int = 20
+	$after: Cursor
+	$hashtag: String
+	$listId: ID
+	$actorId: ID
+	$mediaOnly: Boolean = false
+) {
+	timeline(type: $type, first: $first, after: $after, hashtag: $hashtag, listId: $listId, actorId: $actorId, mediaOnly: $mediaOnly) {
+		edges {
+			cursor
+			node {
+				...ObjectFields
+				viewerFavourited
+				viewerBookmarked
+				viewerPinned
+				boostedObject {
+					viewerFavourited
+					viewerBookmarked
+					viewerPinned
+				}
+			}
+		}
+		pageInfo {
+			hasNextPage
+			endCursor
+		}
+		totalCount
+	}
+}
+`;
+
+const OBJECT_BY_ID_WITH_VIEWER_STATE_QUERY = `
+${OBJECT_FIELDS_FRAGMENT}
+query ObjectByIdWithViewerState($id: ID!) {
+	object(id: $id) {
+		...ObjectFields
+		viewerFavourited
+		viewerBookmarked
+		viewerPinned
+		boostedObject {
+			viewerFavourited
+			viewerBookmarked
+			viewerPinned
+		}
+	}
+}
+`;
+
+const THREAD_CONTEXT_WITH_POSTS_QUERY = `
+${OBJECT_FIELDS_FRAGMENT}
+query ThreadContextWithPosts($noteId: ID!) {
+	threadContext(noteId: $noteId) {
+		rootNote {
+			...ObjectFields
+			viewerFavourited
+			viewerBookmarked
+			viewerPinned
+			boostedObject {
+				viewerFavourited
+				viewerBookmarked
+				viewerPinned
+			}
+		}
+		ancestors {
+			...ObjectFields
+			viewerFavourited
+			viewerBookmarked
+			viewerPinned
+			boostedObject {
+				viewerFavourited
+				viewerBookmarked
+				viewerPinned
+			}
+		}
+		descendants {
+			...ObjectFields
+			viewerFavourited
+			viewerBookmarked
+			viewerPinned
+			boostedObject {
+				viewerFavourited
+				viewerBookmarked
+				viewerPinned
+			}
+		}
+		replyCount
+		participantCount
+		lastActivity
+		missingPosts
+		syncStatus
+	}
+}
+`;
+
 export async function fetchViewer({ signal }: { signal?: AbortSignal } = {}): Promise<Account> {
 	const token = getAccessToken();
 	if (!token) {
@@ -161,8 +272,16 @@ async function fetchTimeline({
 		actorId,
 	};
 
-	const data = await graphqlRequest<TimelineQuery, TimelineQueryVariables>({
-		document: TimelineDocument,
+	const data = await graphqlRequest<
+		{
+			timeline: {
+				edges: Array<{ cursor: string; node: ObjectWithViewerState }>;
+				pageInfo: { endCursor?: string | null; hasNextPage: boolean };
+			};
+		},
+		TimelineQueryVariables
+	>({
+		document: TIMELINE_WITH_VIEWER_STATE_QUERY,
 		variables,
 		token,
 		signal,
@@ -495,14 +614,51 @@ export async function fetchObjectById({
 
 	const variables: ObjectByIdQueryVariables = { id };
 
-	const data = await graphqlRequest<ObjectByIdQuery, ObjectByIdQueryVariables>({
-		document: ObjectByIdDocument,
+	const data = await graphqlRequest<
+		{ object?: ObjectWithViewerState | null },
+		ObjectByIdQueryVariables
+	>({
+		document: OBJECT_BY_ID_WITH_VIEWER_STATE_QUERY,
 		variables,
 		token,
 		signal,
 	});
 
 	return data.object ? toStatus(data.object) : null;
+}
+
+export async function fetchThreadContext({
+	noteId,
+	signal,
+}: {
+	noteId: string;
+	signal?: AbortSignal;
+}): Promise<{ rootNote: Status; ancestors: Status[]; descendants: Status[] } | null> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		{
+			threadContext?: {
+				rootNote: ObjectWithViewerState;
+				ancestors: ObjectWithViewerState[];
+				descendants: ObjectWithViewerState[];
+			} | null;
+		},
+		{ noteId: string }
+	>({
+		document: THREAD_CONTEXT_WITH_POSTS_QUERY,
+		variables: { noteId },
+		token,
+		signal,
+	});
+
+	if (!data.threadContext) return null;
+
+	return {
+		rootNote: toStatus(data.threadContext.rootNote),
+		ancestors: data.threadContext.ancestors.map((item) => toStatus(item)),
+		descendants: data.threadContext.descendants.map((item) => toStatus(item)),
+	};
 }
 
 export async function fetchNotifications({
@@ -756,6 +912,7 @@ export const api = {
 	fetchActorByUsername,
 	fetchActorTimeline,
 	fetchObjectById,
+	fetchThreadContext,
 	fetchNotifications,
 	dismissNotification,
 	clearNotifications,

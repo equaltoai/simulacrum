@@ -159,6 +159,16 @@ export function toStatus(object: ObjectLike, depth = 0): Status {
 
 	const editedAt = object.updatedAt !== object.createdAt ? object.updatedAt : undefined;
 	const reblogged = 'boosted' in object && typeof object.boosted === 'boolean' ? object.boosted : undefined;
+	const viewerFavourited =
+		'viewerFavourited' in object && typeof object.viewerFavourited === 'boolean'
+			? object.viewerFavourited
+			: undefined;
+	const viewerBookmarked =
+		'viewerBookmarked' in object && typeof object.viewerBookmarked === 'boolean'
+			? object.viewerBookmarked
+			: undefined;
+	const viewerPinned =
+		'viewerPinned' in object && typeof object.viewerPinned === 'boolean' ? object.viewerPinned : undefined;
 
 	return {
 		id: object.id,
@@ -175,6 +185,9 @@ export function toStatus(object: ObjectLike, depth = 0): Status {
 		reblogsCount: object.sharesCount,
 		favouritesCount: object.likesCount,
 		reblogged,
+		favourited: viewerFavourited,
+		bookmarked: viewerBookmarked,
+		pinned: viewerPinned,
 		reblog,
 		mediaAttachments: object.attachments.map(toMediaAttachment),
 		mentions: object.mentions.map(toMention),

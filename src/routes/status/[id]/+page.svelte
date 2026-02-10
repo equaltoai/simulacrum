@@ -62,16 +62,23 @@
 
 		void (async () => {
 			try {
-				const [viewer, statusData, context] = await Promise.all([
+				const [viewer, thread] = await Promise.all([
 					api.fetchViewer({ signal: controller.signal }),
-					api.fetchStatusById({ id, signal: controller.signal }),
-					api.fetchStatusContext({ id, signal: controller.signal }),
+					api.fetchThreadContext({ noteId: id, signal: controller.signal }),
 				]);
 
 				viewerId = viewer.id;
-				status = statusData;
-				ancestors = context.ancestors;
-				descendants = context.descendants;
+
+				if (!thread) {
+					status = null;
+					ancestors = [];
+					descendants = [];
+					return;
+				}
+
+				status = thread.rootNote;
+				ancestors = thread.ancestors;
+				descendants = thread.descendants;
 			} catch (err) {
 				if (err instanceof DOMException && err.name === 'AbortError') return;
 				error = err instanceof Error ? err.message : String(err);
