@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { api } from '$lib/api';
+	import { toStatus } from '$lib/api/adapters';
 	import { authSession } from '$lib/auth/session';
 	import type { Status } from '$lib/types';
 	import TimelineVirtualizedReactive from '$lib/components/TimelineVirtualizedReactive.svelte';
 	import type { FollowedHashtag, TrendingLink, TrendingStatus, TrendingTag } from '$lib/api';
+	import { getStreamingAdapter } from '$lib/realtime/adapter';
 
 	type Feed = 'local' | 'public';
 	let feed = $state<Feed>('local');
@@ -12,6 +14,11 @@
 	let items = $state<Status[]>([]);
 	let isLoading = $state(false);
 	let error = $state<string | null>(null);
+	let realtimeError = $state<string | null>(null);
+
+	function prependUnique(status: Status) {
+		items = [status, ...items.filter((item) => item.id !== status.id)].slice(0, 200);
+	}
 
 	let trends = $state<{ tags: TrendingTag[]; links: TrendingLink[]; statuses: TrendingStatus[] } | null>(
 		null
@@ -46,6 +53,7 @@
 		items = [];
 		error = null;
 		isLoading = false;
+		realtimeError = null;
 
 		if (!token) return;
 
@@ -68,6 +76,34 @@
 		})();
 
 		return () => controller.abort();
+	});
+
+	$effect(() => {
+		const token = $authSession?.accessToken ?? null;
+		realtimeError = null;
+
+		if (!token) return;
+
+		const adapter = getStreamingAdapter(token);
+		if (!adapter) return;
+
+		const type = feed === 'local' ? 'LOCAL' : 'PUBLIC';
+
+		const subscription = adapter
+			.subscribeToTimelineUpdates({ type })
+			.subscribe({
+				next: (result) => {
+					const object = result.data?.timelineUpdates;
+					if (!object) return;
+					prependUnique(toStatus(object));
+				},
+				error: (err) => {
+					console.warn('Explore timeline updates subscription failed:', err);
+					realtimeError = 'Realtime updates are currently unavailable.';
+				},
+			});
+
+		return () => subscription.unsubscribe();
 	});
 
 	$effect(() => {
@@ -218,6 +254,10 @@
 
 		{#if error}
 			<div class="page__notice page__notice--error" role="alert">{error}</div>
+		{/if}
+
+		{#if realtimeError}
+			<div class="page__notice">{realtimeError}</div>
 		{/if}
 
 		{#if isLoading}

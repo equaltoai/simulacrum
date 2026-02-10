@@ -21,6 +21,7 @@
 		{ label: 'Explore', href: `${base}/explore` },
 		{ label: 'Lists', href: `${base}/lists` },
 		{ label: 'Notifications', href: `${base}/notifications` },
+		{ label: 'Conversations', href: `${base}/conversations` },
 		{ label: 'Profile', href: `${base}/profile` },
 		{ label: 'Settings', href: `${base}/settings` },
 		{ label: 'Admin', href: `${base}/admin` },

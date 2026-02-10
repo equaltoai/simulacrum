@@ -116,6 +116,8 @@ Acceptance:
 - Receive timeline updates without refresh while the tab is open.
 - Receive notifications via WS; push registration succeeds in a supported browser.
 
+Done (2026-02-10): Wired GraphQL WebSocket subscriptions for home/local/public timeline updates and notification streaming, added conversations list + detail pages with mark-as-read and delete actions, and implemented push subscription registration/update/delete (service worker + instance VAPID key fetch) in Settings.
+
 ### M11 — Trust + moderation (user-facing)
 
 Deliverables:

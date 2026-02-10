@@ -1,8 +1,17 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { api, type UserPreferences } from '$lib/api';
 	import { authSession } from '$lib/auth/session';
 	import type { Account } from '$lib/types';
 	import type { ExpandMediaPreference, Visibility } from '$lib/greater/adapters/graphql';
+	import { getStreamingAdapter } from '$lib/realtime/adapter';
+	import {
+		PushNotificationsController,
+		type PushNotificationsState,
+		type PushSubscription,
+	} from '$lib/components/Profile/PushNotificationsController';
+
+	type PushAlerts = PushSubscription['alerts'];
 
 	let viewer = $state<Account | null>(null);
 	let isLoading = $state(false);
@@ -25,6 +34,36 @@
 	let isSavingPreferences = $state(false);
 	let preferencesMessage = $state<string | null>(null);
 	let preferencesError = $state<string | null>(null);
+
+	let pushState = $state<PushNotificationsState | null>(null);
+	let pushAlerts = $state<PushAlerts>({
+		follow: true,
+		favourite: true,
+		reblog: true,
+		mention: true,
+		poll: true,
+		followRequest: true,
+		status: true,
+		update: true,
+		adminSignUp: false,
+		adminReport: false,
+	});
+	let pushController = $state<PushNotificationsController | null>(null);
+	let pushSetupError = $state<string | null>(null);
+	let isLoadingPush = $state(false);
+
+	const pushAlertOptions = [
+		{ key: 'mention', label: 'Mentions' },
+		{ key: 'follow', label: 'Follows' },
+		{ key: 'followRequest', label: 'Follow requests' },
+		{ key: 'favourite', label: 'Likes' },
+		{ key: 'reblog', label: 'Boosts' },
+		{ key: 'poll', label: 'Polls' },
+		{ key: 'status', label: 'New posts' },
+		{ key: 'update', label: 'Edits/updates' },
+		{ key: 'adminReport', label: 'Admin reports' },
+		{ key: 'adminSignUp', label: 'Admin sign ups' },
+	] as const satisfies ReadonlyArray<{ key: keyof PushAlerts; label: string }>;
 
 	function stripHtml(html: string): string {
 		if (typeof document === 'undefined') return html;
@@ -86,6 +125,99 @@
 
 		return () => controller.abort();
 	});
+
+	$effect(() => {
+		const token = $authSession?.accessToken ?? null;
+
+		pushController?.destroy();
+		pushController = null;
+		pushState = null;
+		pushSetupError = null;
+		isLoadingPush = false;
+
+		if (!token) return;
+
+		const adapter = getStreamingAdapter(token);
+		if (!adapter) return;
+
+		const abortController = new AbortController();
+		let unsubscribe: (() => void) | null = null;
+		let localController: PushNotificationsController | null = null;
+		isLoadingPush = true;
+
+		void (async () => {
+			try {
+				const vapidPublicKey = await api.fetchInstanceVapidKey({ signal: abortController.signal });
+				if (abortController.signal.aborted) return;
+
+				localController = new PushNotificationsController({
+					adapter,
+					vapidPublicKey,
+					serviceWorkerPath: `${base}/sw.js`,
+				});
+
+				pushController = localController;
+				unsubscribe = localController.subscribe((next) => {
+					pushState = next;
+					if (next.subscription) {
+						pushAlerts = { ...next.subscription.alerts };
+					}
+				});
+
+				await localController.initialize();
+			} catch (err) {
+				if (abortController.signal.aborted) return;
+				pushSetupError = err instanceof Error ? err.message : String(err);
+			} finally {
+				if (!abortController.signal.aborted) {
+					isLoadingPush = false;
+				}
+			}
+		})();
+
+		return () => {
+			abortController.abort();
+			unsubscribe?.();
+			localController?.destroy();
+		};
+	});
+
+	function updatePushAlert(key: keyof PushAlerts, value: boolean) {
+		pushAlerts = { ...pushAlerts, [key]: value };
+	}
+
+	async function handleEnablePush() {
+		if (!pushController) return;
+		pushSetupError = null;
+
+		try {
+			await pushController.register(pushAlerts);
+		} catch (err) {
+			pushSetupError = err instanceof Error ? err.message : String(err);
+		}
+	}
+
+	async function handleDisablePush() {
+		if (!pushController) return;
+		pushSetupError = null;
+
+		try {
+			await pushController.unregister();
+		} catch (err) {
+			pushSetupError = err instanceof Error ? err.message : String(err);
+		}
+	}
+
+	async function handleSavePushAlerts() {
+		if (!pushController) return;
+		pushSetupError = null;
+
+		try {
+			await pushController.updateAlerts(pushAlerts);
+		} catch (err) {
+			pushSetupError = err instanceof Error ? err.message : String(err);
+		}
+	}
 
 	async function handleProfileSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -316,6 +448,92 @@
 						</button>
 					</div>
 				</form>
+			</section>
+
+			<section class="settings__section">
+				<header class="settings__header">
+					<h2 class="settings__title">Push notifications</h2>
+					<p class="settings__subtitle">Receive notifications when the app is not open.</p>
+				</header>
+
+				{#if pushSetupError}
+					<div class="settings-form__notice settings-form__notice--error" role="alert">
+						{pushSetupError}
+					</div>
+				{:else if pushState?.error}
+					<div class="settings-form__notice settings-form__notice--error" role="alert">
+						{pushState.error}
+					</div>
+				{/if}
+
+				{#if isLoadingPush}
+					<div class="page__notice">Loading push notifications…</div>
+				{:else if pushState && !pushState.supported}
+					<p class="settings-form__hint">
+						Push notifications are not supported in this browser (requires Service Workers + Push API).
+					</p>
+				{:else if pushState}
+					<p class="settings-form__hint">
+						Permission: <strong>{pushState.permission}</strong>
+					</p>
+
+					{#if pushState.subscription}
+						<p class="settings-form__hint">Push notifications are enabled for this account.</p>
+
+						<div class="settings-filters" aria-label="Push notification alerts">
+							{#each pushAlertOptions as option (option.key)}
+								<label class="settings-filter">
+									<span class="settings-filter__label">{option.label}</span>
+									<input
+										class="settings-filter__checkbox"
+										type="checkbox"
+										checked={pushAlerts[option.key]}
+										disabled={pushState.loading || pushState.registering}
+										onchange={(event) =>
+											updatePushAlert(
+												option.key,
+												(event.currentTarget as HTMLInputElement).checked
+											)}
+									/>
+								</label>
+							{/each}
+						</div>
+
+						<div class="settings-form__actions">
+							<button
+								type="button"
+								class="gr-button gr-button--solid"
+								onclick={handleSavePushAlerts}
+								disabled={pushState.loading || pushState.registering}
+							>
+								Save alerts
+							</button>
+							<button
+								type="button"
+								class="gr-button gr-button--outline"
+								onclick={handleDisablePush}
+								disabled={pushState.loading || pushState.registering}
+							>
+								Disable
+							</button>
+						</div>
+					{:else}
+						<p class="settings-form__hint">
+							Enable push notifications to receive alerts when you are not actively using the app.
+						</p>
+
+						<button
+							type="button"
+							class="gr-button gr-button--solid"
+							onclick={handleEnablePush}
+							disabled={pushState.registering}
+						>
+							{pushState.registering ? 'Enabling…' : 'Enable push notifications'}
+						</button>
+					{/if}
+				{:else}
+					<p class="settings-form__hint">Push notifications are not available.</p>
+				{/if}
 			</section>
 		</div>
 	{/if}

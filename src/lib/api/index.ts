@@ -1771,6 +1771,24 @@ export async function fetchAdminModerationReviewers({
 	return data.adminModerationReviewers;
 }
 
+export async function fetchInstanceVapidKey({
+	signal,
+}: {
+	signal?: AbortSignal;
+} = {}): Promise<string> {
+	const data = await restRequest<{ vapid_key?: string | null }>({
+		path: '/api/v1/instance',
+		signal,
+	});
+
+	const key = typeof data.vapid_key === 'string' ? data.vapid_key.trim() : '';
+	if (!key) {
+		throw new Error('Instance did not provide a VAPID public key.');
+	}
+
+	return key;
+}
+
 export const api = {
 	graphqlRequest,
 	restRequest,
@@ -1823,4 +1841,5 @@ export const api = {
 	fetchUserPreferences,
 	updateUserPreferences,
 	fetchAdminModerationReviewers,
+	fetchInstanceVapidKey,
 } as const;

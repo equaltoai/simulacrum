@@ -934,6 +934,95 @@ a {
 	letter-spacing: 0.04em;
 }
 
+.conversations {
+	display: flex;
+	flex-direction: column;
+	gap: var(--gr-spacing-scale-3);
+}
+
+.conversation-card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--gr-spacing-scale-2);
+	padding: var(--gr-spacing-scale-4);
+	border-radius: var(--gr-radii-lg);
+	background: var(--gr-semantic-background-surface);
+	border: 1px solid var(--gr-semantic-border-default);
+	text-decoration: none;
+}
+
+.conversation-card:hover {
+	background: var(--gr-semantic-background-secondary);
+}
+
+.conversation-card.is-unread {
+	border-color: var(--gr-semantic-action-primary-default);
+}
+
+.conversation-card__meta {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--gr-spacing-scale-3);
+	color: var(--gr-semantic-foreground-primary);
+}
+
+.conversation-card__badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0.125rem 0.5rem;
+	border-radius: var(--gr-radii-pill);
+	background: var(--gr-semantic-action-primary-default);
+	color: var(--gr-semantic-foreground-inverse);
+	font-size: var(--gr-typography-fontSize-xs);
+	font-weight: var(--gr-typography-fontWeight-semibold);
+}
+
+.conversation-card__preview {
+	color: var(--gr-semantic-foreground-secondary);
+	font-size: var(--gr-typography-fontSize-sm);
+}
+
+.conversation-detail {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--gr-spacing-scale-6);
+}
+
+.conversation-detail__participants {
+	display: flex;
+	flex-direction: column;
+	gap: var(--gr-spacing-scale-2);
+	min-width: 0;
+}
+
+.conversation-detail__list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--gr-spacing-scale-2);
+}
+
+.conversation-detail__name {
+	color: var(--gr-semantic-foreground-primary);
+}
+
+.conversation-detail__handle {
+	color: var(--gr-semantic-foreground-tertiary);
+	font-size: var(--gr-typography-fontSize-xs);
+}
+
+.conversation-detail__actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--gr-spacing-scale-2);
+}
+
 @media (max-width: 900px) {
 	.shell__body {
 		grid-template-columns: 1fr;

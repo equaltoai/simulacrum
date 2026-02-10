@@ -2,6 +2,8 @@
 	import { base } from '$app/paths';
 	import { api } from '$lib/api';
 	import { authSession } from '$lib/auth/session';
+	import { toNotification } from '$lib/api/adapters';
+	import { getStreamingAdapter } from '$lib/realtime/adapter';
 	import ContentRenderer from '$lib/components/ContentRenderer.svelte';
 	import type { Notification, Status } from '$lib/types';
 
@@ -10,6 +12,12 @@
 	let isLoading = $state(false);
 	let isMutating = $state(false);
 	let error = $state<string | null>(null);
+	let realtimeError = $state<string | null>(null);
+
+	function prependUnique(notification: Notification) {
+		items = [notification, ...items.filter((item) => item.id !== notification.id)].slice(0, 200);
+		unreadCount = items.reduce((count, next) => count + (next.read ? 0 : 1), 0);
+	}
 
 	function profileHref(acct: string) {
 		return `${base}/profile/${encodeURIComponent(acct)}`;
@@ -63,6 +71,7 @@
 		unreadCount = 0;
 		error = null;
 		isLoading = false;
+		realtimeError = null;
 
 		if (!token) return;
 
@@ -83,6 +92,30 @@
 		})();
 
 		return () => controller.abort();
+	});
+
+	$effect(() => {
+		const token = $authSession?.accessToken ?? null;
+		realtimeError = null;
+
+		if (!token) return;
+
+		const adapter = getStreamingAdapter(token);
+		if (!adapter) return;
+
+		const subscription = adapter.subscribeToNotificationStream().subscribe({
+			next: (result) => {
+				const nextNotification = result.data?.notificationStream;
+				if (!nextNotification) return;
+				prependUnique(toNotification(nextNotification as unknown as Parameters<typeof toNotification>[0]));
+			},
+			error: (err) => {
+				console.warn('Notification stream subscription failed:', err);
+				realtimeError = 'Realtime notifications are currently unavailable.';
+			},
+		});
+
+		return () => subscription.unsubscribe();
 	});
 </script>
 
@@ -112,6 +145,10 @@
 
 		{#if error}
 			<div class="page__notice page__notice--error" role="alert">{error}</div>
+		{/if}
+
+		{#if realtimeError}
+			<div class="page__notice">{realtimeError}</div>
 		{/if}
 
 		{#if isLoading}
