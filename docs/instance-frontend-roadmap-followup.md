@@ -242,11 +242,17 @@ Acceptance:
 - Authors can configure their public tip address; by default it uses the wallet they used to log in.
 
 Dependencies / likely gaps:
-- The instance API currently has no explicit “tip config” contract surface; add one (or embed into instance config).
-- There is no public mapping from ActivityPub actor → wallet address today; we’ll likely standardize on a profile field
-  convention until a first-class API exists.
-- Content hash for `TipSent.contentHash` needs a stable rule (proposal: `keccak256(utf8(object.id))`).
+- Tip config should be discoverable from a first-party surface:
+  - REST: `/api/v1/instance` → `configuration.tips`
+  - GraphQL: `Query.instance` → `tips`
+- Recipient resolution should be first-class:
+  - GraphQL: `Actor.tipAddress` / `Actor.tipChainId` (instance-scoped)
+  - Also publish a CAIP-10 `Wallet` field for compatibility (`eip155:<chainId>:<0xAddress>`)
+- Content hash should be canonical:
+  - GraphQL: `Object.contentHash` (convention: `keccak256(utf8(object.id.trim()))`)
 - If any of the above is missing/awkward in practice, file issues against `equaltoai/lesser` and/or `equaltoai/lesser-host`.
+
+Done (2026-02-11): Added a TipSplitter-based tipping UI on timelines, status detail, and profiles using the injected EIP-1193 wallet as the sender (`tipETH(hostId, actor, contentHash)`) with pending/confirmed/failed UX. Added Settings → Tipping to select a default tip recipient from linked wallets (challenge + signature verification updates `last_used`) and to publish a CAIP-10 `Wallet` profile field. Tip config is discovered from `/api/v1/instance` (`configuration.tips`).
 
 ## Out of scope (for now)
 

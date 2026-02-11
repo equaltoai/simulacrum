@@ -36,6 +36,11 @@ type ActorLike = {
 	readonly bot: boolean;
 	readonly locked: boolean;
 	readonly updatedAt: string;
+	readonly fields?: ReadonlyArray<{
+		readonly name: string;
+		readonly value: string;
+		readonly verifiedAt?: string | null;
+	}>;
 	readonly isAgent?: boolean;
 	readonly agentInfo?: {
 		readonly id: string;
@@ -43,6 +48,8 @@ type ActorLike = {
 		readonly verified: boolean;
 		readonly verifiedAt?: string | null;
 	} | null;
+	readonly tipAddress?: string | null;
+	readonly tipChainId?: number | null;
 	readonly trustScore: number;
 	readonly createdAt?: string | null;
 	readonly reputation?: ReputationLike | null;
@@ -130,6 +137,7 @@ function toVouch(vouch: VouchLike): Vouch {
 export function toAccount(actor: ActorLike): Account {
 	const reputation = actor.reputation ? toReputation(actor.reputation) : undefined;
 	const vouches = actor.vouches ? actor.vouches.map(toVouch) : undefined;
+	const fields = actor.fields ? actor.fields.map((field) => ({ ...field })) : undefined;
 
 	const agentInfo = actor.agentInfo
 		? {
@@ -155,8 +163,11 @@ export function toAccount(actor: ActorLike): Account {
 		bot: actor.bot,
 		locked: actor.locked,
 		createdAt: actor.createdAt ?? actor.updatedAt,
+		fields,
 		isAgent: actor.isAgent ?? false,
 		agentInfo,
+		tipAddress: actor.tipAddress ?? undefined,
+		tipChainId: actor.tipChainId ?? undefined,
 		trustScore: actor.trustScore,
 		reputation,
 		vouches,

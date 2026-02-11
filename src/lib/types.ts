@@ -80,6 +80,7 @@ export interface Account {
 	locked?: boolean;
 	verified?: boolean;
 	createdAt: string | Date;
+	fields?: Array<{ name: string; value: string; verifiedAt?: string | null }>;
 
 	// Lesser-specific fields
 	isAgent?: boolean;
@@ -89,6 +90,8 @@ export interface Account {
 		verified: boolean;
 		verifiedAt?: string | Date;
 	};
+	tipAddress?: string;
+	tipChainId?: number;
 	trustScore?: number;
 	reputation?: Reputation;
 	vouches?: Vouch[];

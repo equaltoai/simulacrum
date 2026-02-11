@@ -190,6 +190,8 @@ type ViewerQueryData = {
 		locked: boolean;
 		createdAt: string;
 		updatedAt: string;
+		tipAddress?: string | null;
+		tipChainId?: number | null;
 		trustScore: number;
 		fields: Array<{ name: string; value: string; verifiedAt?: string | null }>;
 	};
@@ -212,6 +214,8 @@ query Viewer {
 		locked
 		createdAt
 		updatedAt
+		tipAddress
+		tipChainId
 		trustScore
 		fields {
 			name
@@ -3680,6 +3684,123 @@ export async function fetchInstanceVapidKey({
 	return key;
 }
 
+export type LinkedWallet = {
+	id: string;
+	address: string;
+	chainId: number;
+	walletType: string;
+	verified: boolean;
+	linkedAt: string;
+	lastUsed: string;
+	ens?: string;
+	name?: string;
+};
+
+type WalletListResponse = {
+	wallets: Array<{
+		id: string;
+		address: string;
+		chain_id: number;
+		wallet_type: string;
+		verified: boolean;
+		linked_at: string;
+		last_used: string;
+		ens?: string;
+		name?: string;
+	} | null>;
+	count: number;
+};
+
+export async function fetchLinkedWallets({
+	signal,
+}: {
+	signal?: AbortSignal;
+} = {}): Promise<LinkedWallet[]> {
+	const token = requireAccessToken();
+
+	const data = await restRequest<WalletListResponse>({
+		path: '/auth/wallet/list',
+		token,
+		signal,
+	});
+
+	return (data.wallets ?? [])
+		.filter((w): w is NonNullable<typeof w> => !!w)
+		.map((w) => ({
+			id: w.id,
+			address: w.address,
+			chainId: w.chain_id,
+			walletType: w.wallet_type,
+			verified: w.verified,
+			linkedAt: w.linked_at,
+			lastUsed: w.last_used,
+			ens: w.ens ?? undefined,
+			name: w.name ?? undefined,
+		}));
+}
+
+type WalletChallenge = {
+	id: string;
+	address: string;
+	chain_id: number;
+	username: string;
+	message: string;
+};
+
+export async function createWalletChallenge({
+	address,
+	username,
+	chainId,
+	signal,
+}: {
+	address: string;
+	username: string;
+	chainId?: number;
+	signal?: AbortSignal;
+}): Promise<WalletChallenge> {
+	return restRequest<WalletChallenge>({
+		path: '/auth/wallet/challenge',
+		method: 'POST',
+		body: {
+			address,
+			username,
+			...(chainId ? { chainId } : {}),
+		},
+		signal,
+	});
+}
+
+type WalletVerifyResponse = {
+	verified: boolean;
+	message: string;
+};
+
+export async function verifyWalletSignature({
+	address,
+	challengeId,
+	message,
+	signature,
+	signal,
+}: {
+	address: string;
+	challengeId: string;
+	message: string;
+	signature: string;
+	signal?: AbortSignal;
+}): Promise<WalletVerifyResponse> {
+	return restRequest<WalletVerifyResponse>({
+		path: '/auth/wallet/verify',
+		method: 'POST',
+		body: {
+			address,
+			challengeId,
+			message,
+			signature,
+		},
+		signal,
+	});
+}
+
 export const api = {
 	graphqlRequest,
 	restRequest,
@@ -3782,4 +3903,7 @@ export const api = {
 	adminUnverifyAgent,
 	adminSuspendAgent,
 	fetchInstanceVapidKey,
+	fetchLinkedWallets,
+	createWalletChallenge,
+	verifyWalletSignature,
 } as const;

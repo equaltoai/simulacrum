@@ -13,6 +13,7 @@
 	import ModerationTools from '$lib/patterns/ModerationTools.svelte';
 	import CommunityNotesPanel from '$lib/components/CommunityNotesPanel.svelte';
 	import TranslationPanel from '$lib/components/TranslationPanel.svelte';
+	import TipButton from '$lib/components/Tips/TipButton.svelte';
 
 	interface Props {
 		items?: Status[];
@@ -387,6 +388,9 @@
 					idPrefix={idPrefix(item.id)}
 				>
 					{#snippet extensions()}
+						{#if status.account.tipAddress && (!viewerId || status.account.id !== viewerId)}
+							<TipButton recipient={status.account} contentHash={status.contentHash ?? null} />
+						{/if}
 						{#if viewerId && status.account.id === viewerId}
 							<button
 								type="button"

@@ -5,6 +5,7 @@
 	import { authSession } from '$lib/auth/session';
 	import ContentRenderer from '$lib/components/ContentRenderer.svelte';
 	import TimelineVirtualizedReactive from '$lib/components/TimelineVirtualizedReactive.svelte';
+	import TipButton from '$lib/components/Tips/TipButton.svelte';
 	import ModerationTools from '$lib/patterns/ModerationTools.svelte';
 	import type { Account, Status } from '$lib/types';
 
@@ -111,6 +112,9 @@
 					</div>
 
 					<div class="profile-card__actions" aria-label="Account moderation">
+						{#if account.tipAddress}
+							<TipButton recipient={account} mode="button" label="Tip" />
+						{/if}
 						<ModerationTools
 							targetType="account"
 							targetId={account.id}

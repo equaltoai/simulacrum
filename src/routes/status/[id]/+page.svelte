@@ -13,6 +13,7 @@
 	import TranslationPanel from '$lib/components/TranslationPanel.svelte';
 	import AIAnalysisPanel from '$lib/components/AIAnalysisPanel.svelte';
 	import VerificationPanel from '$lib/components/VerificationPanel.svelte';
+	import TipButton from '$lib/components/Tips/TipButton.svelte';
 	import ModerationTools from '$lib/patterns/ModerationTools.svelte';
 	import type { Status } from '$lib/types';
 
@@ -420,6 +421,9 @@
 					idPrefix={idPrefix(status.id)}
 				>
 					{#snippet extensions()}
+						{#if status && status.account.tipAddress && (!viewerId || status.account.id !== viewerId)}
+							<TipButton recipient={status.account} contentHash={status.contentHash ?? null} />
+						{/if}
 						{#if status && viewerId && status.account.id === viewerId}
 							<button
 								type="button"
