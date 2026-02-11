@@ -195,6 +195,8 @@ Acceptance:
 - Request AI analysis for a post and see results populate without refresh.
 - Admin can view AI stats and capabilities.
 
+Done (2026-02-11): Added a per-status AI analysis panel backed by GraphQL `aiAnalysis` + `requestAIAnalysis` with realtime `aiAnalysisUpdates` subscriptions on the status detail page, surfaced AI suggestions in admin report review, and shipped an admin AI dashboard (`/l/admin/ai`) showing `aiCapabilities` and `aiStats` with a period selector.
+
 ### M15 — Verification via `lesser-host` (attestations + content checks)
 
 Goal:

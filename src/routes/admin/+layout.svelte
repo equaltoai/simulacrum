@@ -12,6 +12,7 @@
 		{ label: 'Reports', href: `${base}/admin` },
 		{ label: 'Accounts', href: `${base}/admin/accounts` },
 		{ label: 'Statuses', href: `${base}/admin/statuses` },
+		{ label: 'AI', href: `${base}/admin/ai` },
 		{ label: 'Instance', href: `${base}/admin/instance` },
 		{ label: 'Agents', href: `${base}/admin/agents` },
 	] as const;
@@ -83,4 +84,3 @@
 		{@render children()}
 	{/if}
 </section>
-

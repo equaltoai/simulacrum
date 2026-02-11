@@ -11,6 +11,7 @@
 	import PollCard from '$lib/components/PollCard.svelte';
 	import QuotePreview from '$lib/components/QuotePreview.svelte';
 	import TranslationPanel from '$lib/components/TranslationPanel.svelte';
+	import AIAnalysisPanel from '$lib/components/AIAnalysisPanel.svelte';
 	import ModerationTools from '$lib/patterns/ModerationTools.svelte';
 	import type { Status } from '$lib/types';
 
@@ -469,6 +470,8 @@
 				{/if}
 
 				<TranslationPanel statusId={status.id} />
+
+				<AIAnalysisPanel objectId={status.id} />
 
 				<ModerationTools
 					targetType="status"

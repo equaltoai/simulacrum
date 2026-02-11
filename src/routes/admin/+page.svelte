@@ -4,6 +4,7 @@
 	import { GraphQLRequestError } from '$lib/api/graphql';
 	import { authSession } from '$lib/auth/session';
 	import ContentRenderer from '$lib/components/ContentRenderer.svelte';
+	import AIAnalysisPanel from '$lib/components/AIAnalysisPanel.svelte';
 	import type { Status } from '$lib/types';
 
 	function profileHref(acct: string) {
@@ -427,6 +428,8 @@
 											</header>
 
 											<ContentRenderer content={status.content} spoilerText={status.spoilerText} collapsed />
+
+											<AIAnalysisPanel objectId={status.id} variant="summary" />
 										</article>
 									{/each}
 								</div>
