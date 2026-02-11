@@ -310,6 +310,7 @@ export function toStatus(object: ObjectLike, depth = 0): Status {
 		id: object.id,
 		uri: object.id,
 		url: object.id,
+		contentHash: object.contentHash,
 		account: toAccount(object.actor),
 		content: object.content,
 		createdAt: object.createdAt,

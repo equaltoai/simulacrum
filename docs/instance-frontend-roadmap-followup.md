@@ -217,6 +217,8 @@ Dependencies / likely gaps:
 - We may need a first-party Lesser endpoint (REST or GraphQL) that proxies to `lesser-host` trust APIs using the
   instance key server-side. If it doesn’t exist, file an issue in `equaltoai/lesser` and/or `equaltoai/lesser-host`.
 
+Done (2026-02-11): Added a status-detail Verification panel that uses the first-party `/api/v1/trust/*` proxy endpoints to run link safety verification (`publish/jobs`) and claim verification (`ai/claims/verify`), showing cached/signed attestations with drill-down JSON and per-link risk details.
+
 ### M16 — Tipping (TipSplitter) + settings
 
 Goal:

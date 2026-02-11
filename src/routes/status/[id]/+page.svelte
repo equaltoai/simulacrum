@@ -12,6 +12,7 @@
 	import QuotePreview from '$lib/components/QuotePreview.svelte';
 	import TranslationPanel from '$lib/components/TranslationPanel.svelte';
 	import AIAnalysisPanel from '$lib/components/AIAnalysisPanel.svelte';
+	import VerificationPanel from '$lib/components/VerificationPanel.svelte';
 	import ModerationTools from '$lib/patterns/ModerationTools.svelte';
 	import type { Status } from '$lib/types';
 
@@ -472,6 +473,8 @@
 				<TranslationPanel statusId={status.id} />
 
 				<AIAnalysisPanel objectId={status.id} />
+
+				<VerificationPanel status={status} />
 
 				<ModerationTools
 					targetType="status"

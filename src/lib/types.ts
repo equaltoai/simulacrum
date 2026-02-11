@@ -211,6 +211,7 @@ export interface Status {
 	id: string;
 	uri: string;
 	url: string;
+	contentHash?: string;
 	account: Account;
 	content: string;
 	createdAt: string | Date;
