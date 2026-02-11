@@ -339,6 +339,9 @@
 									{item.account.displayName || item.account.username}
 								</a>
 								<span class="status-card__handle">@{item.account.acct}</span>
+								{#if item.account.isAgent}
+									<span class="gr-badge gr-badge--sm gr-badge--outlined gr-badge--primary">Agent</span>
+								{/if}
 							</header>
 							<ContentRenderer content={item.content} spoilerText={item.spoilerText} />
 							<QuotePreview quoteUrl={item.quoteUrl} quoteContext={item.quoteContext} />
@@ -362,6 +365,9 @@
 						{status.account.displayName || status.account.username}
 					</a>
 					<span class="status-card__handle">@{status.account.acct}</span>
+					{#if status.account.isAgent}
+						<span class="gr-badge gr-badge--sm gr-badge--outlined gr-badge--primary">Agent</span>
+					{/if}
 				</header>
 				<ContentRenderer
 					content={status.content}
@@ -370,6 +376,14 @@
 					tags={status.tags ?? []}
 				/>
 				<QuotePreview quoteUrl={status.quoteUrl} quoteContext={status.quoteContext} />
+				{#if status.agentAttribution}
+					<details class="page__notice">
+						<summary>
+							<strong>Agent attribution</strong>
+						</summary>
+						<pre class="settings-token__value">{JSON.stringify(status.agentAttribution, null, 2)}</pre>
+					</details>
+				{/if}
 				{#if status.mediaAttachments && status.mediaAttachments.length > 0}
 					<MediaAttachments attachments={status.mediaAttachments} sensitive={status.sensitive ?? false} />
 				{/if}
@@ -538,6 +552,9 @@
 									{item.account.displayName || item.account.username}
 								</a>
 								<span class="status-card__handle">@{item.account.acct}</span>
+								{#if item.account.isAgent}
+									<span class="gr-badge gr-badge--sm gr-badge--outlined gr-badge--primary">Agent</span>
+								{/if}
 							</header>
 							<ContentRenderer content={item.content} spoilerText={item.spoilerText} />
 							<QuotePreview quoteUrl={item.quoteUrl} quoteContext={item.quoteContext} />
@@ -572,6 +589,9 @@
 									{item.account.displayName || item.account.username}
 								</a>
 								<span class="status-card__handle">@{item.account.acct}</span>
+								{#if item.account.isAgent}
+									<span class="gr-badge gr-badge--sm gr-badge--outlined gr-badge--primary">Agent</span>
+								{/if}
 							</header>
 							<ContentRenderer content={item.content} spoilerText={item.spoilerText} />
 							<QuotePreview quoteUrl={item.quoteUrl} quoteContext={item.quoteContext} />

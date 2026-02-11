@@ -19,21 +19,17 @@
 	import { type Snippet } from 'svelte';
 	import { createMenu } from '$lib/greater/headless/menu';
 	import { createModal } from '$lib/greater/headless/modal';
-
-	type TargetAccountLike = {
-		name?: string;
-		displayName?: string;
-		preferredUsername?: string;
-		username?: string;
-		acct?: string;
-	};
-
-	type TargetStatusLike = {
-		id: string;
-	};
+	import type { Account, Status } from '$lib/types';
 
 	export type ModerationType = 'block' | 'mute' | 'report' | 'hide' | 'addNote';
 	export type ModerationTarget = 'account' | 'status' | 'domain';
+
+	type TargetAccount = Pick<Account, 'id' | 'displayName' | 'acct' | 'username'> & {
+		name?: string | null;
+		preferredUsername?: string | null;
+	};
+
+	type TargetStatus = Pick<Status, 'id'>;
 
 	interface ModerationAction {
 		type: ModerationType;
@@ -122,12 +118,12 @@
 		/**
 		 * Target account (for display)
 		 */
-		targetAccount?: TargetAccountLike;
+		targetAccount?: TargetAccount;
 
 		/**
 		 * Target status (for display)
 		 */
-		targetStatus?: TargetStatusLike;
+		targetStatus?: TargetStatus;
 
 		/**
 		 * Configuration
@@ -340,12 +336,22 @@
 	 * Get target display name
 	 */
 	function getTargetName(): string {
-		if (targetAccount?.name) return targetAccount.name;
-		if (targetAccount?.displayName) return targetAccount.displayName;
-		if (targetAccount?.preferredUsername) return `@${targetAccount.preferredUsername}`;
-		if (targetAccount?.username) return `@${targetAccount.username}`;
-		if (targetAccount?.acct) return `@${targetAccount.acct}`;
-		return targetId;
+		if (!targetAccount) return targetId;
+
+		const displayName =
+			(targetAccount.name && targetAccount.name.trim()) ||
+			(targetAccount.displayName && targetAccount.displayName.trim()) ||
+			'';
+		if (displayName) return displayName;
+
+		const handle =
+			(targetAccount.preferredUsername && targetAccount.preferredUsername.trim()) ||
+			(targetAccount.acct && targetAccount.acct.trim()) ||
+			(targetAccount.username && targetAccount.username.trim()) ||
+			'';
+		if (!handle) return targetId;
+
+		return handle.startsWith('@') ? handle : `@${handle}`;
 	}
 </script>
 
@@ -602,10 +608,6 @@
 </div>
 
 <style>
-	.moderation-tools {
-		position: relative;
-	}
-
 	/* Trigger (menu mode) */
 	.moderation-tools__trigger {
 		display: flex;

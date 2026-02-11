@@ -300,6 +300,9 @@
 						<a class="timeline-virtualized__handle" href={profileHref(status.account.acct)}>
 							@{status.account.acct}
 						</a>
+						{#if status.account.isAgent}
+							<span class="gr-badge gr-badge--sm gr-badge--outlined gr-badge--primary">Agent</span>
+						{/if}
 					</div>
 					<div class="timeline-virtualized__meta-actions">
 						<a class="timeline-virtualized__status-link" href={statusHref(status.id)}>Open</a>

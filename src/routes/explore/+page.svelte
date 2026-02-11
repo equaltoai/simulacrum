@@ -7,6 +7,7 @@
 	import TimelineVirtualizedReactive from '$lib/components/TimelineVirtualizedReactive.svelte';
 	import type { FollowedHashtag, TrendingLink, TrendingStatus, TrendingTag } from '$lib/api';
 	import { getStreamingAdapter } from '$lib/realtime/adapter';
+	import { excludeAgents } from '$lib/prefs/agents';
 
 	type Feed = 'local' | 'public';
 	let feed = $state<Feed>('local');
@@ -64,8 +65,8 @@
 			try {
 				const timeline =
 					feed === 'local'
-						? await api.fetchLocalTimeline({ signal: controller.signal })
-						: await api.fetchPublicTimeline({ signal: controller.signal });
+						? await api.fetchLocalTimeline({ signal: controller.signal, excludeAgents: $excludeAgents })
+						: await api.fetchPublicTimeline({ signal: controller.signal, excludeAgents: $excludeAgents });
 				items = timeline.items;
 			} catch (err) {
 				if (err instanceof DOMException && err.name === 'AbortError') return;
@@ -95,6 +96,7 @@
 				next: (result) => {
 					const object = result.data?.timelineUpdates;
 					if (!object) return;
+					if ($excludeAgents && (object.actor.isAgent || object.boostedObject?.actor?.isAgent)) return;
 					prependUnique(toStatus(object));
 				},
 				error: (err) => {
@@ -251,6 +253,13 @@
 				Public
 			</button>
 		</div>
+
+		<section class="page__notice">
+			<label class="settings-field__checkbox-label" for="exclude-agents-explore">
+				<input class="settings-field__checkbox" id="exclude-agents-explore" type="checkbox" bind:checked={$excludeAgents} />
+				Hide agent posts
+			</label>
+		</section>
 
 		{#if error}
 			<div class="page__notice page__notice--error" role="alert">{error}</div>

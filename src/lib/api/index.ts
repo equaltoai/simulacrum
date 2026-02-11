@@ -1,6 +1,19 @@
 import { print } from 'graphql';
 
 import {
+	AdminAgentPolicyDocument,
+	AdminSuspendAgentDocument,
+	AdminUnverifyAgentDocument,
+	AdminVerifyAgentDocument,
+	AgentActivityDocument,
+	AgentByUsernameDocument,
+	AgentsDocument,
+	DeleteAgentDocument,
+	DelegateToAgentDocument,
+	MyAgentsDocument,
+	RevokeAgentTokenDocument,
+	UpdateAdminAgentPolicyDocument,
+	UpdateAgentDocument,
 	ActorByUsernameDocument,
 	AddCommunityNoteDocument,
 	AddAccountsToListDocument,
@@ -40,10 +53,24 @@ import {
 	VoteCommunityNoteDocument,
 	type ActorByUsernameQuery,
 	type ActorByUsernameQueryVariables,
+	type AdminAgentPolicyQuery,
+	type AdminAgentPolicyQueryVariables,
+	type AdminSuspendAgentMutation,
+	type AdminSuspendAgentMutationVariables,
+	type AdminUnverifyAgentMutation,
+	type AdminUnverifyAgentMutationVariables,
+	type AdminVerifyAgentMutation,
+	type AdminVerifyAgentMutationVariables,
 	type AddCommunityNoteMutation,
 	type AddCommunityNoteMutationVariables,
 	type AddAccountsToListMutation,
 	type AddAccountsToListMutationVariables,
+	type AgentActivityQuery,
+	type AgentActivityQueryVariables,
+	type AgentByUsernameQuery,
+	type AgentByUsernameQueryVariables,
+	type AgentsQuery,
+	type AgentsQueryVariables,
 	type BlockActorMutation,
 	type BlockActorMutationVariables,
 	type BookmarkObjectMutation,
@@ -53,10 +80,14 @@ import {
 	type CreateListMutation,
 	type CreateListMutationVariables,
 	type CreateNoteMutationVariables,
+	type DeleteAgentMutation,
+	type DeleteAgentMutationVariables,
 	type DeleteListMutation,
 	type DeleteListMutationVariables,
 	type DeleteObjectMutation,
 	type DeleteObjectMutationVariables,
+	type DelegateToAgentMutation,
+	type DelegateToAgentMutationVariables,
 	type DismissNotificationMutation,
 	type DismissNotificationMutationVariables,
 	type FlagObjectMutation,
@@ -71,6 +102,8 @@ import {
 	type ListQueryVariables,
 	type ListsQuery,
 	type ListsQueryVariables,
+	type MyAgentsQuery,
+	type MyAgentsQueryVariables,
 	type MuteActorMutation,
 	type MuteActorMutationVariables,
 	type MuteHashtagMutation,
@@ -126,6 +159,12 @@ import {
 	type VoteCommunityNoteMutation,
 	type VoteCommunityNoteMutationVariables,
 	type Poll as GraphQLPoll,
+	type RevokeAgentTokenMutation,
+	type RevokeAgentTokenMutationVariables,
+	type UpdateAdminAgentPolicyMutation,
+	type UpdateAdminAgentPolicyMutationVariables,
+	type UpdateAgentMutation,
+	type UpdateAgentMutationVariables,
 } from '$lib/greater/adapters/graphql';
 import type { Account, Notification, Status } from '$lib/types';
 import { getAccessToken } from './auth';
@@ -229,8 +268,9 @@ query TimelineWithViewerState(
 	$listId: ID
 	$actorId: ID
 	$mediaOnly: Boolean = false
+	$excludeAgents: Boolean = false
 ) {
-	timeline(type: $type, first: $first, after: $after, hashtag: $hashtag, listId: $listId, actorId: $actorId, mediaOnly: $mediaOnly) {
+	timeline(type: $type, first: $first, after: $after, hashtag: $hashtag, listId: $listId, actorId: $actorId, mediaOnly: $mediaOnly, excludeAgents: $excludeAgents) {
 		edges {
 			cursor
 			node {
@@ -356,6 +396,7 @@ async function fetchTimeline({
 	hashtag,
 	listId,
 	mediaOnly,
+	excludeAgents,
 	signal,
 }: {
 	type: TimelineType;
@@ -365,6 +406,7 @@ async function fetchTimeline({
 	hashtag?: string;
 	listId?: string;
 	mediaOnly?: boolean;
+	excludeAgents?: boolean;
 	signal?: AbortSignal;
 }): Promise<{
 	items: Status[];
@@ -380,6 +422,7 @@ async function fetchTimeline({
 		hashtag,
 		listId,
 		mediaOnly,
+		excludeAgents,
 	};
 
 	const data = await graphqlRequest<
@@ -409,46 +452,52 @@ async function fetchTimeline({
 export async function fetchHomeTimeline({
 	first = 20,
 	after,
+	excludeAgents,
 	signal,
 }: {
 	first?: number;
 	after?: string;
+	excludeAgents?: boolean;
 	signal?: AbortSignal;
 } = {}): Promise<{
 	items: Status[];
 	pageInfo: { endCursor: string | null; hasNextPage: boolean };
 }> {
-	return fetchTimeline({ type: 'HOME', first, after, signal });
+	return fetchTimeline({ type: 'HOME', first, after, excludeAgents, signal });
 }
 
 export async function fetchLocalTimeline({
 	first = 20,
 	after,
+	excludeAgents,
 	signal,
 }: {
 	first?: number;
 	after?: string;
+	excludeAgents?: boolean;
 	signal?: AbortSignal;
 } = {}): Promise<{
 	items: Status[];
 	pageInfo: { endCursor: string | null; hasNextPage: boolean };
 }> {
-	return fetchTimeline({ type: 'LOCAL', first, after, signal });
+	return fetchTimeline({ type: 'LOCAL', first, after, excludeAgents, signal });
 }
 
 export async function fetchPublicTimeline({
 	first = 20,
 	after,
+	excludeAgents,
 	signal,
 }: {
 	first?: number;
 	after?: string;
+	excludeAgents?: boolean;
 	signal?: AbortSignal;
 } = {}): Promise<{
 	items: Status[];
 	pageInfo: { endCursor: string | null; hasNextPage: boolean };
 }> {
-	return fetchTimeline({ type: 'PUBLIC', first, after, signal });
+	return fetchTimeline({ type: 'PUBLIC', first, after, excludeAgents, signal });
 }
 
 export async function fetchHashtagTimeline({
@@ -3365,83 +3414,252 @@ mutation DeleteEmoji($shortcode: String!) {
 	return data.deleteEmoji;
 }
 
-export type AdminAgentPolicy = Record<string, unknown>;
+export type Agent = NonNullable<AgentByUsernameQuery['agent']>;
+export type AgentConnection = AgentsQuery['agents'];
+export type AgentActivityConnection = AgentActivityQuery['agentActivity'];
+export type AgentDelegation = DelegateToAgentMutation['delegateToAgent'];
+export type AdminAgentPolicy = AdminAgentPolicyQuery['adminAgentPolicy'];
 
-export async function fetchAdminAgentPolicy({
+export async function fetchAgentByUsername({
+	username,
 	signal,
 }: {
+	username: string;
 	signal?: AbortSignal;
-} = {}): Promise<AdminAgentPolicy> {
+}): Promise<Agent | null> {
 	const token = requireAccessToken();
 
-	return restRequest<AdminAgentPolicy>({
-		path: '/api/v1/admin/agents/policy',
+	const data = await graphqlRequest<AgentByUsernameQuery, AgentByUsernameQueryVariables>({
+		document: AgentByUsernameDocument,
+		variables: { username },
 		token,
 		signal,
 	});
+
+	return data.agent ?? null;
+}
+
+export async function fetchAgents({
+	first = 20,
+	after,
+	type,
+	query,
+	verified,
+	ownerUsername,
+	signal,
+}: AgentsQueryVariables & { signal?: AbortSignal } = {}): Promise<AgentConnection> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<AgentsQuery, AgentsQueryVariables>({
+		document: AgentsDocument,
+		variables: { first, after, type, query, verified, ownerUsername },
+		token,
+		signal,
+	});
+
+	return data.agents;
+}
+
+export async function fetchMyAgents({ signal }: { signal?: AbortSignal } = {}): Promise<MyAgentsQuery['myAgents']> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<MyAgentsQuery, MyAgentsQueryVariables>({
+		document: MyAgentsDocument,
+		variables: {},
+		token,
+		signal,
+	});
+
+	return data.myAgents;
+}
+
+export async function fetchAgentActivity({
+	username,
+	first = 20,
+	after,
+	signal,
+}: AgentActivityQueryVariables & { signal?: AbortSignal }): Promise<AgentActivityConnection> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<AgentActivityQuery, AgentActivityQueryVariables>({
+		document: AgentActivityDocument,
+		variables: { username, first, after },
+		token,
+		signal,
+	});
+
+	return data.agentActivity;
+}
+
+export async function delegateToAgent({
+	input,
+	signal,
+}: {
+	input: DelegateToAgentMutationVariables['input'];
+	signal?: AbortSignal;
+}): Promise<AgentDelegation> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<DelegateToAgentMutation, DelegateToAgentMutationVariables>({
+		document: DelegateToAgentDocument,
+		variables: { input },
+		token,
+		signal,
+	});
+
+	return data.delegateToAgent;
+}
+
+export async function revokeAgentToken({
+	username,
+	signal,
+}: {
+	username: string;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<RevokeAgentTokenMutation, RevokeAgentTokenMutationVariables>({
+		document: RevokeAgentTokenDocument,
+		variables: { username },
+		token,
+		signal,
+	});
+
+	return data.revokeAgentToken;
+}
+
+export async function updateAgent({
+	username,
+	input,
+	signal,
+}: {
+	username: string;
+	input: UpdateAgentMutationVariables['input'];
+	signal?: AbortSignal;
+}): Promise<UpdateAgentMutation['updateAgent']> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<UpdateAgentMutation, UpdateAgentMutationVariables>({
+		document: UpdateAgentDocument,
+		variables: { username, input },
+		token,
+		signal,
+	});
+
+	return data.updateAgent;
+}
+
+export async function deleteAgent({
+	username,
+	signal,
+}: {
+	username: string;
+	signal?: AbortSignal;
+}): Promise<DeleteAgentMutation['deleteAgent']> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<DeleteAgentMutation, DeleteAgentMutationVariables>({
+		document: DeleteAgentDocument,
+		variables: { username },
+		token,
+		signal,
+	});
+
+	return data.deleteAgent;
+}
+
+export async function fetchAdminAgentPolicy({ signal }: { signal?: AbortSignal } = {}): Promise<AdminAgentPolicy> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<AdminAgentPolicyQuery, AdminAgentPolicyQueryVariables>({
+		document: AdminAgentPolicyDocument,
+		variables: {},
+		token,
+		signal,
+	});
+
+	return data.adminAgentPolicy;
 }
 
 export async function updateAdminAgentPolicy({
-	policy,
+	input,
 	signal,
 }: {
-	policy: AdminAgentPolicy;
+	input: UpdateAdminAgentPolicyMutationVariables['input'];
 	signal?: AbortSignal;
-}): Promise<AdminAgentPolicy> {
+}): Promise<UpdateAdminAgentPolicyMutation['updateAdminAgentPolicy']> {
 	const token = requireAccessToken();
 
-	return restRequest<AdminAgentPolicy>({
-		path: '/api/v1/admin/agents/policy',
-		method: 'PUT',
-		body: policy,
+	const data = await graphqlRequest<UpdateAdminAgentPolicyMutation, UpdateAdminAgentPolicyMutationVariables>({
+		document: UpdateAdminAgentPolicyDocument,
+		variables: { input },
 		token,
 		signal,
 	});
+
+	return data.updateAdminAgentPolicy;
 }
 
-type AdminVerifyAgentBody = {
-	exit_quarantine?: boolean;
-	reason?: string;
-};
-
-export async function verifyAgent({
+export async function adminVerifyAgent({
 	username,
-	body,
+	input,
 	signal,
 }: {
 	username: string;
-	body?: AdminVerifyAgentBody;
+	input?: AdminVerifyAgentMutationVariables['input'];
 	signal?: AbortSignal;
-}): Promise<Record<string, unknown>> {
+}): Promise<AdminVerifyAgentMutation['adminVerifyAgent']> {
 	const token = requireAccessToken();
 
-	return restRequest<Record<string, unknown>>({
-		path: `/api/v1/admin/agents/${encodeURIComponent(username)}/verify`,
-		method: 'POST',
-		body: body ?? {},
+	const data = await graphqlRequest<AdminVerifyAgentMutation, AdminVerifyAgentMutationVariables>({
+		document: AdminVerifyAgentDocument,
+		variables: { username, input },
 		token,
 		signal,
 	});
+
+	return data.adminVerifyAgent;
 }
 
-export async function unverifyAgent({
+export async function adminUnverifyAgent({
 	username,
-	body,
+	input,
 	signal,
 }: {
 	username: string;
-	body?: AdminVerifyAgentBody;
+	input?: AdminUnverifyAgentMutationVariables['input'];
 	signal?: AbortSignal;
-}): Promise<Record<string, unknown>> {
+}): Promise<AdminUnverifyAgentMutation['adminUnverifyAgent']> {
 	const token = requireAccessToken();
 
-	return restRequest<Record<string, unknown>>({
-		path: `/api/v1/admin/agents/${encodeURIComponent(username)}/unverify`,
-		method: 'POST',
-		body: body ?? {},
+	const data = await graphqlRequest<AdminUnverifyAgentMutation, AdminUnverifyAgentMutationVariables>({
+		document: AdminUnverifyAgentDocument,
+		variables: { username, input },
 		token,
 		signal,
 	});
+
+	return data.adminUnverifyAgent;
+}
+
+export async function adminSuspendAgent({
+	username,
+	signal,
+}: {
+	username: string;
+	signal?: AbortSignal;
+}): Promise<AdminSuspendAgentMutation['adminSuspendAgent']> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<AdminSuspendAgentMutation, AdminSuspendAgentMutationVariables>({
+		document: AdminSuspendAgentDocument,
+		variables: { username },
+		token,
+		signal,
+	});
+
+	return data.adminSuspendAgent;
 }
 
 export async function fetchInstanceVapidKey({
@@ -3550,9 +3768,18 @@ export const api = {
 	createEmoji,
 	updateEmoji,
 	deleteEmoji,
+	fetchAgentByUsername,
+	fetchAgents,
+	fetchMyAgents,
+	fetchAgentActivity,
+	delegateToAgent,
+	revokeAgentToken,
+	updateAgent,
+	deleteAgent,
 	fetchAdminAgentPolicy,
 	updateAdminAgentPolicy,
-	verifyAgent,
-	unverifyAgent,
+	adminVerifyAgent,
+	adminUnverifyAgent,
+	adminSuspendAgent,
 	fetchInstanceVapidKey,
 } as const;

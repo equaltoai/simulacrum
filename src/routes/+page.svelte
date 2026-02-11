@@ -6,6 +6,7 @@
 	import type { Account, Status } from '$lib/types';
 	import Composer from '$lib/components/Composer.svelte';
 	import TimelineVirtualizedReactive from '$lib/components/TimelineVirtualizedReactive.svelte';
+	import { excludeAgents } from '$lib/prefs/agents';
 
 	let viewer = $state<Account | null>(null);
 	let items = $state<Status[]>([]);
@@ -36,7 +37,7 @@
 			try {
 				const [viewerData, timeline] = await Promise.all([
 					api.fetchViewer({ signal: controller.signal }),
-					api.fetchHomeTimeline({ signal: controller.signal }),
+					api.fetchHomeTimeline({ signal: controller.signal, excludeAgents: $excludeAgents }),
 				]);
 
 				viewer = viewerData;
@@ -67,6 +68,7 @@
 				next: (result) => {
 					const object = result.data?.timelineUpdates;
 					if (!object) return;
+					if ($excludeAgents && (object.actor.isAgent || object.boostedObject?.actor?.isAgent)) return;
 					prependUnique(toStatus(object));
 				},
 				error: (err) => {
@@ -95,6 +97,13 @@
 				<span class="page__handle">@{viewer.acct}</span>
 			</p>
 		{/if}
+
+		<section class="page__notice">
+			<label class="settings-field__checkbox-label" for="exclude-agents-home">
+				<input class="settings-field__checkbox" id="exclude-agents-home" type="checkbox" bind:checked={$excludeAgents} />
+				Hide agent posts
+			</label>
+		</section>
 
 		<Composer
 			mode="post"

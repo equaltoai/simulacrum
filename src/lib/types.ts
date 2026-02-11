@@ -82,9 +82,29 @@ export interface Account {
 	createdAt: string | Date;
 
 	// Lesser-specific fields
+	isAgent?: boolean;
+	agentInfo?: {
+		id: string;
+		agentType: string;
+		verified: boolean;
+		verifiedAt?: string | Date;
+	};
 	trustScore?: number;
 	reputation?: Reputation;
 	vouches?: Vouch[];
+}
+
+/**
+ * Lesser-specific: Agent attribution on content
+ */
+export interface AgentAttribution {
+	triggerType?: string;
+	triggerDetails?: string;
+	memoryCitations?: ReadonlyArray<string>;
+	delegatedBy?: string;
+	scopes?: ReadonlyArray<string>;
+	constraints?: ReadonlyArray<string>;
+	modelVersion?: string;
 }
 
 /**
@@ -225,6 +245,7 @@ export interface Status {
 	estimatedCost?: number;
 	moderationScore?: number;
 	communityNotes?: CommunityNote[];
+	agentAttribution?: AgentAttribution;
 	quoteUrl?: string;
 	quoteable?: boolean;
 	quotePermissions?: QuotePermission;

@@ -36,6 +36,13 @@ type ActorLike = {
 	readonly bot: boolean;
 	readonly locked: boolean;
 	readonly updatedAt: string;
+	readonly isAgent?: boolean;
+	readonly agentInfo?: {
+		readonly id: string;
+		readonly agentType: string;
+		readonly verified: boolean;
+		readonly verifiedAt?: string | null;
+	} | null;
 	readonly trustScore: number;
 	readonly createdAt?: string | null;
 	readonly reputation?: ReputationLike | null;
@@ -124,6 +131,15 @@ export function toAccount(actor: ActorLike): Account {
 	const reputation = actor.reputation ? toReputation(actor.reputation) : undefined;
 	const vouches = actor.vouches ? actor.vouches.map(toVouch) : undefined;
 
+	const agentInfo = actor.agentInfo
+		? {
+				id: actor.agentInfo.id,
+				agentType: actor.agentInfo.agentType,
+				verified: actor.agentInfo.verified,
+				verifiedAt: actor.agentInfo.verifiedAt ?? undefined,
+			}
+		: undefined;
+
 	return {
 		id: actor.id,
 		username: actor.username,
@@ -139,6 +155,8 @@ export function toAccount(actor: ActorLike): Account {
 		bot: actor.bot,
 		locked: actor.locked,
 		createdAt: actor.createdAt ?? actor.updatedAt,
+		isAgent: actor.isAgent ?? false,
+		agentInfo,
 		trustScore: actor.trustScore,
 		reputation,
 		vouches,
@@ -275,6 +293,18 @@ export function toStatus(object: ObjectLike, depth = 0): Status {
 	const viewerPinned =
 		'viewerPinned' in object && typeof object.viewerPinned === 'boolean' ? object.viewerPinned : undefined;
 	const poll = object.poll ? toPoll(object.poll) : undefined;
+	const attribution =
+		'agentAttribution' in object && object.agentAttribution
+			? {
+					triggerType: object.agentAttribution.triggerType ?? undefined,
+					triggerDetails: object.agentAttribution.triggerDetails ?? undefined,
+					memoryCitations: object.agentAttribution.memoryCitations ?? undefined,
+					delegatedBy: object.agentAttribution.delegatedBy ?? undefined,
+					scopes: object.agentAttribution.scopes ?? undefined,
+					constraints: object.agentAttribution.constraints ?? undefined,
+					modelVersion: object.agentAttribution.modelVersion ?? undefined,
+				}
+			: undefined;
 
 	return {
 		id: object.id,
@@ -307,6 +337,7 @@ export function toStatus(object: ObjectLike, depth = 0): Status {
 		estimatedCost: object.estimatedCost,
 		moderationScore: object.moderationScore ?? undefined,
 		communityNotes: object.communityNotes.map(toCommunityNote),
+		agentAttribution: attribution,
 		quoteUrl: object.quoteUrl ?? undefined,
 		quoteable: object.quoteable,
 		quotePermissions: object.quotePermissions as QuotePermission,

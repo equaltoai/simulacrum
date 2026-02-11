@@ -134,33 +134,14 @@ export class PushNotificationsController {
 
 		try {
 			const subscription = await this.adapter.getPushSubscription();
-
-			let browserSubscription: globalThis.PushSubscription | null = null;
-			try {
-				const registration = await navigator.serviceWorker.getRegistration();
-				browserSubscription = registration ? await registration.pushManager.getSubscription() : null;
-			} catch {
-				browserSubscription = null;
-			}
-
 			this.updateState({
 				subscription: this.normalizeSubscription(subscription),
-				browserSubscription,
 				loading: false,
 			});
 		} catch {
 			// Subscription might not exist yet, which is fine
-			let browserSubscription: globalThis.PushSubscription | null = null;
-			try {
-				const registration = await navigator.serviceWorker.getRegistration();
-				browserSubscription = registration ? await registration.pushManager.getSubscription() : null;
-			} catch {
-				browserSubscription = null;
-			}
-
 			this.updateState({
 				subscription: null,
-				browserSubscription,
 				loading: false,
 			});
 		}
@@ -283,18 +264,8 @@ export class PushNotificationsController {
 			await this.adapter.deletePushSubscription();
 
 			// Unsubscribe browser subscription
-			let browserSubscription = this.state.browserSubscription;
-			if (!browserSubscription) {
-				try {
-					const registration = await navigator.serviceWorker.getRegistration();
-					browserSubscription = registration ? await registration.pushManager.getSubscription() : null;
-				} catch {
-					browserSubscription = null;
-				}
-			}
-
-			if (browserSubscription) {
-				await browserSubscription.unsubscribe();
+			if (this.state.browserSubscription) {
+				await this.state.browserSubscription.unsubscribe();
 			}
 
 			this.updateState({

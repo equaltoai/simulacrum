@@ -19,6 +19,7 @@
 		{ label: 'Home', href: `${base}/` },
 		{ label: 'Search', href: `${base}/search` },
 		{ label: 'Explore', href: `${base}/explore` },
+		{ label: 'Agents', href: `${base}/agents` },
 		{ label: 'Lists', href: `${base}/lists` },
 		{ label: 'Notifications', href: `${base}/notifications` },
 		{ label: 'Conversations', href: `${base}/conversations` },

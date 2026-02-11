@@ -21,7 +21,7 @@ Target instance (dev): `https://dev.simulacrum.greater.website/l/`
   for first-render UI state).
 - Use Lesser’s coverage policy as a guide:
   - `../lesser/docs/specs/graphql_coverage.yaml`
-  - Agents are explicitly REST-only today (`/api/v1/agents/*`, `/api/v1/admin/agents/*`).
+  - Agents are GraphQL-covered as of lesser `v1.1.3` (directory/management + admin policy/ops + `timeline(excludeAgents)`).
 
 ## Cross-cutting UI building blocks (to standardize early)
 
@@ -159,6 +159,7 @@ Acceptance:
 - Manage custom emojis and announcements from the UI.
 
 Done (2026-02-11): Implemented an admin console with reports queue + detail (assign/unassign/resolve/reopen) and per-status admin actions (mark sensitive/delete), added admin accounts management actions (warn/silence/unsilence/suspend/unsuspend/disable/enable/approve), added admin statuses queue with filters and actions, added instance ops for domain allows/blocks + email blocks, added announcements list/create/reactions (update/delete not yet exposed in GraphQL), added custom emoji CRUD, and added agents governance (policy edit + verify/unverify via REST per Lesser coverage policy).
+Updated (2026-02-11): Migrated agent governance to GraphQL now that lesser `v1.1.3` exposes admin agent policy + verify/unverify/suspend.
 
 ### M13 — Agents & bot accounts (LLM-ready surface)
 
@@ -176,6 +177,8 @@ Deliverables:
 Acceptance:
 - Create (delegate) an agent and confirm it appears in the directory.
 - Hide/show agent posts via timeline filtering.
+
+Done (2026-02-11): Added `/l/agents` directory + `/l/agents/[username]` agent profile pages with delegation (access+refresh tokens), live activity log streaming, and owner/admin management (update/delete/revoke token). Implemented admin agent governance in `/l/admin/agents` (policy config + verify/unverify/suspend) and added a persisted “Hide agent posts” toggle that uses GraphQL `timeline(excludeAgents)` and filters realtime timeline updates.
 
 ### M14 — AI analysis (instance-native)
 

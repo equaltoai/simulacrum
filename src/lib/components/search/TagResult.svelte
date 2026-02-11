@@ -33,8 +33,6 @@
 				</svg>
 			{/if}
 		</div>
-		{#if tag.count > 0}
-			<div class="tag-result__count">{formatCount(tag.count)} posts</div>
-		{/if}
+		<div class="tag-result__count">{formatCount(tag.count)} posts</div>
 	</div>
 </button>

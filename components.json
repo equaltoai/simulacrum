@@ -1,7 +1,7 @@
 {
   "$schema": "https://greater.components.dev/schema.json",
   "version": "1.0.0",
-  "ref": "greater-v0.1.7",
+  "ref": "greater-v0.1.8",
   "installMode": "vendored",
   "style": "default",
   "rsc": false,
@@ -24,211 +24,211 @@
   "installed": [
     {
       "name": "icons",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:20:32.347Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T19:28:03.812Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "utils",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:20:32.347Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T19:28:03.812Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "tokens",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:20:32.347Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T19:28:03.812Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "primitives",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:20:32.347Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T19:28:03.812Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "content",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:20:32.347Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T19:28:03.812Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "adapters",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:20:32.347Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T19:28:03.812Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "headless",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:20:32.347Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T19:28:03.812Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "social-generics",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:22.773Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:24.257Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "timeline",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:23.470Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:24.933Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "status",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:24.474Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:25.876Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "profile",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:26.979Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:28.129Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "auth",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:28.600Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:29.767Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "compose",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:30.583Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:31.886Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "notifications",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:31.728Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:33.119Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "search",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:32.738Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:34.092Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "admin",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:36.025Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T19:28:03.812Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "messaging",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:37.302Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:39.783Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "thread-view",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:37.619Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:40.177Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "moderation-tools",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:37.722Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:40.323Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "visibility-selector",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:37.819Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:40.427Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "content-warning-handler",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:37.913Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:40.515Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "custom-emoji-picker",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:38.021Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:40.667Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "federation-indicator",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:38.112Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:40.784Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "instance-picker",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:38.220Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:40.912Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "poll-composer",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:38.328Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:41.072Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "media-composer",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:38.424Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:41.216Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "bookmark-manager",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:38.537Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:41.347Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "lists",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:39.424Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:42.519Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "filters",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:40.172Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:43.339Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "hashtags",
-      "version": "greater-v0.1.7",
-      "installedAt": "2026-02-10T21:19:40.986Z",
+      "version": "greater-v0.1.8",
+      "installedAt": "2026-02-11T18:30:44.123Z",
       "modified": false,
       "checksums": []
     }
