@@ -3,6 +3,7 @@
 -->
 <script lang="ts">
 	import { createButton } from '$lib/greater/headless/button';
+	import { sanitizeHtml } from '$lib/greater/utils';
 	import { getSearchContext, formatCount } from './context.svelte.js';
 	import type { SearchActor } from './context.svelte.js';
 
@@ -18,6 +19,15 @@
 	const followButton = createButton({
 		onClick: () => handleFollow(),
 	});
+
+	function sanitizeActorBio(bio: string): string {
+		return sanitizeHtml(bio, {
+			allowedTags: ['p', 'br', 'span', 'a', 'strong', 'em', 'b', 'i', 'u', 'code', 'pre'],
+			allowedAttributes: ['href', 'rel', 'target', 'class', 'title'],
+		});
+	}
+
+	const sanitizedBio = $derived.by(() => (actor.bio ? sanitizeActorBio(actor.bio) : ''));
 
 	async function handleFollow() {
 		await handlers.onFollow?.(actor.id);
@@ -61,7 +71,7 @@
 			{#if actor.bio}
 				<div class="actor-result__bio">
 					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-					<div class="actor-result__bio-content">{@html actor.bio}</div>
+					<div class="actor-result__bio-content">{@html sanitizedBio}</div>
 				</div>
 			{/if}
 			{#if actor.followersCount !== undefined}

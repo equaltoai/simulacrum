@@ -18,6 +18,7 @@ Displays a single notification with type-specific rendering.
 	import type { Snippet } from 'svelte';
 	import type { Notification, NotificationType } from './types.js';
 	import { getNotificationsContext } from './context.svelte.js';
+	import { sanitizeHtml } from '$lib/greater/utils';
 
 	interface Props {
 		/**
@@ -85,6 +86,39 @@ Displays a single notification with type-specific rendering.
 	};
 
 	const title = $derived(titleMap[notification.type] ?? 'sent a notification');
+
+	const sanitizedStatusContent = $derived.by(() => {
+		if (!notification.status?.content) return '';
+		return sanitizeHtml(notification.status.content, {
+			allowedTags: [
+				'p',
+				'br',
+				'span',
+				'a',
+				'del',
+				'pre',
+				'code',
+				'em',
+				'strong',
+				'b',
+				'i',
+				'u',
+				's',
+				'strike',
+				'ul',
+				'ol',
+				'li',
+				'blockquote',
+				'h1',
+				'h2',
+				'h3',
+				'h4',
+				'h5',
+				'h6',
+			],
+			allowedAttributes: ['href', 'title', 'class', 'rel', 'target'],
+		});
+	});
 
 	/**
 	 * Handle notification click
@@ -165,7 +199,7 @@ Displays a single notification with type-specific rendering.
 				{#if notification.status}
 					<div class="notification-item__status">
 						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-						<div class="notification-item__status-content">{@html notification.status.content}</div>
+						<div class="notification-item__status-content">{@html sanitizedStatusContent}</div>
 					</div>
 				{/if}
 			</div>

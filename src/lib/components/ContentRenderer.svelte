@@ -65,6 +65,39 @@
 		}
 	}
 
+	function escapeRegExp(text: string): string {
+		return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	}
+
+	function safeExternalUrl(rawUrl: string): string | null {
+		if (!rawUrl || typeof rawUrl !== 'string') return null;
+		const value = rawUrl.trim();
+		if (!value) return null;
+
+		// Disallow scheme-relative URLs.
+		if (value.startsWith('//')) return null;
+
+		// Allow same-origin relative URLs.
+		if (
+			value.startsWith('/') ||
+			value.startsWith('./') ||
+			value.startsWith('../') ||
+			value.startsWith('#') ||
+			value.startsWith('?')
+		) {
+			return encodeURI(value);
+		}
+
+		try {
+			const parsed = new URL(value);
+			const protocol = parsed.protocol.toLowerCase();
+			if (protocol !== 'http:' && protocol !== 'https:') return null;
+			return parsed.toString();
+		} catch {
+			return null;
+		}
+	}
+
 	function processContent(html: string): string {
 		// First sanitize the HTML
 		let processed = sanitizeHtml(html, {
@@ -97,39 +130,82 @@
 			allowedAttributes: ['href', 'title', 'class', 'rel', 'target'],
 		});
 
+		let modified = false;
+
 		// Replace mention links if we have mention data
 		if (mentions.length > 0) {
 			mentions.forEach((mention) => {
-				const pattern = new RegExp(`@${mention.username}(@[\\w.-]+)?`, 'g');
-				const safeUrl = encodeURI(mention.url);
-				processed = processed.replace(pattern, (match) => {
+				const pattern = new RegExp(`@${escapeRegExp(mention.username)}(?:@[\\w.-]+)?`, 'g');
+				const safeUrl = safeExternalUrl(mention.url) ?? '#';
+				const next = processed.replace(pattern, (match) => {
 					return `<a href="${safeUrl}" class="mention" rel="noopener noreferrer" target="_blank">${match}</a>`;
 				});
+				if (next !== processed) modified = true;
+				processed = next;
 			});
 		}
 
 		// Replace hashtag links if we have tag data
 		if (tags.length > 0) {
 			tags.forEach((tag) => {
-				const pattern = new RegExp(`#${tag.name}\\b`, 'gi');
-				const safeUrl = encodeURI(tag.url);
-				processed = processed.replace(pattern, () => {
+				const pattern = new RegExp(`#${escapeRegExp(tag.name)}\\b`, 'gi');
+				const safeUrl = safeExternalUrl(tag.url) ?? '#';
+				const next = processed.replace(pattern, () => {
 					return `<a href="${safeUrl}" class="hashtag" rel="noopener noreferrer" target="_blank">#${tag.name}</a>`;
 				});
+				if (next !== processed) modified = true;
+				processed = next;
 			});
 		}
 
 		// If no specific mention/tag data, use generic linkification
 		if (mentions.length === 0 && tags.length === 0) {
-			processed = linkifyMentions(processed, {
-				mentionBaseUrl,
-				hashtagBaseUrl,
-				openInNewTab: true,
-				nofollow: false,
-			});
+			// Only linkify if the sanitized output looks like plain text.
+			const containsHtmlTags = /<\/?[a-z][\s\S]*>/i.test(processed);
+			if (!containsHtmlTags) {
+				const next = linkifyMentions(processed, {
+					mentionBaseUrl,
+					hashtagBaseUrl,
+					openInNewTab: true,
+					nofollow: false,
+				});
+				if (next !== processed) modified = true;
+				processed = next;
+			}
 		}
 
-		return processed;
+		// Re-sanitize after linkification to enforce protocol/attribute allow-lists.
+		if (!modified) return processed;
+
+		return sanitizeHtml(processed, {
+			allowedTags: [
+				'p',
+				'br',
+				'span',
+				'a',
+				'del',
+				'pre',
+				'code',
+				'em',
+				'strong',
+				'b',
+				'i',
+				'u',
+				's',
+				'strike',
+				'ul',
+				'ol',
+				'li',
+				'blockquote',
+				'h1',
+				'h2',
+				'h3',
+				'h4',
+				'h5',
+				'h6',
+			],
+			allowedAttributes: ['href', 'title', 'class', 'rel', 'target'],
+		});
 	}
 
 	const processedContent = $derived(processContent(content));
