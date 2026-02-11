@@ -158,6 +158,8 @@ Acceptance:
 - As admin, process a report end-to-end (assign → resolve → verify state).
 - Manage custom emojis and announcements from the UI.
 
+Done (2026-02-11): Implemented an admin console with reports queue + detail (assign/unassign/resolve/reopen) and per-status admin actions (mark sensitive/delete), added admin accounts management actions (warn/silence/unsilence/suspend/unsuspend/disable/enable/approve), added admin statuses queue with filters and actions, added instance ops for domain allows/blocks + email blocks, added announcements list/create/reactions (update/delete not yet exposed in GraphQL), added custom emoji CRUD, and added agents governance (policy edit + verify/unverify via REST per Lesser coverage policy).
+
 ### M13 — Agents & bot accounts (LLM-ready surface)
 
 Deliverables:

@@ -2165,6 +2165,1285 @@ export async function fetchAdminModerationReviewers({
 	return data.adminModerationReviewers;
 }
 
+const ADMIN_ACTOR_FIELDS = `
+id
+username
+domain
+displayName
+summary
+avatar
+header
+followers
+following
+statusesCount
+bot
+locked
+createdAt
+updatedAt
+trustScore
+`;
+
+type AdminActorFields = Omit<ViewerQueryData['viewer'], 'fields'>;
+
+export type AdminReportStatus = 'OPEN' | 'RESOLVED' | 'REJECTED';
+export type AdminReportAction = 'ASSIGN_TO_SELF' | 'UNASSIGN' | 'RESOLVE' | 'REOPEN';
+
+export type AdminReportListItem = {
+	id: string;
+	category: string;
+	comment?: string | null;
+	createdAt: string;
+	updatedAt: string;
+	forwarded: boolean;
+	actionTaken: boolean;
+	actionTakenAt?: string | null;
+	reporter: Account;
+	target: Account;
+	assignedAccount?: Account | null;
+	statuses: Array<{ id: string }>;
+};
+
+export type AdminReportDetail = Omit<AdminReportListItem, 'statuses'> & {
+	actionTakenBy?: Account | null;
+	statuses: Status[];
+};
+
+const ADMIN_REPORTS_QUERY = `
+query AdminReports($status: AdminReportStatus!, $first: Int = 50, $after: Cursor) {
+	adminReports(status: $status, first: $first, after: $after) {
+		reports {
+			id
+			category
+			comment
+			createdAt
+			updatedAt
+			forwarded
+			actionTaken
+			actionTakenAt
+			reporter {
+				${ADMIN_ACTOR_FIELDS}
+			}
+			target {
+				${ADMIN_ACTOR_FIELDS}
+			}
+			assignedAccount {
+				${ADMIN_ACTOR_FIELDS}
+			}
+			statuses {
+				id
+			}
+		}
+		nextCursor
+	}
+}
+`;
+
+export async function fetchAdminReports({
+	status = 'OPEN',
+	first = 50,
+	after,
+	signal,
+}: {
+	status?: AdminReportStatus;
+	first?: number;
+	after?: string;
+	signal?: AbortSignal;
+} = {}): Promise<{ reports: AdminReportListItem[]; nextCursor: string | null }> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		{
+			adminReports: {
+				reports: Array<{
+					id: string;
+					category: string;
+					comment?: string | null;
+					createdAt: string;
+					updatedAt: string;
+					forwarded: boolean;
+					actionTaken: boolean;
+					actionTakenAt?: string | null;
+					reporter: AdminActorFields;
+					target: AdminActorFields;
+					assignedAccount?: AdminActorFields | null;
+					statuses: Array<{ id: string }>;
+				}>;
+				nextCursor?: string | null;
+			};
+		},
+		{ status: AdminReportStatus; first: number; after?: string }
+	>({
+		document: ADMIN_REPORTS_QUERY,
+		variables: { status, first, after },
+		token,
+		signal,
+	});
+
+	return {
+		reports: data.adminReports.reports.map((report) => ({
+			id: report.id,
+			category: report.category,
+			comment: report.comment ?? null,
+			createdAt: report.createdAt,
+			updatedAt: report.updatedAt,
+			forwarded: report.forwarded,
+			actionTaken: report.actionTaken,
+			actionTakenAt: report.actionTakenAt ?? null,
+			reporter: toAccount(report.reporter),
+			target: toAccount(report.target),
+			assignedAccount: report.assignedAccount ? toAccount(report.assignedAccount) : null,
+			statuses: report.statuses,
+		})),
+		nextCursor: data.adminReports.nextCursor ?? null,
+	};
+}
+
+const ADMIN_REPORT_QUERY = `
+query AdminReport($id: ID!) {
+	adminReport(id: $id) {
+		id
+		category
+		comment
+		createdAt
+		updatedAt
+		forwarded
+		actionTaken
+		actionTakenAt
+		reporter {
+			${ADMIN_ACTOR_FIELDS}
+		}
+		target {
+			${ADMIN_ACTOR_FIELDS}
+		}
+		assignedAccount {
+			${ADMIN_ACTOR_FIELDS}
+		}
+		actionTakenBy {
+			${ADMIN_ACTOR_FIELDS}
+		}
+		statuses {
+			...ObjectFields
+			${POLL_FIELDS}
+		}
+	}
+}
+${OBJECT_FIELDS_FRAGMENT}
+`;
+
+export async function fetchAdminReport({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<AdminReportDetail> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		{
+			adminReport?: {
+				id: string;
+				category: string;
+				comment?: string | null;
+				createdAt: string;
+				updatedAt: string;
+				forwarded: boolean;
+				actionTaken: boolean;
+				actionTakenAt?: string | null;
+				reporter: AdminActorFields;
+				target: AdminActorFields;
+				assignedAccount?: AdminActorFields | null;
+				actionTakenBy?: AdminActorFields | null;
+				statuses: Array<ObjectWithViewerStateAndPoll>;
+			} | null;
+		},
+		{ id: string }
+	>({
+		document: ADMIN_REPORT_QUERY,
+		variables: { id },
+		token,
+		signal,
+	});
+
+	if (!data.adminReport) {
+		throw new Error('Report not found');
+	}
+
+	return {
+		id: data.adminReport.id,
+		category: data.adminReport.category,
+		comment: data.adminReport.comment ?? null,
+		createdAt: data.adminReport.createdAt,
+		updatedAt: data.adminReport.updatedAt,
+		forwarded: data.adminReport.forwarded,
+		actionTaken: data.adminReport.actionTaken,
+		actionTakenAt: data.adminReport.actionTakenAt ?? null,
+		reporter: toAccount(data.adminReport.reporter),
+		target: toAccount(data.adminReport.target),
+		assignedAccount: data.adminReport.assignedAccount ? toAccount(data.adminReport.assignedAccount) : null,
+		actionTakenBy: data.adminReport.actionTakenBy ? toAccount(data.adminReport.actionTakenBy) : null,
+		statuses: data.adminReport.statuses.map((status) => toStatus(status)),
+	};
+}
+
+const ADMIN_REPORT_ACTION_MUTATION = `
+mutation AdminReportAction($id: ID!, $action: AdminReportAction!) {
+	adminReportAction(id: $id, action: $action) {
+		id
+		updatedAt
+	}
+}
+`;
+
+export async function adminReportAction({
+	id,
+	action,
+	signal,
+}: {
+	id: string;
+	action: AdminReportAction;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ adminReportAction: { id: string } }, { id: string; action: AdminReportAction }>(
+		{
+			document: ADMIN_REPORT_ACTION_MUTATION,
+			variables: { id, action },
+			token,
+			signal,
+		}
+	);
+
+	return Boolean(data.adminReportAction?.id);
+}
+
+export type AdminAccountRole = {
+	id: string;
+	name: string;
+	permissions: number;
+};
+
+export type AdminAccount = {
+	id: string;
+	username: string;
+	createdAt: string;
+	locale: string;
+	role: AdminAccountRole;
+	confirmed: boolean;
+	approved: boolean;
+	disabled: boolean;
+	silenced: boolean;
+	suspended: boolean;
+	reportsCount: number;
+	resolvedReportsCount: number;
+	actor?: Account | null;
+};
+
+const ADMIN_ACCOUNTS_QUERY = `
+query AdminAccounts($first: Int = 50, $after: Cursor) {
+	adminAccounts(first: $first, after: $after) {
+		accounts {
+			id
+			username
+			createdAt
+			locale
+			confirmed
+			approved
+			disabled
+			silenced
+			suspended
+			reportsCount
+			resolvedReportsCount
+			role {
+				id
+				name
+				permissions
+			}
+			actor {
+				${ADMIN_ACTOR_FIELDS}
+			}
+		}
+		nextCursor
+	}
+}
+`;
+
+export async function fetchAdminAccounts({
+	first = 50,
+	after,
+	signal,
+}: {
+	first?: number;
+	after?: string;
+	signal?: AbortSignal;
+} = {}): Promise<{ accounts: AdminAccount[]; nextCursor: string | null }> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		{
+			adminAccounts: {
+				accounts: Array<{
+					id: string;
+					username: string;
+					createdAt: string;
+					locale: string;
+					confirmed: boolean;
+					approved: boolean;
+					disabled: boolean;
+					silenced: boolean;
+					suspended: boolean;
+					reportsCount: number;
+					resolvedReportsCount: number;
+					role: AdminAccountRole;
+					actor?: AdminActorFields | null;
+				}>;
+				nextCursor?: string | null;
+			};
+		},
+		{ first: number; after?: string }
+	>({
+		document: ADMIN_ACCOUNTS_QUERY,
+		variables: { first, after },
+		token,
+		signal,
+	});
+
+	return {
+		accounts: data.adminAccounts.accounts.map((account) => ({
+			id: account.id,
+			username: account.username,
+			createdAt: account.createdAt,
+			locale: account.locale,
+			role: account.role,
+			confirmed: account.confirmed,
+			approved: account.approved,
+			disabled: account.disabled,
+			silenced: account.silenced,
+			suspended: account.suspended,
+			reportsCount: account.reportsCount,
+			resolvedReportsCount: account.resolvedReportsCount,
+			actor: account.actor ? toAccount(account.actor) : null,
+		})),
+		nextCursor: data.adminAccounts.nextCursor ?? null,
+	};
+}
+
+const ADMIN_ACCOUNT_QUERY = `
+query AdminAccount($id: ID!) {
+	adminAccount(id: $id) {
+		id
+		username
+		createdAt
+		locale
+		confirmed
+		approved
+		disabled
+		silenced
+		suspended
+		reportsCount
+		resolvedReportsCount
+		role {
+			id
+			name
+			permissions
+		}
+		actor {
+			${ADMIN_ACTOR_FIELDS}
+		}
+	}
+}
+`;
+
+export async function fetchAdminAccount({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<AdminAccount | null> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		{
+			adminAccount?: {
+				id: string;
+				username: string;
+				createdAt: string;
+				locale: string;
+				confirmed: boolean;
+				approved: boolean;
+				disabled: boolean;
+				silenced: boolean;
+				suspended: boolean;
+				reportsCount: number;
+				resolvedReportsCount: number;
+				role: AdminAccountRole;
+				actor?: AdminActorFields | null;
+			} | null;
+		},
+		{ id: string }
+	>({
+		document: ADMIN_ACCOUNT_QUERY,
+		variables: { id },
+		token,
+		signal,
+	});
+
+	if (!data.adminAccount) return null;
+
+	return {
+		id: data.adminAccount.id,
+		username: data.adminAccount.username,
+		createdAt: data.adminAccount.createdAt,
+		locale: data.adminAccount.locale,
+		role: data.adminAccount.role,
+		confirmed: data.adminAccount.confirmed,
+		approved: data.adminAccount.approved,
+		disabled: data.adminAccount.disabled,
+		silenced: data.adminAccount.silenced,
+		suspended: data.adminAccount.suspended,
+		reportsCount: data.adminAccount.reportsCount,
+		resolvedReportsCount: data.adminAccount.resolvedReportsCount,
+		actor: data.adminAccount.actor ? toAccount(data.adminAccount.actor) : null,
+	};
+}
+
+const ADMIN_ACCOUNT_ACTION_MUTATION = `
+mutation AdminAccountAction($input: AdminAccountActionInput!) {
+	adminAccountAction(input: $input)
+}
+`;
+
+export async function adminAccountAction({
+	id,
+	type,
+	text,
+	signal,
+}: {
+	id: string;
+	type: string;
+	text?: string;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ adminAccountAction: boolean }, { input: { id: string; type: string; text?: string } }>(
+		{
+			document: ADMIN_ACCOUNT_ACTION_MUTATION,
+			variables: { input: { id, type, ...(text ? { text } : {}) } },
+			token,
+			signal,
+		}
+	);
+
+	return data.adminAccountAction;
+}
+
+export type AdminStatusFilter = {
+	local?: boolean;
+	remote?: boolean;
+	byDomain?: string;
+	visibility?: string;
+	flagged?: boolean;
+	reported?: boolean;
+	media?: boolean;
+	sensitive?: boolean;
+	minDate?: string;
+	maxDate?: string;
+};
+
+const ADMIN_STATUSES_QUERY = `
+query AdminStatuses($filter: AdminStatusFilter, $first: Int = 20, $after: Cursor) {
+	adminStatuses(filter: $filter, first: $first, after: $after) {
+		statuses {
+			...ObjectFields
+			${POLL_FIELDS}
+		}
+		nextCursor
+	}
+}
+${OBJECT_FIELDS_FRAGMENT}
+`;
+
+export async function fetchAdminStatuses({
+	filter,
+	first = 20,
+	after,
+	signal,
+}: {
+	filter?: AdminStatusFilter;
+	first?: number;
+	after?: string;
+	signal?: AbortSignal;
+} = {}): Promise<{ statuses: Status[]; nextCursor: string | null }> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		{ adminStatuses: { statuses: ObjectWithViewerStateAndPoll[]; nextCursor?: string | null } },
+		{ filter?: AdminStatusFilter; first: number; after?: string }
+	>({
+		document: ADMIN_STATUSES_QUERY,
+		variables: { filter, first, after },
+		token,
+		signal,
+	});
+
+	return {
+		statuses: data.adminStatuses.statuses.map((status) => toStatus(status)),
+		nextCursor: data.adminStatuses.nextCursor ?? null,
+	};
+}
+
+const ADMIN_DELETE_STATUS_MUTATION = `
+mutation AdminDeleteStatus($id: ID!) {
+	adminDeleteStatus(id: $id)
+}
+`;
+
+export async function adminDeleteStatus({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ adminDeleteStatus: boolean }, { id: string }>({
+		document: ADMIN_DELETE_STATUS_MUTATION,
+		variables: { id },
+		token,
+		signal,
+	});
+
+	return data.adminDeleteStatus;
+}
+
+const ADMIN_SET_STATUS_SENSITIVE_MUTATION = `
+mutation AdminSetStatusSensitive($id: ID!, $sensitive: Boolean!) {
+	adminSetStatusSensitive(id: $id, sensitive: $sensitive) {
+		...ObjectFields
+		${POLL_FIELDS}
+	}
+}
+${OBJECT_FIELDS_FRAGMENT}
+`;
+
+export async function adminSetStatusSensitive({
+	id,
+	sensitive,
+	signal,
+}: {
+	id: string;
+	sensitive: boolean;
+	signal?: AbortSignal;
+}): Promise<Status> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		{ adminSetStatusSensitive: ObjectWithViewerStateAndPoll },
+		{ id: string; sensitive: boolean }
+	>({
+		document: ADMIN_SET_STATUS_SENSITIVE_MUTATION,
+		variables: { id, sensitive },
+		token,
+		signal,
+	});
+
+	return toStatus(data.adminSetStatusSensitive);
+}
+
+export type AdminDomainAllow = {
+	id: string;
+	domain: string;
+	createdAt: string;
+};
+
+export type AdminDomainBlock = {
+	id: string;
+	domain: string;
+	severity: string;
+	rejectMedia: boolean;
+	rejectReports: boolean;
+	privateComment?: string | null;
+	publicComment?: string | null;
+	obfuscate: boolean;
+	createdAt: string;
+	updatedAt: string;
+};
+
+export type AdminEmailDomainBlock = {
+	id: string;
+	domain: string;
+	createdAt: string;
+};
+
+const ADMIN_DOMAIN_ALLOWS_QUERY = `
+query AdminDomainAllows($first: Int = 100, $after: Cursor) {
+	adminDomainAllows(first: $first, after: $after) {
+		allows {
+			id
+			domain
+			createdAt
+		}
+		nextCursor
+	}
+}
+`;
+
+export async function fetchAdminDomainAllows({
+	first = 100,
+	after,
+	signal,
+}: {
+	first?: number;
+	after?: string;
+	signal?: AbortSignal;
+} = {}): Promise<{ allows: AdminDomainAllow[]; nextCursor: string | null }> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		{ adminDomainAllows: { allows: AdminDomainAllow[]; nextCursor?: string | null } },
+		{ first: number; after?: string }
+	>({
+		document: ADMIN_DOMAIN_ALLOWS_QUERY,
+		variables: { first, after },
+		token,
+		signal,
+	});
+
+	return { allows: data.adminDomainAllows.allows, nextCursor: data.adminDomainAllows.nextCursor ?? null };
+}
+
+const ADMIN_CREATE_DOMAIN_ALLOW_MUTATION = `
+mutation AdminCreateDomainAllow($domain: String!) {
+	adminCreateDomainAllow(domain: $domain) {
+		id
+		domain
+		createdAt
+	}
+}
+`;
+
+export async function adminCreateDomainAllow({
+	domain,
+	signal,
+}: {
+	domain: string;
+	signal?: AbortSignal;
+}): Promise<AdminDomainAllow> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ adminCreateDomainAllow: AdminDomainAllow }, { domain: string }>({
+		document: ADMIN_CREATE_DOMAIN_ALLOW_MUTATION,
+		variables: { domain },
+		token,
+		signal,
+	});
+
+	return data.adminCreateDomainAllow;
+}
+
+const ADMIN_DELETE_DOMAIN_ALLOW_MUTATION = `
+mutation AdminDeleteDomainAllow($id: ID!) {
+	adminDeleteDomainAllow(id: $id)
+}
+`;
+
+export async function adminDeleteDomainAllow({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ adminDeleteDomainAllow: boolean }, { id: string }>({
+		document: ADMIN_DELETE_DOMAIN_ALLOW_MUTATION,
+		variables: { id },
+		token,
+		signal,
+	});
+
+	return data.adminDeleteDomainAllow;
+}
+
+const ADMIN_DOMAIN_BLOCKS_QUERY = `
+query AdminDomainBlocks($first: Int = 100, $after: Cursor) {
+	adminDomainBlocks(first: $first, after: $after) {
+		blocks {
+			id
+			domain
+			severity
+			rejectMedia
+			rejectReports
+			privateComment
+			publicComment
+			obfuscate
+			createdAt
+			updatedAt
+		}
+		nextCursor
+	}
+}
+`;
+
+export async function fetchAdminDomainBlocks({
+	first = 100,
+	after,
+	signal,
+}: {
+	first?: number;
+	after?: string;
+	signal?: AbortSignal;
+} = {}): Promise<{ blocks: AdminDomainBlock[]; nextCursor: string | null }> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		{ adminDomainBlocks: { blocks: AdminDomainBlock[]; nextCursor?: string | null } },
+		{ first: number; after?: string }
+	>({
+		document: ADMIN_DOMAIN_BLOCKS_QUERY,
+		variables: { first, after },
+		token,
+		signal,
+	});
+
+	return { blocks: data.adminDomainBlocks.blocks, nextCursor: data.adminDomainBlocks.nextCursor ?? null };
+}
+
+const ADMIN_CREATE_DOMAIN_BLOCK_MUTATION = `
+mutation AdminCreateDomainBlock($input: AdminDomainBlockCreateInput!) {
+	adminCreateDomainBlock(input: $input) {
+		id
+		domain
+		severity
+		rejectMedia
+		rejectReports
+		privateComment
+		publicComment
+		obfuscate
+		createdAt
+		updatedAt
+	}
+}
+`;
+
+export async function adminCreateDomainBlock({
+	input,
+	signal,
+}: {
+	input: {
+		domain: string;
+		severity?: string;
+		rejectMedia?: boolean;
+		rejectReports?: boolean;
+		privateComment?: string;
+		publicComment?: string;
+		obfuscate?: boolean;
+	};
+	signal?: AbortSignal;
+}): Promise<AdminDomainBlock> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ adminCreateDomainBlock: AdminDomainBlock }, { input: typeof input }>({
+		document: ADMIN_CREATE_DOMAIN_BLOCK_MUTATION,
+		variables: { input },
+		token,
+		signal,
+	});
+
+	return data.adminCreateDomainBlock;
+}
+
+const ADMIN_UPDATE_DOMAIN_BLOCK_MUTATION = `
+mutation AdminUpdateDomainBlock($id: ID!, $input: AdminDomainBlockUpdateInput!) {
+	adminUpdateDomainBlock(id: $id, input: $input) {
+		id
+		domain
+		severity
+		rejectMedia
+		rejectReports
+		privateComment
+		publicComment
+		obfuscate
+		createdAt
+		updatedAt
+	}
+}
+`;
+
+export async function adminUpdateDomainBlock({
+	id,
+	input,
+	signal,
+}: {
+	id: string;
+	input: {
+		severity?: string;
+		rejectMedia?: boolean;
+		rejectReports?: boolean;
+		privateComment?: string;
+		publicComment?: string;
+		obfuscate?: boolean;
+	};
+	signal?: AbortSignal;
+}): Promise<AdminDomainBlock> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		{ adminUpdateDomainBlock: AdminDomainBlock },
+		{ id: string; input: typeof input }
+	>({
+		document: ADMIN_UPDATE_DOMAIN_BLOCK_MUTATION,
+		variables: { id, input },
+		token,
+		signal,
+	});
+
+	return data.adminUpdateDomainBlock;
+}
+
+const ADMIN_DELETE_DOMAIN_BLOCK_MUTATION = `
+mutation AdminDeleteDomainBlock($id: ID!) {
+	adminDeleteDomainBlock(id: $id)
+}
+`;
+
+export async function adminDeleteDomainBlock({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ adminDeleteDomainBlock: boolean }, { id: string }>({
+		document: ADMIN_DELETE_DOMAIN_BLOCK_MUTATION,
+		variables: { id },
+		token,
+		signal,
+	});
+
+	return data.adminDeleteDomainBlock;
+}
+
+const ADMIN_EMAIL_DOMAIN_BLOCKS_QUERY = `
+query AdminEmailDomainBlocks($first: Int = 100, $after: Cursor) {
+	adminEmailDomainBlocks(first: $first, after: $after) {
+		blocks {
+			id
+			domain
+			createdAt
+		}
+		nextCursor
+	}
+}
+`;
+
+export async function fetchAdminEmailDomainBlocks({
+	first = 100,
+	after,
+	signal,
+}: {
+	first?: number;
+	after?: string;
+	signal?: AbortSignal;
+} = {}): Promise<{ blocks: AdminEmailDomainBlock[]; nextCursor: string | null }> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		{ adminEmailDomainBlocks: { blocks: AdminEmailDomainBlock[]; nextCursor?: string | null } },
+		{ first: number; after?: string }
+	>({
+		document: ADMIN_EMAIL_DOMAIN_BLOCKS_QUERY,
+		variables: { first, after },
+		token,
+		signal,
+	});
+
+	return { blocks: data.adminEmailDomainBlocks.blocks, nextCursor: data.adminEmailDomainBlocks.nextCursor ?? null };
+}
+
+const ADMIN_CREATE_EMAIL_DOMAIN_BLOCK_MUTATION = `
+mutation AdminCreateEmailDomainBlock($domain: String!) {
+	adminCreateEmailDomainBlock(domain: $domain) {
+		id
+		domain
+		createdAt
+	}
+}
+`;
+
+export async function adminCreateEmailDomainBlock({
+	domain,
+	signal,
+}: {
+	domain: string;
+	signal?: AbortSignal;
+}): Promise<AdminEmailDomainBlock> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ adminCreateEmailDomainBlock: AdminEmailDomainBlock }, { domain: string }>({
+		document: ADMIN_CREATE_EMAIL_DOMAIN_BLOCK_MUTATION,
+		variables: { domain },
+		token,
+		signal,
+	});
+
+	return data.adminCreateEmailDomainBlock;
+}
+
+const ADMIN_DELETE_EMAIL_DOMAIN_BLOCK_MUTATION = `
+mutation AdminDeleteEmailDomainBlock($id: ID!) {
+	adminDeleteEmailDomainBlock(id: $id)
+}
+`;
+
+export async function adminDeleteEmailDomainBlock({
+	id,
+	signal,
+}: {
+	id: string;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ adminDeleteEmailDomainBlock: boolean }, { id: string }>({
+		document: ADMIN_DELETE_EMAIL_DOMAIN_BLOCK_MUTATION,
+		variables: { id },
+		token,
+		signal,
+	});
+
+	return data.adminDeleteEmailDomainBlock;
+}
+
+export type AnnouncementReaction = {
+	name: string;
+	count: number;
+	me: boolean;
+	url?: string | null;
+	staticUrl?: string | null;
+};
+
+export type Announcement = {
+	id: string;
+	content: string;
+	text: string;
+	publishedAt: string;
+	updatedAt: string;
+	allDay: boolean;
+	startsAt?: string | null;
+	endsAt?: string | null;
+	read: boolean;
+	reactions: AnnouncementReaction[];
+};
+
+const ANNOUNCEMENTS_QUERY = `
+query Announcements {
+	announcements {
+		id
+		content
+		text
+		publishedAt
+		updatedAt
+		allDay
+		startsAt
+		endsAt
+		read
+		reactions {
+			name
+			count
+			me
+			url
+			staticUrl
+		}
+	}
+}
+`;
+
+export async function fetchAnnouncements({
+	signal,
+}: {
+	signal?: AbortSignal;
+} = {}): Promise<Announcement[]> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ announcements: Announcement[] }>({
+		document: ANNOUNCEMENTS_QUERY,
+		token,
+		signal,
+	});
+
+	return data.announcements;
+}
+
+const ADMIN_CREATE_ANNOUNCEMENT_MUTATION = `
+mutation AdminCreateAnnouncement($input: AdminCreateAnnouncementInput!) {
+	adminCreateAnnouncement(input: $input) {
+		id
+		content
+		text
+		publishedAt
+		updatedAt
+		allDay
+		startsAt
+		endsAt
+		read
+		reactions {
+			name
+			count
+			me
+			url
+			staticUrl
+		}
+	}
+}
+`;
+
+export async function adminCreateAnnouncement({
+	input,
+	signal,
+}: {
+	input: { text: string; allDay?: boolean; startsAt?: string; endsAt?: string };
+	signal?: AbortSignal;
+}): Promise<Announcement> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ adminCreateAnnouncement: Announcement }, { input: typeof input }>({
+		document: ADMIN_CREATE_ANNOUNCEMENT_MUTATION,
+		variables: { input },
+		token,
+		signal,
+	});
+
+	return data.adminCreateAnnouncement;
+}
+
+const ADD_ANNOUNCEMENT_REACTION_MUTATION = `
+mutation AddAnnouncementReaction($id: ID!, $name: String!) {
+	addAnnouncementReaction(id: $id, name: $name)
+}
+`;
+
+export async function addAnnouncementReaction({
+	id,
+	name,
+	signal,
+}: {
+	id: string;
+	name: string;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ addAnnouncementReaction: boolean }, { id: string; name: string }>({
+		document: ADD_ANNOUNCEMENT_REACTION_MUTATION,
+		variables: { id, name },
+		token,
+		signal,
+	});
+
+	return data.addAnnouncementReaction;
+}
+
+const REMOVE_ANNOUNCEMENT_REACTION_MUTATION = `
+mutation RemoveAnnouncementReaction($id: ID!, $name: String!) {
+	removeAnnouncementReaction(id: $id, name: $name)
+}
+`;
+
+export async function removeAnnouncementReaction({
+	id,
+	name,
+	signal,
+}: {
+	id: string;
+	name: string;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ removeAnnouncementReaction: boolean }, { id: string; name: string }>({
+		document: REMOVE_ANNOUNCEMENT_REACTION_MUTATION,
+		variables: { id, name },
+		token,
+		signal,
+	});
+
+	return data.removeAnnouncementReaction;
+}
+
+export async function createEmoji({
+	input,
+	signal,
+}: {
+	input: { shortcode: string; image: string; category?: string; visibleInPicker?: boolean };
+	signal?: AbortSignal;
+}): Promise<CustomEmoji> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ createEmoji: CustomEmoji }, { input: typeof input }>({
+		document: `
+mutation CreateEmoji($input: CreateEmojiInput!) {
+	createEmoji(input: $input) {
+		id
+		shortcode
+		url
+		staticUrl
+		category
+		visibleInPicker
+		domain
+	}
+}
+`,
+		variables: { input },
+		token,
+		signal,
+	});
+
+	return data.createEmoji;
+}
+
+export async function updateEmoji({
+	shortcode,
+	input,
+	signal,
+}: {
+	shortcode: string;
+	input: { category?: string; visibleInPicker?: boolean };
+	signal?: AbortSignal;
+}): Promise<CustomEmoji> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ updateEmoji: CustomEmoji }, { shortcode: string; input: typeof input }>({
+		document: `
+mutation UpdateEmoji($shortcode: String!, $input: UpdateEmojiInput!) {
+	updateEmoji(shortcode: $shortcode, input: $input) {
+		id
+		shortcode
+		url
+		staticUrl
+		category
+		visibleInPicker
+		domain
+	}
+}
+`,
+		variables: { shortcode, input },
+		token,
+		signal,
+	});
+
+	return data.updateEmoji;
+}
+
+export async function deleteEmoji({
+	shortcode,
+	signal,
+}: {
+	shortcode: string;
+	signal?: AbortSignal;
+}): Promise<boolean> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<{ deleteEmoji: boolean }, { shortcode: string }>({
+		document: `
+mutation DeleteEmoji($shortcode: String!) {
+	deleteEmoji(shortcode: $shortcode)
+}
+`,
+		variables: { shortcode },
+		token,
+		signal,
+	});
+
+	return data.deleteEmoji;
+}
+
+export type AdminAgentPolicy = Record<string, unknown>;
+
+export async function fetchAdminAgentPolicy({
+	signal,
+}: {
+	signal?: AbortSignal;
+} = {}): Promise<AdminAgentPolicy> {
+	const token = requireAccessToken();
+
+	return restRequest<AdminAgentPolicy>({
+		path: '/api/v1/admin/agents/policy',
+		token,
+		signal,
+	});
+}
+
+export async function updateAdminAgentPolicy({
+	policy,
+	signal,
+}: {
+	policy: AdminAgentPolicy;
+	signal?: AbortSignal;
+}): Promise<AdminAgentPolicy> {
+	const token = requireAccessToken();
+
+	return restRequest<AdminAgentPolicy>({
+		path: '/api/v1/admin/agents/policy',
+		method: 'PUT',
+		body: policy,
+		token,
+		signal,
+	});
+}
+
+type AdminVerifyAgentBody = {
+	exit_quarantine?: boolean;
+	reason?: string;
+};
+
+export async function verifyAgent({
+	username,
+	body,
+	signal,
+}: {
+	username: string;
+	body?: AdminVerifyAgentBody;
+	signal?: AbortSignal;
+}): Promise<Record<string, unknown>> {
+	const token = requireAccessToken();
+
+	return restRequest<Record<string, unknown>>({
+		path: `/api/v1/admin/agents/${encodeURIComponent(username)}/verify`,
+		method: 'POST',
+		body: body ?? {},
+		token,
+		signal,
+	});
+}
+
+export async function unverifyAgent({
+	username,
+	body,
+	signal,
+}: {
+	username: string;
+	body?: AdminVerifyAgentBody;
+	signal?: AbortSignal;
+}): Promise<Record<string, unknown>> {
+	const token = requireAccessToken();
+
+	return restRequest<Record<string, unknown>>({
+		path: `/api/v1/admin/agents/${encodeURIComponent(username)}/unverify`,
+		method: 'POST',
+		body: body ?? {},
+		token,
+		signal,
+	});
+}
+
 export async function fetchInstanceVapidKey({
 	signal,
 }: {
@@ -2245,5 +3524,35 @@ export const api = {
 	updateQuotePermissions,
 	fetchActorProfile,
 	fetchAdminModerationReviewers,
+	fetchAdminReports,
+	fetchAdminReport,
+	adminReportAction,
+	fetchAdminAccounts,
+	fetchAdminAccount,
+	adminAccountAction,
+	fetchAdminStatuses,
+	adminDeleteStatus,
+	adminSetStatusSensitive,
+	fetchAdminDomainAllows,
+	adminCreateDomainAllow,
+	adminDeleteDomainAllow,
+	fetchAdminDomainBlocks,
+	adminCreateDomainBlock,
+	adminUpdateDomainBlock,
+	adminDeleteDomainBlock,
+	fetchAdminEmailDomainBlocks,
+	adminCreateEmailDomainBlock,
+	adminDeleteEmailDomainBlock,
+	fetchAnnouncements,
+	adminCreateAnnouncement,
+	addAnnouncementReaction,
+	removeAnnouncementReaction,
+	createEmoji,
+	updateEmoji,
+	deleteEmoji,
+	fetchAdminAgentPolicy,
+	updateAdminAgentPolicy,
+	verifyAgent,
+	unverifyAgent,
 	fetchInstanceVapidKey,
 } as const;
