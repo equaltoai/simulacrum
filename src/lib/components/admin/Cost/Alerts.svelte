@@ -1,0 +1,33 @@
+<!--
+Admin.Cost.Alerts - Cost and Budget Alerts
+
+Displays active cost alerts and budget warnings from admin streaming store.
+
+@component
+-->
+
+<script lang="ts">
+	import { getCostContext } from './context.js';
+
+	interface Props {
+		class?: string;
+		alerts?: Array<Record<string, unknown>>;
+	}
+
+	let { class: className = '', alerts = [] }: Props = $props();
+
+	getCostContext();
+</script>
+
+<div class={`cost-alerts ${className}`}>
+	<h4>Cost Alerts</h4>
+	{#if alerts.length === 0}
+		<p>No active cost alerts.</p>
+	{:else}
+		<ul>
+			{#each alerts as alert, i (alert.id || i)}
+				<li>{alert.message}</li>
+			{/each}
+		</ul>
+	{/if}
+</div>
