@@ -15,10 +15,10 @@ Displays a single notification with type-specific rendering.
 -->
 
 <script lang="ts">
+	import { sanitizeHtml } from '$lib/greater/utils';
 	import type { Snippet } from 'svelte';
 	import type { Notification, NotificationType } from './types.js';
 	import { getNotificationsContext } from './context.svelte.js';
-	import { sanitizeHtml } from '$lib/greater/utils';
 
 	interface Props {
 		/**
@@ -87,39 +87,6 @@ Displays a single notification with type-specific rendering.
 
 	const title = $derived(titleMap[notification.type] ?? 'sent a notification');
 
-	const sanitizedStatusContent = $derived.by(() => {
-		if (!notification.status?.content) return '';
-		return sanitizeHtml(notification.status.content, {
-			allowedTags: [
-				'p',
-				'br',
-				'span',
-				'a',
-				'del',
-				'pre',
-				'code',
-				'em',
-				'strong',
-				'b',
-				'i',
-				'u',
-				's',
-				'strike',
-				'ul',
-				'ol',
-				'li',
-				'blockquote',
-				'h1',
-				'h2',
-				'h3',
-				'h4',
-				'h5',
-				'h6',
-			],
-			allowedAttributes: ['href', 'title', 'class', 'rel', 'target'],
-		});
-	});
-
 	/**
 	 * Handle notification click
 	 */
@@ -148,6 +115,43 @@ Displays a single notification with type-specific rendering.
 			event.preventDefault();
 			handleClick();
 		}
+	}
+
+	const sanitizedStatusContent = $derived(
+		notification.status
+			? sanitizeHtml(notification.status.content, {
+					allowedTags: [
+						'p',
+						'br',
+						'span',
+						'a',
+						'del',
+						'pre',
+						'code',
+						'em',
+						'strong',
+						'b',
+						'i',
+						'u',
+						's',
+						'strike',
+						'ul',
+						'ol',
+						'li',
+						'blockquote',
+					],
+					allowedAttributes: ['href', 'title', 'class', 'rel', 'target'],
+				}).trim()
+			: ''
+	);
+
+	function setHtml(node: HTMLElement, html: string) {
+		node.innerHTML = html;
+		return {
+			update(newHtml: string) {
+				node.innerHTML = newHtml;
+			},
+		};
 	}
 </script>
 
@@ -196,10 +200,12 @@ Displays a single notification with type-specific rendering.
 					</time>
 				{/if}
 
-				{#if notification.status}
+				{#if notification.status && sanitizedStatusContent}
 					<div class="notification-item__status">
-						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-						<div class="notification-item__status-content">{@html sanitizedStatusContent}</div>
+						<div
+							class="notification-item__status-content"
+							use:setHtml={sanitizedStatusContent}
+						></div>
 					</div>
 				{/if}
 			</div>

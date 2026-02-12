@@ -20,15 +20,6 @@
 		onClick: () => handleFollow(),
 	});
 
-	function sanitizeActorBio(bio: string): string {
-		return sanitizeHtml(bio, {
-			allowedTags: ['p', 'br', 'span', 'a', 'strong', 'em', 'b', 'i', 'u', 'code', 'pre'],
-			allowedAttributes: ['href', 'rel', 'target', 'class', 'title'],
-		});
-	}
-
-	const sanitizedBio = $derived.by(() => (actor.bio ? sanitizeActorBio(actor.bio) : ''));
-
 	async function handleFollow() {
 		await handlers.onFollow?.(actor.id);
 	}
@@ -42,6 +33,24 @@
 			event.preventDefault();
 			handleClick();
 		}
+	}
+
+	const sanitizedBio = $derived(
+		actor.bio
+			? sanitizeHtml(actor.bio, {
+					allowedTags: ['p', 'br', 'span', 'a', 'strong', 'em', 'b', 'i', 'u', 'code'],
+					allowedAttributes: ['href', 'rel', 'target', 'class', 'title'],
+				}).trim()
+			: ''
+	);
+
+	function setHtml(node: HTMLElement, html: string) {
+		node.innerHTML = html;
+		return {
+			update(newHtml: string) {
+				node.innerHTML = newHtml;
+			},
+		};
 	}
 </script>
 
@@ -68,10 +77,9 @@
 				<h4 class="actor-result__name">{actor.displayName}</h4>
 				<span class="actor-result__username">@{actor.username}</span>
 			</div>
-			{#if actor.bio}
+			{#if sanitizedBio}
 				<div class="actor-result__bio">
-					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-					<div class="actor-result__bio-content">{@html sanitizedBio}</div>
+					<div class="actor-result__bio-content" use:setHtml={sanitizedBio}></div>
 				</div>
 			{/if}
 			{#if actor.followersCount !== undefined}

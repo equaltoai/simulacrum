@@ -19,17 +19,22 @@
 	import { type Snippet } from 'svelte';
 	import { createMenu } from '$lib/greater/headless/menu';
 	import { createModal } from '$lib/greater/headless/modal';
-	import type { Account, Status } from '$lib/types';
 
 	export type ModerationType = 'block' | 'mute' | 'report' | 'hide' | 'addNote';
 	export type ModerationTarget = 'account' | 'status' | 'domain';
 
-	type TargetAccount = Pick<Account, 'id' | 'displayName' | 'acct' | 'username'> & {
+	type TargetAccount = {
+		id: string;
 		name?: string | null;
+		displayName?: string | null;
 		preferredUsername?: string | null;
+		acct?: string | null;
+		username?: string | null;
 	};
 
-	type TargetStatus = Pick<Status, 'id'>;
+	type TargetStatus = {
+		id: string;
+	};
 
 	interface ModerationAction {
 		type: ModerationType;
