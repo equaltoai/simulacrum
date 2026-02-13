@@ -1,4 +1,18 @@
 import { assertEqual, assertOk } from './_harness/assert.mjs';
+import { SkipTestError } from './_harness/skip.mjs';
+
+function assertGraphqlOk(res, message) {
+	assertEqual(res.status, 200, message ?? 'Expected POST /api/graphql to return 200');
+	if (Array.isArray(res.body?.errors) && res.body.errors.length) {
+		const first = res.body.errors?.[0]?.message;
+		throw new Error(`GraphQL returned errors (${res.body.errors.length})${first ? `: ${first}` : ''}`);
+	}
+}
+
+function shouldSkipAgents(res) {
+	if (!Array.isArray(res.body?.errors)) return false;
+	return res.body.errors.some((e) => typeof e?.message === 'string' && e.message.toLowerCase().includes('agents are disabled'));
+}
 
 export default [
 	{
@@ -70,13 +84,175 @@ export default [
 				operationName: 'Viewer',
 			});
 
-			assertEqual(res.status, 200, 'Expected POST /api/graphql to return 200');
+			assertGraphqlOk(res);
 			assertOk(res.body?.data?.viewer?.id, 'Expected viewer.id');
 			assertOk(res.body?.data?.viewer?.username, 'Expected viewer.username');
+		},
+	},
+	{
+		slug: 'gql.timeline_home',
+		name: 'GraphQL: timeline(HOME) returns connection metadata',
+		tags: ['smoke', 'graphql', 'timeline', 'auth'],
+		requiresAuth: true,
+		async run({ gql }) {
+			const res = await gql('timeline_home', {
+				query: `query TimelineSmoke($type: TimelineType!, $first: Int = 1) {
+  timeline(type: $type, first: $first) {
+    totalCount
+    edges { cursor }
+    pageInfo { hasNextPage endCursor }
+  }
+}`,
+				operationName: 'TimelineSmoke',
+				variables: { type: 'HOME', first: 1 },
+			});
 
-			if (Array.isArray(res.body?.errors) && res.body.errors.length) {
-				throw new Error(`Expected GraphQL viewer query to succeed (got errors: ${res.body.errors.length})`);
+			assertGraphqlOk(res);
+			assertOk(typeof res.body?.data?.timeline?.totalCount === 'number', 'Expected timeline.totalCount');
+			assertOk(Array.isArray(res.body?.data?.timeline?.edges), 'Expected timeline.edges array');
+			assertOk(typeof res.body?.data?.timeline?.pageInfo?.hasNextPage === 'boolean', 'Expected timeline.pageInfo.hasNextPage');
+		},
+	},
+	{
+		slug: 'gql.timeline_local',
+		name: 'GraphQL: timeline(LOCAL) returns connection metadata',
+		tags: ['smoke', 'graphql', 'timeline', 'auth'],
+		requiresAuth: true,
+		async run({ gql }) {
+			const res = await gql('timeline_local', {
+				query: `query TimelineSmoke($type: TimelineType!, $first: Int = 1) {
+  timeline(type: $type, first: $first) {
+    totalCount
+    edges { cursor }
+    pageInfo { hasNextPage endCursor }
+  }
+}`,
+				operationName: 'TimelineSmoke',
+				variables: { type: 'LOCAL', first: 1 },
+			});
+
+			assertGraphqlOk(res);
+			assertOk(typeof res.body?.data?.timeline?.totalCount === 'number', 'Expected timeline.totalCount');
+			assertOk(Array.isArray(res.body?.data?.timeline?.edges), 'Expected timeline.edges array');
+			assertOk(typeof res.body?.data?.timeline?.pageInfo?.hasNextPage === 'boolean', 'Expected timeline.pageInfo.hasNextPage');
+		},
+	},
+	{
+		slug: 'gql.timeline_public',
+		name: 'GraphQL: timeline(PUBLIC) returns connection metadata',
+		tags: ['smoke', 'graphql', 'timeline', 'auth'],
+		requiresAuth: true,
+		async run({ gql }) {
+			const res = await gql('timeline_public', {
+				query: `query TimelineSmoke($type: TimelineType!, $first: Int = 1) {
+  timeline(type: $type, first: $first) {
+    totalCount
+    edges { cursor }
+    pageInfo { hasNextPage endCursor }
+  }
+}`,
+				operationName: 'TimelineSmoke',
+				variables: { type: 'PUBLIC', first: 1 },
+			});
+
+			assertGraphqlOk(res);
+			assertOk(typeof res.body?.data?.timeline?.totalCount === 'number', 'Expected timeline.totalCount');
+			assertOk(Array.isArray(res.body?.data?.timeline?.edges), 'Expected timeline.edges array');
+			assertOk(typeof res.body?.data?.timeline?.pageInfo?.hasNextPage === 'boolean', 'Expected timeline.pageInfo.hasNextPage');
+		},
+	},
+	{
+		slug: 'gql.notifications',
+		name: 'GraphQL: notifications returns connection metadata',
+		tags: ['smoke', 'graphql', 'notifications', 'auth'],
+		requiresAuth: true,
+		async run({ gql }) {
+			const res = await gql('notifications', {
+				query: `query NotificationsSmoke($first: Int = 1) {
+  notifications(first: $first) {
+    totalCount
+    edges { cursor }
+    pageInfo { hasNextPage endCursor }
+  }
+}`,
+				operationName: 'NotificationsSmoke',
+				variables: { first: 1 },
+			});
+
+			assertGraphqlOk(res);
+			assertOk(typeof res.body?.data?.notifications?.totalCount === 'number', 'Expected notifications.totalCount');
+			assertOk(Array.isArray(res.body?.data?.notifications?.edges), 'Expected notifications.edges array');
+			assertOk(typeof res.body?.data?.notifications?.pageInfo?.hasNextPage === 'boolean', 'Expected notifications.pageInfo.hasNextPage');
+		},
+	},
+	{
+		slug: 'gql.my_agents',
+		name: 'GraphQL: myAgents returns agent list',
+		tags: ['smoke', 'graphql', 'agents', 'auth'],
+		requiresAuth: true,
+		async run({ gql }) {
+			const res = await gql('my_agents', {
+				query: `query MyAgentsSmoke {
+  myAgents {
+    username
+    verified
+    agentType
+  }
+}`,
+				operationName: 'MyAgentsSmoke',
+			});
+
+			if (shouldSkipAgents(res)) {
+				throw new SkipTestError('agents are disabled');
 			}
+
+			assertGraphqlOk(res);
+			assertOk(Array.isArray(res.body?.data?.myAgents), 'Expected myAgents array');
+		},
+	},
+	{
+		slug: 'gql.agent',
+		name: 'GraphQL: agent(username) returns agent details',
+		tags: ['smoke', 'graphql', 'agents', 'auth'],
+		requiresAuth: true,
+		async run({ gql }) {
+			const listRes = await gql('my_agents_for_lookup', {
+				query: `query MyAgentsForLookup {
+  myAgents { username }
+}`,
+				operationName: 'MyAgentsForLookup',
+			});
+
+			if (shouldSkipAgents(listRes)) {
+				throw new SkipTestError('agents are disabled');
+			}
+
+			assertGraphqlOk(listRes);
+			const agents = listRes.body?.data?.myAgents;
+			assertOk(Array.isArray(agents), 'Expected myAgents array');
+
+			const username = agents?.[0]?.username;
+			if (!username) {
+				throw new SkipTestError('no agents exist for lookup');
+			}
+
+			const res = await gql('agent_lookup', {
+				query: `query AgentSmoke($username: String!) {
+  agent(username: $username) {
+    username
+    verified
+    agentType
+    agentCapabilities { canPost }
+  }
+}`,
+				operationName: 'AgentSmoke',
+				variables: { username },
+			});
+
+			assertGraphqlOk(res);
+			assertOk(res.body?.data?.agent?.username, 'Expected agent.username');
+			assertEqual(res.body.data.agent.username, username, 'Expected agent.username to match lookup username');
+			assertOk(typeof res.body?.data?.agent?.verified === 'boolean', 'Expected agent.verified boolean');
 		},
 	},
 	{

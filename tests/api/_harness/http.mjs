@@ -115,8 +115,11 @@ export function createRestClient({ baseUrl, token, evidence, openapi }) {
 	};
 }
 
-export function createGraphQLClient({ baseUrl, token, evidence }) {
-	return async function graphqlRequest(name, { query, variables, operationName, token: tokenOverride } = {}) {
+export function createGraphQLClient({ baseUrl, token, evidence, contract }) {
+	return async function graphqlRequest(
+		name,
+		{ query, variables, operationName, token: tokenOverride, contract: contractOverride } = {}
+	) {
 		const url = new URL('/api/graphql', baseUrl).toString();
 
 		const payload = { query, variables: variables ?? undefined, operationName: operationName ?? undefined };
@@ -124,6 +127,37 @@ export function createGraphQLClient({ baseUrl, token, evidence }) {
 		const requestHeaders = { accept: 'application/json', 'content-type': 'application/json' };
 		const resolvedToken = tokenOverride === undefined ? token : tokenOverride;
 		if (resolvedToken) requestHeaders.authorization = `Bearer ${resolvedToken}`;
+
+		const resolvedContract = contractOverride === undefined ? contract : contractOverride;
+		const contractResult = resolvedContract?.validateDocument ? resolvedContract.validateDocument({ query }) : null;
+		if (contractResult && contractResult.valid === false) {
+			await evidence.recordRequest({
+				name,
+				kind: 'graphql',
+				request: {
+					method: 'POST',
+					url: redactUrl(url),
+					headers: redactHeaders(requestHeaders),
+					body: redactUnknown(payload),
+				},
+				response: {
+					status: null,
+					headers: {},
+					body: {
+						message: 'GraphQL document failed local validation against pinned schema snapshot.',
+						contractErrors: contractResult.errors,
+					},
+					durationMs: 0,
+				},
+				correlation: {},
+				contract: contractResult,
+			});
+
+			const first = contractResult.errors?.[0]?.message;
+			throw new Error(
+				`Contract mismatch: GraphQL document did not validate against contracts/graphql-schema.graphql${first ? ` (${first})` : ''}`
+			);
+		}
 
 		const started = Date.now();
 
@@ -153,6 +187,7 @@ export function createGraphQLClient({ baseUrl, token, evidence }) {
 					durationMs,
 				},
 				correlation: pickCorrelation(response.headers),
+				contract: contractResult,
 			});
 
 			return { status: response.status, headers: response.headers, body: responseBody };
@@ -174,6 +209,7 @@ export function createGraphQLClient({ baseUrl, token, evidence }) {
 					durationMs,
 				},
 				correlation: {},
+				contract: contractResult,
 			});
 			throw error;
 		}

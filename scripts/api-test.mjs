@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 
 import { EvidenceWriter } from '../tests/api/_harness/evidence.mjs';
 import { createGraphQLClient, createRestClient } from '../tests/api/_harness/http.mjs';
+import { createGraphQLContractValidator } from '../tests/api/_harness/graphql-contract.mjs';
 import { createOpenApiValidator } from '../tests/api/_harness/openapi.mjs';
 import { SkipTestError } from '../tests/api/_harness/skip.mjs';
 import tests from '../tests/api/index.mjs';
@@ -207,9 +208,12 @@ async function main() {
 	await evidence.init();
 
 	const openapi = await createOpenApiValidator({ specPath: path.join(repoRoot, 'contracts', 'openapi.yaml') });
+	const graphqlContract = await createGraphQLContractValidator({
+		schemaPath: path.join(repoRoot, 'contracts', 'graphql-schema.graphql'),
+	});
 
 	const rest = createRestClient({ baseUrl: args.baseUrl, token, evidence, openapi });
-	const gql = createGraphQLClient({ baseUrl: args.baseUrl, token, evidence });
+	const gql = createGraphQLClient({ baseUrl: args.baseUrl, token, evidence, contract: graphqlContract });
 	const tokens = { accessToken: token, refreshToken, clientId };
 
 	let failed = 0;
@@ -223,6 +227,7 @@ async function main() {
 					gql,
 					evidence,
 					openapi,
+					graphqlContract,
 					baseUrl: args.baseUrl,
 					stage: args.stage,
 					profile,
