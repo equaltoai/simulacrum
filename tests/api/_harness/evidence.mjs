@@ -122,6 +122,7 @@ export class EvidenceWriter {
 		const failureJson = {
 			slug: test.slug,
 			name: test.name,
+			issue: test.issue ?? null,
 			error: {
 				message: error?.message ?? String(error),
 				stack: typeof error?.stack === 'string' ? error.stack : null,
@@ -177,6 +178,7 @@ export class EvidenceWriter {
 			'',
 			'## Summary',
 			`- Test: ${test.name}`,
+			test.issue?.number ? `- Related: ${test.issue.repo ?? 'equaltoai/lesser'}#${test.issue.number}` : null,
 			`- Error: ${error?.message ?? String(error)}`,
 			'',
 			'## Environment',
@@ -219,7 +221,9 @@ export class EvidenceWriter {
 			'## Notes',
 			'- Evidence is redacted (tokens/cookies removed).',
 			'',
-		].join('\n');
+		]
+			.filter(Boolean)
+			.join('\n');
 
 		await writeFile(mdPath, md, 'utf8');
 	}

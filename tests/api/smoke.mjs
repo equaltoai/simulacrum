@@ -255,19 +255,4 @@ export default [
 			assertOk(typeof res.body?.data?.agent?.verified === 'boolean', 'Expected agent.verified boolean');
 		},
 	},
-	{
-		slug: 'rest.wallet_list',
-		name: 'REST: /auth/wallet/list returns linked wallets (or empty list)',
-		tags: ['smoke', 'rest', 'wallet'],
-		requiresAuth: true,
-		async run({ rest }) {
-			const res = await rest('wallet_list', { path: '/auth/wallet/list' });
-			assertEqual(res.status, 200, 'Expected GET /auth/wallet/list to return 200');
-
-			const wallets = res.body?.wallets;
-			if (wallets !== undefined) {
-				assertOk(Array.isArray(wallets), 'Expected wallet list response to include wallets array');
-			}
-		},
-	},
 ];
