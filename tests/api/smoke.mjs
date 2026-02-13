@@ -34,6 +34,32 @@ export default [
 		},
 	},
 	{
+		slug: 'rest.home_timeline',
+		name: 'REST: /api/v1/timelines/home returns status list',
+		tags: ['smoke', 'rest', 'timeline', 'auth'],
+		requiresAuth: true,
+		async run({ rest }) {
+			const res = await rest('home_timeline', { path: '/api/v1/timelines/home?limit=1' });
+			assertEqual(res.status, 200, 'Expected GET /api/v1/timelines/home to return 200');
+			assertOk(Array.isArray(res.body), 'Expected home timeline response to be an array');
+		},
+	},
+	{
+		slug: 'rest.search_v2',
+		name: 'REST: /api/v2/search returns results object',
+		tags: ['smoke', 'rest', 'search', 'auth'],
+		requiresAuth: true,
+		async run({ rest }) {
+			const res = await rest('search_v2', { path: '/api/v2/search?q=test&type=accounts&limit=1' });
+			assertEqual(res.status, 200, 'Expected GET /api/v2/search to return 200');
+			assertOk(res.body && typeof res.body === 'object', 'Expected search response to be an object');
+
+			if (res.body.accounts !== undefined) assertOk(Array.isArray(res.body.accounts), 'Expected search.accounts to be an array');
+			if (res.body.statuses !== undefined) assertOk(Array.isArray(res.body.statuses), 'Expected search.statuses to be an array');
+			if (res.body.hashtags !== undefined) assertOk(Array.isArray(res.body.hashtags), 'Expected search.hashtags to be an array');
+		},
+	},
+	{
 		slug: 'gql.viewer',
 		name: 'GraphQL: viewer query returns id + username',
 		tags: ['smoke', 'graphql', 'auth'],
@@ -69,4 +95,3 @@ export default [
 		},
 	},
 ];
-

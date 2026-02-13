@@ -29,9 +29,10 @@ async function readResponseBody(response) {
 	}
 }
 
-export function createRestClient({ baseUrl, token, evidence }) {
+export function createRestClient({ baseUrl, token, evidence, openapi }) {
 	return async function restRequest(name, { method = 'GET', path, headers = {}, body, token: tokenOverride } = {}) {
 		const url = new URL(path, baseUrl).toString();
+		const pathname = new URL(url).pathname;
 
 		const requestHeaders = { accept: 'application/json', ...headers };
 		const resolvedToken = tokenOverride === undefined ? token : tokenOverride;
@@ -59,6 +60,15 @@ export function createRestClient({ baseUrl, token, evidence }) {
 
 			const responseBody = await readResponseBody(response);
 			const durationMs = Date.now() - started;
+			const openapiResult = openapi?.validateRest
+				? openapi.validateRest({
+						method,
+						pathname,
+						status: response.status,
+						contentType: response.headers.get('content-type'),
+						body: responseBody,
+					})
+				: null;
 
 			await evidence.recordRequest({
 				name,
@@ -76,9 +86,10 @@ export function createRestClient({ baseUrl, token, evidence }) {
 					durationMs,
 				},
 				correlation: pickCorrelation(response.headers),
+				openapi: openapiResult,
 			});
 
-			return { status: response.status, headers: response.headers, body: responseBody };
+			return { status: response.status, headers: response.headers, body: responseBody, openapi: openapiResult };
 		} catch (error) {
 			const durationMs = Date.now() - started;
 			await evidence.recordRequest({
@@ -97,6 +108,7 @@ export function createRestClient({ baseUrl, token, evidence }) {
 					durationMs,
 				},
 				correlation: {},
+				openapi: null,
 			});
 			throw error;
 		}

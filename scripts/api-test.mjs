@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 
 import { EvidenceWriter } from '../tests/api/_harness/evidence.mjs';
 import { createGraphQLClient, createRestClient } from '../tests/api/_harness/http.mjs';
+import { createOpenApiValidator } from '../tests/api/_harness/openapi.mjs';
 import { SkipTestError } from '../tests/api/_harness/skip.mjs';
 import tests from '../tests/api/index.mjs';
 
@@ -205,7 +206,9 @@ async function main() {
 
 	await evidence.init();
 
-	const rest = createRestClient({ baseUrl: args.baseUrl, token, evidence });
+	const openapi = await createOpenApiValidator({ specPath: path.join(repoRoot, 'contracts', 'openapi.yaml') });
+
+	const rest = createRestClient({ baseUrl: args.baseUrl, token, evidence, openapi });
 	const gql = createGraphQLClient({ baseUrl: args.baseUrl, token, evidence });
 	const tokens = { accessToken: token, refreshToken, clientId };
 
@@ -219,6 +222,7 @@ async function main() {
 					rest,
 					gql,
 					evidence,
+					openapi,
 					baseUrl: args.baseUrl,
 					stage: args.stage,
 					profile,
