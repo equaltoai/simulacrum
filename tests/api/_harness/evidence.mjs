@@ -225,7 +225,8 @@ export class EvidenceWriter {
 				const status =
 					r.status === 'passed' ? 'PASS' : r.status === 'skipped' ? 'SKIP' : r.status === 'failed' ? 'FAIL' : r.status;
 				const extra = r.status === 'failed' ? ` → failures/${slugToFilename(r.slug)}.md` : '';
-				return `- ${status}: ${r.slug}${extra}`;
+				const reason = r.status === 'skipped' && r.reason ? ` (${r.reason})` : '';
+				return `- ${status}: ${r.slug}${reason}${extra}`;
 			}),
 			'',
 		].filter(Boolean);
@@ -233,4 +234,3 @@ export class EvidenceWriter {
 		await writeFile(summaryPath, lines.join('\n'), 'utf8');
 	}
 }
-

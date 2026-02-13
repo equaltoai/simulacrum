@@ -1,0 +1,76 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { redactFormUrlEncoded, redactHeaders, redactJwtLikeStrings, redactUnknown, redactUrl } from './redact.mjs';
+
+test('redactHeaders redacts authorization + cookie', () => {
+	const output = redactHeaders({
+		Authorization: 'Bearer secret-token',
+		cookie: 'session=secret',
+		'x-other': 'ok',
+	});
+
+	assert.equal(output.Authorization, '<redacted>');
+	assert.equal(output.cookie, '<redacted>');
+	assert.equal(output['x-other'], 'ok');
+});
+
+test('redactJwtLikeStrings truncates JWT-like tokens', () => {
+	const input = 'aaaaaaaa.bbbbbbbb.cccccccc';
+	const output = redactJwtLikeStrings(input);
+	assert.notEqual(output, input);
+	assert.match(output, /…/);
+});
+
+test('redactUnknown redacts common token keys (including nested)', () => {
+	const input = {
+		access_token: 'access',
+		refreshToken: 'refresh',
+		nested: {
+			token: 'token',
+			client_secret: 'secret',
+			code: 'code',
+			signature: 'sig',
+			other: 'aaaaaaaa.bbbbbbbb.cccccccc',
+		},
+	};
+
+	const output = redactUnknown(input);
+
+	assert.equal(output.access_token, '<redacted>');
+	assert.equal(output.refreshToken, '<redacted>');
+	assert.equal(output.nested.token, '<redacted>');
+	assert.equal(output.nested.client_secret, '<redacted>');
+	assert.equal(output.nested.code, '<redacted>');
+	assert.equal(output.nested.signature, '<redacted>');
+	assert.notEqual(output.nested.other, input.nested.other);
+});
+
+test('redactFormUrlEncoded redacts sensitive fields in form bodies', () => {
+	const input =
+		'grant_type=refresh_token&client_id=lesser-agent-delegation&refresh_token=something&token=another';
+	const output = redactFormUrlEncoded(input);
+
+	assert.match(output, /grant_type=refresh_token/);
+	assert.match(output, /client_id=lesser-agent-delegation/);
+	assert.match(output, /refresh_token=<redacted>/);
+	assert.match(output, /token=<redacted>/);
+});
+
+test('redactUnknown redacts sensitive fields inside form-like strings', () => {
+	const input = 'code=abc123&code_verifier=verifier&client_id=client';
+	const output = redactUnknown(input);
+
+	assert.match(output, /code=<redacted>/);
+	assert.match(output, /code_verifier=<redacted>/);
+});
+
+test('redactUrl redacts sensitive query params', () => {
+	const input = 'https://example.com/callback?code=abc123&access_token=secret&ok=1';
+	const output = redactUrl(input);
+
+	assert.match(output, /code=<redacted>/);
+	assert.match(output, /access_token=<redacted>/);
+	assert.match(output, /ok=1/);
+});
+

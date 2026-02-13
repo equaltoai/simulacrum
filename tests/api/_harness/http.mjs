@@ -30,11 +30,12 @@ async function readResponseBody(response) {
 }
 
 export function createRestClient({ baseUrl, token, evidence }) {
-	return async function restRequest(name, { method = 'GET', path, headers = {}, body } = {}) {
+	return async function restRequest(name, { method = 'GET', path, headers = {}, body, token: tokenOverride } = {}) {
 		const url = new URL(path, baseUrl).toString();
 
 		const requestHeaders = { accept: 'application/json', ...headers };
-		if (token) requestHeaders.authorization = `Bearer ${token}`;
+		const resolvedToken = tokenOverride === undefined ? token : tokenOverride;
+		if (resolvedToken) requestHeaders.authorization = `Bearer ${resolvedToken}`;
 
 		let requestBody = undefined;
 		if (body !== undefined) {
@@ -103,13 +104,14 @@ export function createRestClient({ baseUrl, token, evidence }) {
 }
 
 export function createGraphQLClient({ baseUrl, token, evidence }) {
-	return async function graphqlRequest(name, { query, variables, operationName } = {}) {
+	return async function graphqlRequest(name, { query, variables, operationName, token: tokenOverride } = {}) {
 		const url = new URL('/api/graphql', baseUrl).toString();
 
 		const payload = { query, variables: variables ?? undefined, operationName: operationName ?? undefined };
 
 		const requestHeaders = { accept: 'application/json', 'content-type': 'application/json' };
-		if (token) requestHeaders.authorization = `Bearer ${token}`;
+		const resolvedToken = tokenOverride === undefined ? token : tokenOverride;
+		if (resolvedToken) requestHeaders.authorization = `Bearer ${resolvedToken}`;
 
 		const started = Date.now();
 
@@ -165,4 +167,3 @@ export function createGraphQLClient({ baseUrl, token, evidence }) {
 		}
 	};
 }
-

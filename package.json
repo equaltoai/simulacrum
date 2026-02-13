@@ -11,7 +11,8 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"api:contracts": "node scripts/update-contracts.mjs",
-		"api:test": "node scripts/api-test.mjs"
+		"api:test": "node scripts/api-test.mjs",
+		"test": "node --test tests/api/_harness/redact.test.mjs"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^7.0.0",

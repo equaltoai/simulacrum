@@ -3,6 +3,7 @@ const SENSITIVE_KEY_SET = new Set([
 	'access_token',
 	'refreshtoken',
 	'refresh_token',
+	'token',
 	'clientsecret',
 	'client_secret',
 	'code',
@@ -11,12 +12,24 @@ const SENSITIVE_KEY_SET = new Set([
 	'signature',
 ]);
 
-const SENSITIVE_QUERY_KEYS = new Set(['access_token', 'refresh_token', 'client_secret', 'code', 'code_verifier', 'signature']);
+const SENSITIVE_QUERY_KEYS = new Set([
+	'access_token',
+	'refresh_token',
+	'token',
+	'client_secret',
+	'code',
+	'code_verifier',
+	'signature',
+]);
 
 const JWT_LIKE_REGEX = /\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
 
 function normalizeKey(key) {
 	return String(key).toLowerCase().replace(/[^a-z0-9_]+/g, '');
+}
+
+function decodeRedactedAngleBrackets(text) {
+	return String(text).replace(/%3Credacted%3E/gi, '<redacted>');
 }
 
 export function redactJwtLikeStrings(text) {
@@ -35,7 +48,7 @@ export function redactUrl(url) {
 				parsed.searchParams.set(key, '<redacted>');
 			}
 		}
-		return parsed.toString();
+		return decodeRedactedAngleBrackets(parsed.toString());
 	} catch {
 		return redactJwtLikeStrings(url);
 	}
@@ -56,10 +69,49 @@ export function redactHeaders(headers) {
 	return redacted;
 }
 
+export function redactFormUrlEncoded(text) {
+	if (typeof text !== 'string') return redactJwtLikeStrings(text);
+	if (!text.includes('=')) return redactJwtLikeStrings(text);
+
+	const params = new URLSearchParams(text.startsWith('?') ? text.slice(1) : text);
+	let didChange = false;
+
+	for (const [key, value] of params.entries()) {
+		const lowered = key.toLowerCase();
+		const normalized = normalizeKey(key);
+
+		if (SENSITIVE_QUERY_KEYS.has(lowered) || SENSITIVE_KEY_SET.has(normalized)) {
+			if (value !== '<redacted>') {
+				params.set(key, '<redacted>');
+				didChange = true;
+			}
+			continue;
+		}
+
+		const redactedValue = redactJwtLikeStrings(value);
+		if (redactedValue !== value) {
+			params.set(key, redactedValue);
+			didChange = true;
+		}
+	}
+
+	if (!didChange) return text;
+	return decodeRedactedAngleBrackets(params.toString());
+}
+
 export function redactUnknown(value) {
 	if (value === null || value === undefined) return value;
 
-	if (typeof value === 'string') return redactJwtLikeStrings(value);
+	if (typeof value === 'string') {
+		const trimmed = value.trim();
+		const looksLikeJson = trimmed.startsWith('{') || trimmed.startsWith('[');
+		if (!looksLikeJson && trimmed.includes('=') && !trimmed.includes('\n')) {
+			const redactedForm = redactFormUrlEncoded(trimmed);
+			if (redactedForm !== trimmed) return redactedForm;
+		}
+
+		return redactJwtLikeStrings(value);
+	}
 	if (typeof value === 'number' || typeof value === 'boolean') return value;
 
 	if (Array.isArray(value)) return value.map((v) => redactUnknown(v));
@@ -85,4 +137,3 @@ export function truncateText(text, maxChars = 200_000) {
 	if (value.length <= maxChars) return { value, truncated: false };
 	return { value: `${value.slice(0, maxChars)}\n<truncated ${value.length - maxChars} chars>`, truncated: true };
 }
-
