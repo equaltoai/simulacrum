@@ -30,3 +30,6 @@ vite.config.ts.timestamp-*
 # Playwright MCP
 /.playwright-mcp
 nohup.out
+
+# API test artifacts
+/artifacts/api
