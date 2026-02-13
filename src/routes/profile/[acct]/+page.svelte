@@ -8,6 +8,7 @@
 	import TipButton from '$lib/components/Tips/TipButton.svelte';
 	import ModerationTools from '$lib/patterns/ModerationTools.svelte';
 	import type { Account, Status } from '$lib/types';
+	import { toActivityPubActor } from '$lib/utils/activitypub';
 
 	let account = $state<Account | null>(null);
 	let items = $state<Status[]>([]);
@@ -115,15 +116,15 @@
 						{#if account.tipAddress}
 							<TipButton recipient={account} mode="button" label="Tip" />
 						{/if}
-						<ModerationTools
-							targetType="account"
-							targetId={account.id}
-							targetAccount={account}
-							config={{ actions: ['report', 'mute', 'block'], mode: 'menu' }}
-							disabled={!$authSession?.accessToken}
-							handlers={{
-								onReport: async (_targetType, _targetId, reason) => {
-									await api.flagObject({ input: { objectId: account!.id, reason } });
+							<ModerationTools
+								targetType="account"
+								targetId={account.id}
+								targetAccount={toActivityPubActor(account)}
+								config={{ actions: ['report', 'mute', 'block'], mode: 'menu' }}
+								disabled={!$authSession?.accessToken}
+								handlers={{
+									onReport: async (_targetType, _targetId, reason) => {
+										await api.flagObject({ input: { objectId: account!.id, reason } });
 								},
 								onBlock: async () => {
 									await api.blockActor({ id: account!.id });

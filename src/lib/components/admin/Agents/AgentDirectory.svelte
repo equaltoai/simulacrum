@@ -40,14 +40,14 @@
 
 <section class={['admin-agent-directory', className].filter(Boolean).join(' ')}>
 	<div class="admin-agent-directory__toolbar">
-		<TextField label="Search" type="search" placeholder="Search agents" bind:value={query} />
+			<TextField label="Search" type="search" placeholder="Search agents" bind:value={query} />
 
-		{#if canLoadMore}
-			<Button variant="outline" size="sm" disabled={loading} onclick={() => onLoadMore?.()}>
-				Load more
-			</Button>
-		{/if}
-	</div>
+			{#if canLoadMore}
+				<Button variant="outline" size="sm" disabled={loading} onclick={() => onLoadMore?.()}>
+					Load more
+				</Button>
+			{/if}
+		</div>
 
 	{#if error}
 		<div class="admin-agent-directory__error" role="alert">

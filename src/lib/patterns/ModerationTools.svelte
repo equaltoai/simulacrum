@@ -19,22 +19,10 @@
 	import { type Snippet } from 'svelte';
 	import { createMenu } from '$lib/greater/headless/menu';
 	import { createModal } from '$lib/greater/headless/modal';
+	import type { ActivityPubActor, GenericStatus } from '../generics/index.js';
 
 	export type ModerationType = 'block' | 'mute' | 'report' | 'hide' | 'addNote';
 	export type ModerationTarget = 'account' | 'status' | 'domain';
-
-	type TargetAccount = {
-		id: string;
-		name?: string | null;
-		displayName?: string | null;
-		preferredUsername?: string | null;
-		acct?: string | null;
-		username?: string | null;
-	};
-
-	type TargetStatus = {
-		id: string;
-	};
 
 	interface ModerationAction {
 		type: ModerationType;
@@ -123,12 +111,12 @@
 		/**
 		 * Target account (for display)
 		 */
-		targetAccount?: TargetAccount;
+		targetAccount?: ActivityPubActor;
 
 		/**
 		 * Target status (for display)
 		 */
-		targetStatus?: TargetStatus;
+		targetStatus?: GenericStatus;
 
 		/**
 		 * Configuration
@@ -341,22 +329,9 @@
 	 * Get target display name
 	 */
 	function getTargetName(): string {
-		if (!targetAccount) return targetId;
-
-		const displayName =
-			(targetAccount.name && targetAccount.name.trim()) ||
-			(targetAccount.displayName && targetAccount.displayName.trim()) ||
-			'';
-		if (displayName) return displayName;
-
-		const handle =
-			(targetAccount.preferredUsername && targetAccount.preferredUsername.trim()) ||
-			(targetAccount.acct && targetAccount.acct.trim()) ||
-			(targetAccount.username && targetAccount.username.trim()) ||
-			'';
-		if (!handle) return targetId;
-
-		return handle.startsWith('@') ? handle : `@${handle}`;
+		if (targetAccount?.name) return targetAccount.name;
+		if (targetAccount?.preferredUsername) return `@${targetAccount.preferredUsername}`;
+		return targetId;
 	}
 </script>
 

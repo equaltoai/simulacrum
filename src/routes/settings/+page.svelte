@@ -126,17 +126,40 @@
 
 		void (async () => {
 			try {
-				const [nextViewer, nextPreferences, nextWallets, nextTipsConfig] = await Promise.all([
-					api.fetchViewer({ signal: controller.signal }),
-					api.fetchUserPreferences({ signal: controller.signal }),
-					api.fetchLinkedWallets({ signal: controller.signal }),
-					getTipsConfig(),
-				]);
+				const [viewerResult, preferencesResult, walletsResult, tipsConfigResult] =
+					await Promise.allSettled([
+						api.fetchViewer({ signal: controller.signal }),
+						api.fetchUserPreferences({ signal: controller.signal }),
+						api.fetchLinkedWallets({ signal: controller.signal }),
+						getTipsConfig(),
+					]);
 
-				viewer = nextViewer;
-				linkedWallets = nextWallets;
-				tipsConfig = nextTipsConfig;
-				hydrateForms(nextViewer, nextPreferences);
+				if (controller.signal.aborted) return;
+
+				if (viewerResult.status === 'rejected') throw viewerResult.reason;
+				if (preferencesResult.status === 'rejected') throw preferencesResult.reason;
+
+				viewer = viewerResult.value;
+				hydrateForms(viewerResult.value, preferencesResult.value);
+
+				if (walletsResult.status === 'fulfilled') {
+					linkedWallets = walletsResult.value;
+				} else if (!(walletsResult.reason instanceof DOMException && walletsResult.reason.name === 'AbortError')) {
+					tipsError =
+						walletsResult.reason instanceof Error ? walletsResult.reason.message : String(walletsResult.reason);
+					linkedWallets = [];
+				}
+
+				if (tipsConfigResult.status === 'fulfilled') {
+					tipsConfig = tipsConfigResult.value;
+				} else if (!(tipsConfigResult.reason instanceof DOMException && tipsConfigResult.reason.name === 'AbortError')) {
+					tipsError =
+						tipsError ??
+						(tipsConfigResult.reason instanceof Error
+							? tipsConfigResult.reason.message
+							: String(tipsConfigResult.reason));
+					tipsConfig = { enabled: false };
+				}
 			} catch (err) {
 				if (err instanceof DOMException && err.name === 'AbortError') return;
 				loadError = err instanceof Error ? err.message : String(err);

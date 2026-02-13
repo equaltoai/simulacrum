@@ -16,6 +16,7 @@
 	import TipButton from '$lib/components/Tips/TipButton.svelte';
 	import ModerationTools from '$lib/patterns/ModerationTools.svelte';
 	import type { Status } from '$lib/types';
+	import { toActivityPubActor } from '$lib/utils/activitypub';
 
 	let viewerId = $state<string | null>(null);
 	let status = $state<Status | null>(null);
@@ -480,16 +481,15 @@
 
 				<VerificationPanel status={status} />
 
-				<ModerationTools
-					targetType="status"
-					targetId={status.id}
-					targetAccount={status.account}
-					targetStatus={status}
-					config={{ actions: ['report', 'addNote', 'mute', 'block'], mode: 'menu' }}
-					disabled={!$authSession?.accessToken}
-					handlers={{
-						onReport: async (_targetType, _targetId, reason) => {
-							await api.flagObject({ input: { objectId: status!.id, reason } });
+					<ModerationTools
+						targetType="status"
+						targetId={status.id}
+						targetAccount={toActivityPubActor(status.account)}
+						config={{ actions: ['report', 'addNote', 'mute', 'block'], mode: 'menu' }}
+						disabled={!$authSession?.accessToken}
+						handlers={{
+							onReport: async (_targetType, _targetId, reason) => {
+								await api.flagObject({ input: { objectId: status!.id, reason } });
 						},
 						onBlock: async () => {
 							await api.blockActor({ id: status!.account.id });

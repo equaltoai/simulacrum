@@ -1,7 +1,7 @@
 {
   "$schema": "https://greater.components.dev/schema.json",
   "version": "1.0.0",
-  "ref": "greater-v0.1.9",
+  "ref": "greater-v0.1.10",
   "installMode": "vendored",
   "style": "default",
   "rsc": false,
@@ -24,211 +24,211 @@
   "installed": [
     {
       "name": "icons",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:43:24.818Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.497Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "utils",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:43:28.378Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.503Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "tokens",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:43:29.520Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.507Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "primitives",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:43:45.392Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.524Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "content",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:43:45.802Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.528Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "adapters",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:43:55.816Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.541Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "headless",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:43:58.696Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.546Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "social-generics",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:43:58.889Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.549Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "timeline",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:43:59.801Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.555Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "status",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:00.748Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.559Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "profile",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:03.224Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.592Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "auth",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:04.909Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.616Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "compose",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:07.069Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.629Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "notifications",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:08.277Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.641Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "search",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:09.702Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.646Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "admin",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:13.146Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.658Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "messaging",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:14.397Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.665Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "thread-view",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:14.747Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.667Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "moderation-tools",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:14.846Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.676Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "visibility-selector",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:14.939Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.679Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "content-warning-handler",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:15.069Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.683Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "custom-emoji-picker",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:15.195Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.684Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "federation-indicator",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:15.287Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.686Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "instance-picker",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:15.392Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.692Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "poll-composer",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:15.506Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.702Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "media-composer",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:15.638Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.704Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "bookmark-manager",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:15.745Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.714Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "lists",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:16.680Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.718Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "filters",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:17.430Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.722Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "hashtags",
-      "version": "greater-v0.1.9",
-      "installedAt": "2026-02-12T00:44:18.095Z",
+      "version": "greater-v0.1.10",
+      "installedAt": "2026-02-12T19:42:24.724Z",
       "modified": false,
       "checksums": []
     }

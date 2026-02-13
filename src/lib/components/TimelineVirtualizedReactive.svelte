@@ -14,6 +14,7 @@
 	import CommunityNotesPanel from '$lib/components/CommunityNotesPanel.svelte';
 	import TranslationPanel from '$lib/components/TranslationPanel.svelte';
 	import TipButton from '$lib/components/Tips/TipButton.svelte';
+	import { toActivityPubActor } from '$lib/utils/activitypub';
 
 	interface Props {
 		items?: Status[];
@@ -307,16 +308,15 @@
 					</div>
 					<div class="timeline-virtualized__meta-actions">
 						<a class="timeline-virtualized__status-link" href={statusHref(status.id)}>Open</a>
-						<ModerationTools
-							targetType="status"
-							targetId={status.id}
-							targetAccount={status.account}
-							targetStatus={status}
-							config={{ actions: ['report', 'addNote', 'mute', 'block'], mode: 'menu' }}
-							disabled={!$authSession?.accessToken}
-							handlers={{
-								onReport: async (_targetType, _targetId, reason) => {
-									await api.flagObject({ input: { objectId: status.id, reason } });
+							<ModerationTools
+								targetType="status"
+								targetId={status.id}
+								targetAccount={toActivityPubActor(status.account)}
+								config={{ actions: ['report', 'addNote', 'mute', 'block'], mode: 'menu' }}
+								disabled={!$authSession?.accessToken}
+								handlers={{
+									onReport: async (_targetType, _targetId, reason) => {
+										await api.flagObject({ input: { objectId: status.id, reason } });
 								},
 								onBlock: async () => {
 									await api.blockActor({ id: status.account.id });

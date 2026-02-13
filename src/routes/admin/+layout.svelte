@@ -6,7 +6,7 @@
 
 	let { children } = $props();
 
-	const ADMIN_OAUTH_SCOPE = `${DEFAULT_OAUTH_SCOPE} admin admin:read admin:write`;
+	const ADMIN_OAUTH_SCOPE = `${DEFAULT_OAUTH_SCOPE} admin`;
 
 	const navItems = [
 		{ label: 'Reports', href: `${base}/admin` },

@@ -33,12 +33,14 @@ export async function graphqlRequest<
 	variables,
 	endpoint = '/api/graphql',
 	token,
+	allowPartialData = false,
 	signal,
 }: {
 	document: TypedDocumentNode<TData, TVariables> | string;
 	variables?: TVariables;
 	endpoint?: string;
 	token?: string | null;
+	allowPartialData?: boolean;
 	signal?: AbortSignal;
 }): Promise<TData> {
 	const query = typeof document === 'string' ? document : print(document);
@@ -66,6 +68,7 @@ export async function graphqlRequest<
 	}
 
 	if (errors && errors.length > 0) {
+		if (allowPartialData && payload?.data) return payload.data;
 		throw new GraphQLRequestError(errors[0]?.message ?? 'GraphQL request failed', {
 			status: response.status,
 			errors,
@@ -78,4 +81,3 @@ export async function graphqlRequest<
 
 	return payload.data;
 }
-

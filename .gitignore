@@ -26,3 +26,7 @@ vite.config.ts.timestamp-*
 # Local tooling
 /.pai
 /.theory
+
+# Playwright MCP
+/.playwright-mcp
+nohup.out

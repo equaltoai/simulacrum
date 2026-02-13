@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build && node scripts/externalize-sveltekit-bootstrap.mjs",
+		"build": "vite build && node scripts/externalize-sveltekit-bootstrap.mjs && node scripts/externalize-sveltekit-announcer.mjs",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

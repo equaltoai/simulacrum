@@ -13,10 +13,9 @@ Alert component - A versatile alert/banner component for displaying error, warni
 </Alert>
 ```
 -->
-<script lang="ts">
-	import type { HTMLAttributes } from 'svelte/elements';
-	import type { Snippet } from 'svelte';
-	import { fade } from 'svelte/transition';
+	<script lang="ts">
+		import type { HTMLAttributes } from 'svelte/elements';
+		import type { Snippet } from 'svelte';
 
 	/**
 	 * Alert component props interface.
@@ -156,12 +155,11 @@ Alert component - A versatile alert/banner component for displaying error, warni
 {#if visible}
 	<div
 		class={alertClass()}
-		role={ariaRole}
-		aria-live={variant === 'error' || variant === 'warning' ? 'assertive' : 'polite'}
-		onkeydown={handleKeydown}
-		transition:fade={{ duration: 200 }}
-		{...restProps}
-	>
+			role={ariaRole}
+			aria-live={variant === 'error' || variant === 'warning' ? 'assertive' : 'polite'}
+			onkeydown={handleKeydown}
+			{...restProps}
+		>
 		<div class="gr-alert__icon" aria-hidden="true">
 			{#if icon}
 				{@render icon()}

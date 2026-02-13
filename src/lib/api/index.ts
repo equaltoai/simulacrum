@@ -2559,6 +2559,7 @@ export async function fetchAdminAccounts({
 		document: ADMIN_ACCOUNTS_QUERY,
 		variables: { first, after },
 		token,
+		allowPartialData: true,
 		signal,
 	});
 

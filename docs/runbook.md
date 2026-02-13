@@ -5,8 +5,10 @@ infrastructure.
 
 ## Build (CSP-safe)
 
-The stage CDN enforces a strict CSP (no inline `<script>` or `<style>`). The `pnpm build` step includes a post-build
-script that externalizes SvelteKit’s inline bootstrap into `dist/_assets/bootstrap.<hash>.js`.
+The stage CDN enforces a strict CSP (no inline `<script>`, `<style>`, or `style=""` attributes). The `pnpm build` step
+includes post-build scripts that:
+- externalize SvelteKit’s inline bootstrap into `dist/_assets/bootstrap.<hash>.js`
+- remove SvelteKit’s inline `style=""` on the route announcer (`#svelte-announcer`)
 
 ```bash
 pnpm install
@@ -22,6 +24,7 @@ Sanity check:
 ```bash
 rg -n "<script" dist/index.html
 rg -n "<style" dist/index.html
+rg -n "id=\"svelte-announcer\".*style=" dist/_assets/immutable/entry/app.*.js
 ```
 
 ## Deploy (dev stage)

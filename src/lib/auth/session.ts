@@ -34,6 +34,48 @@ const STORAGE_KEYS = {
 
 export const authSession = writable<AuthSession | null>(null);
 
+function decodeBase64Url(value: string): string {
+	const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+	const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+
+	if (typeof globalThis.atob === 'function') {
+		return globalThis.atob(padded);
+	}
+
+	throw new Error('Base64 decoding is not available in this environment');
+}
+
+function scopeFromAccessToken(accessToken: string): string | null {
+	const parts = accessToken.split('.');
+	if (parts.length < 2) return null;
+
+	try {
+		const payloadJson = decodeBase64Url(parts[1]);
+		const payload = JSON.parse(payloadJson) as unknown;
+		if (!payload || typeof payload !== 'object') return null;
+
+		const scopesValue = (payload as { scopes?: unknown }).scopes;
+		if (Array.isArray(scopesValue) && scopesValue.every((entry) => typeof entry === 'string')) {
+			return scopesValue.join(' ');
+		}
+
+		const scopeValue = (payload as { scope?: unknown }).scope;
+		if (typeof scopeValue === 'string' && scopeValue.trim()) {
+			return scopeValue.trim();
+		}
+
+		return null;
+	} catch {
+		return null;
+	}
+}
+
+function normalizeAuthSession(session: AuthSession): AuthSession {
+	const derivedScope = scopeFromAccessToken(session.accessToken);
+	if (!derivedScope || derivedScope === session.scope) return session;
+	return { ...session, scope: derivedScope };
+}
+
 function readSessionFromStorage(): AuthSession | null {
 	if (!browser) return null;
 
@@ -44,7 +86,7 @@ function readSessionFromStorage(): AuthSession | null {
 		const parsed = JSON.parse(raw) as AuthSession;
 		if (!parsed?.accessToken || !parsed?.tokenType || !parsed?.expiresAt) return null;
 		if (Date.now() >= parsed.expiresAt) return null;
-		return parsed;
+		return normalizeAuthSession(parsed);
 	} catch {
 		return null;
 	}
@@ -67,8 +109,9 @@ export function clearAuthSession() {
 function writeSessionToStorage(session: AuthSession) {
 	if (!browser) return;
 
-	authSession.set(session);
-	sessionStorage.setItem(STORAGE_KEYS.session, JSON.stringify(session));
+	const normalized = normalizeAuthSession(session);
+	authSession.set(normalized);
+	sessionStorage.setItem(STORAGE_KEYS.session, JSON.stringify(normalized));
 }
 
 function getRedirectUri() {
