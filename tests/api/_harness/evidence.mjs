@@ -27,6 +27,7 @@ export class EvidenceWriter {
 	#results = [];
 	#currentTest = null;
 	#requestsByTest = new Map();
+	#notesByTest = new Map();
 
 	meta;
 
@@ -61,6 +62,7 @@ export class EvidenceWriter {
 	startTest({ slug, name }) {
 		this.#currentTest = { slug, name };
 		if (!this.#requestsByTest.has(slug)) this.#requestsByTest.set(slug, []);
+		if (!this.#notesByTest.has(slug)) this.#notesByTest.set(slug, []);
 	}
 
 	endTest() {
@@ -97,12 +99,25 @@ export class EvidenceWriter {
 		return this.#requestsByTest.get(slug) ?? [];
 	}
 
+	note(text) {
+		const slug = this.#currentTest?.slug;
+		if (!slug) return;
+		const notes = this.#notesByTest.get(slug) ?? [];
+		notes.push(String(text));
+		this.#notesByTest.set(slug, notes);
+	}
+
+	getNotesForTest(slug) {
+		return this.#notesByTest.get(slug) ?? [];
+	}
+
 	async writeFailure({ test, error }) {
 		const slug = slugToFilename(test.slug);
 		const mdPath = path.join(this.#failuresDir, `${slug}.md`);
 		const jsonPath = path.join(this.#failuresDir, `${slug}.json`);
 
 		const requests = this.getRequestsForTest(test.slug);
+		const notes = this.getNotesForTest(test.slug);
 
 		const failureJson = {
 			slug: test.slug,
@@ -112,6 +127,7 @@ export class EvidenceWriter {
 				stack: typeof error?.stack === 'string' ? error.stack : null,
 			},
 			requestFiles: requests.map((r) => r.filename),
+			notes,
 			meta: this.meta,
 		};
 
@@ -193,6 +209,13 @@ export class EvidenceWriter {
 						'',
 					]),
 			requestEvidence,
+			...(!notes.length
+				? []
+				: [
+						'## Cleanup / Notes',
+						...notes.map((n) => `- ${n}`),
+						'',
+					]),
 			'## Notes',
 			'- Evidence is redacted (tokens/cookies removed).',
 			'',

@@ -25,6 +25,7 @@ function parseArgs(argv) {
 		filter: null,
 		smoke: false,
 		unsafe: false,
+		write: false,
 	};
 
 	for (let i = 2; i < argv.length; i++) {
@@ -35,6 +36,10 @@ function parseArgs(argv) {
 		}
 		if (value === '--unsafe') {
 			args.unsafe = true;
+			continue;
+		}
+		if (value === '--write') {
+			args.write = true;
 			continue;
 		}
 		if (value === '--base-url') {
@@ -55,7 +60,7 @@ function parseArgs(argv) {
 		}
 		if (value === '--help' || value === '-h') {
 			console.log(`Usage:
-  pnpm api:test --base-url <url> --profile <user|delegated|admin> [--stage <stage>] [--smoke] [--filter <slug>] [--unsafe]
+  pnpm api:test --base-url <url> --profile <user|delegated|admin> [--stage <stage>] [--smoke] [--filter <slug>] [--unsafe] [--write]
 
 Env:
   API_TEST_BASE_URL
@@ -202,6 +207,7 @@ async function main() {
 			},
 			profile,
 			unsafe: args.unsafe,
+			write: args.write,
 		},
 	});
 
@@ -233,6 +239,7 @@ async function main() {
 					profile,
 					tokens,
 					unsafe: args.unsafe,
+					write: args.write,
 				});
 				evidence.recordResult({ slug: test.slug, name: test.name, status: 'passed' });
 			} catch (error) {
