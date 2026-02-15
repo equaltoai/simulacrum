@@ -5,6 +5,7 @@
 	import { sanitizeHtml } from '$lib/greater/utils';
 	import { getSearchContext, formatCount, highlightQuery } from './context.svelte.js';
 	import type { SearchNote } from './context.svelte.js';
+	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		note: SearchNote;
@@ -69,7 +70,7 @@
 	>
 		<div class="note-result__avatar">
 			{#if note.author.avatar}
-				<img src={note.author.avatar} alt={note.author.displayName} />
+				<AvatarImage src={note.author.avatar} alt={note.author.displayName} />
 			{:else}
 				<div class="note-result__avatar-placeholder">
 					{note.author.displayName[0]?.toUpperCase()}

@@ -7,6 +7,7 @@
 	import TimelineVirtualizedReactive from '$lib/components/TimelineVirtualizedReactive.svelte';
 	import type { Account, Status } from '$lib/types';
 	import type { RepliesPolicy } from '$lib/greater/adapters/graphql';
+	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	const listId = $derived($page.params.id ?? '');
 
@@ -256,7 +257,7 @@
 					{#each list.accounts as account (account.id)}
 						<li class="member-list__row">
 							<a class="member-list__link" href={profileHref(account.acct)}>
-								<img class="member-list__avatar" src={account.avatar} alt="" />
+								<AvatarImage class="member-list__avatar" src={account.avatar} alt="" />
 								<span class="member-list__name">{account.displayName || account.username}</span>
 								<span class="member-list__handle">@{account.acct}</span>
 							</a>
@@ -309,7 +310,7 @@
 					{#each memberResults as account (account.id)}
 						<li class="member-search__row">
 							<a class="member-search__link" href={profileHref(account.acct)}>
-								<img class="member-search__avatar" src={account.avatar} alt="" />
+								<AvatarImage class="member-search__avatar" src={account.avatar} alt="" />
 								<span class="member-search__name">{account.displayName || account.username}</span>
 								<span class="member-search__handle">@{account.acct}</span>
 							</a>

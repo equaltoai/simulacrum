@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
 	import { getListsContext, type ListActor } from './context.js';
+	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		/**
@@ -129,7 +130,7 @@
 				{#each searchResults as result (result.id)}
 					<div class="member-picker__result">
 						{#if result.avatar}
-							<img src={result.avatar} alt={result.displayName} class="member-picker__avatar" />
+							<AvatarImage src={result.avatar} alt={result.displayName} class="member-picker__avatar" />
 						{:else}
 							<div class="member-picker__avatar-placeholder">
 								{result.displayName.charAt(0).toUpperCase()}

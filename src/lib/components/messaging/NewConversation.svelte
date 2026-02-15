@@ -8,6 +8,7 @@
 	import { createModal } from '$lib/greater/headless/modal';
 	import { untrack } from 'svelte';
 	import { getMessagesContext, type MessageParticipant } from './context.svelte.js';
+	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		/**
@@ -192,7 +193,7 @@
 								{#each selectedParticipants as participant (participant.id)}
 									<div class="new-conversation__chip">
 										{#if participant.avatar}
-											<img
+											<AvatarImage
 												src={participant.avatar}
 												alt={participant.displayName}
 												class="new-conversation__chip-avatar"
@@ -243,7 +244,7 @@
 									disabled={selectedParticipants.some((p) => p.id === result.id)}
 								>
 									{#if result.avatar}
-										<img
+										<AvatarImage
 											src={result.avatar}
 											alt={result.displayName}
 											class="new-conversation__result-avatar"

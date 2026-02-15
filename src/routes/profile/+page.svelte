@@ -4,6 +4,7 @@
 	import type { Account, Status } from '$lib/types';
 	import ContentRenderer from '$lib/components/ContentRenderer.svelte';
 	import TimelineVirtualizedReactive from '$lib/components/TimelineVirtualizedReactive.svelte';
+	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	let account = $state<Account | null>(null);
 	let items = $state<Status[]>([]);
@@ -78,7 +79,7 @@
 	{:else}
 		{#if account}
 			<header class="profile-card">
-				<img class="profile-card__avatar" src={account.avatar} alt="" />
+				<AvatarImage class="profile-card__avatar" src={account.avatar} alt="" />
 				<div class="profile-card__body">
 					<div class="profile-card__heading">
 						<h2 class="profile-card__name">{account.displayName || account.username}</h2>

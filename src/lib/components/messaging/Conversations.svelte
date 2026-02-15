@@ -5,6 +5,7 @@
 	import { getMessagesContext } from './context.svelte.js';
 	import { getConversationName, formatMessageTime } from './utils.js';
 	import type { Conversation } from './context.svelte.js';
+	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		currentUserId?: string;
@@ -49,7 +50,7 @@
 				>
 					<div class="messages-conversations__avatar">
 						{#if conversation.participants[0]?.avatar}
-							<img src={conversation.participants[0].avatar} alt="" />
+							<AvatarImage src={conversation.participants[0].avatar} alt="" />
 						{:else}
 							<div class="messages-conversations__avatar-placeholder">
 								{conversation.participants[0]?.displayName[0]?.toUpperCase()}

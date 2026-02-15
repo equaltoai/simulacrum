@@ -20,6 +20,7 @@
 	import { createButton } from '$lib/greater/headless/button';
 	import { getAuthContext } from './context.js';
 	import type { OAuthData } from './context.js';
+	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface ClientInfo {
 		name: string;
@@ -151,7 +152,7 @@
 		{#if user}
 			<div class="auth-oauth__user">
 				{#if user.avatar}
-					<img src={user.avatar} alt={user.username} class="auth-oauth__user-avatar" />
+					<AvatarImage src={user.avatar} alt={user.username} class="auth-oauth__user-avatar" />
 				{/if}
 				<span class="auth-oauth__user-name">
 					{user.displayName || user.username}

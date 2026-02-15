@@ -6,6 +6,7 @@
 	import { sanitizeHtml } from '$lib/greater/utils';
 	import { getSearchContext, formatCount } from './context.svelte.js';
 	import type { SearchActor } from './context.svelte.js';
+	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		actor: SearchActor;
@@ -64,7 +65,7 @@
 	>
 		<div class="actor-result__avatar">
 			{#if actor.avatar}
-				<img src={actor.avatar} alt={actor.displayName || actor.username} />
+				<AvatarImage src={actor.avatar} alt={actor.displayName || actor.username} />
 			{:else}
 				<div class="actor-result__avatar-placeholder">
 					{actor.displayName[0]?.toUpperCase() || actor.username[0]?.toUpperCase()}

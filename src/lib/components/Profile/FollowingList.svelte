@@ -22,6 +22,7 @@ Supports unfollow action.
 <script lang="ts">
 	import type { ProfileData } from './context.js';
 	import { formatCount, getProfileContext } from './context.js';
+	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		/**
@@ -171,7 +172,7 @@ Supports unfollow action.
 					<div class="following-list__item">
 						<div class="following-list__account">
 							{#if account.avatar}
-								<img src={account.avatar} alt="" class="following-list__avatar" loading="lazy" />
+								<AvatarImage src={account.avatar} alt="" class="following-list__avatar" loading="lazy" />
 							{:else}
 								<div class="following-list__avatar-placeholder" aria-hidden="true">
 									{account.displayName[0]?.toUpperCase() || '?'}
