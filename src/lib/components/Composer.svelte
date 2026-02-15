@@ -516,19 +516,19 @@
 
 		{#if emojiOpen}
 			<div class="composer__emoji-popover" role="dialog" aria-label="Emoji picker">
-				{#if emojisLoading}
-					<div class="composer__emoji-loading">Loading emojis…</div>
-				{:else if emojiError}
+				{#if emojiError}
 					<div class="composer__emoji-error" role="alert">{emojiError}</div>
-				{:else}
-					<CustomEmojiPicker
-						emojis={emojis}
-						recentEmojis={recentEmojis}
-						favoriteEmojis={favoriteEmojis}
-						config={{ mode: 'inline', showRecent: true, showFavorites: true }}
-						handlers={{ onSelect: onEmojiSelect, onToggleFavorite: onEmojiToggleFavorite }}
-					/>
 				{/if}
+				{#if emojisLoading}
+					<div class="composer__emoji-loading">Loading custom emojis…</div>
+				{/if}
+				<CustomEmojiPicker
+					emojis={emojis}
+					recentEmojis={recentEmojis}
+					favoriteEmojis={favoriteEmojis}
+					config={{ mode: 'inline', showRecent: true, showFavorites: true, enableUnicodeFallback: true }}
+					handlers={{ onSelect: onEmojiSelect, onToggleFavorite: onEmojiToggleFavorite }}
+				/>
 			</div>
 		{/if}
 	</div>
