@@ -493,6 +493,20 @@ a {
 	font-size: var(--gr-typography-fontSize-sm);
 }
 
+.timeline-virtualized__reply-context {
+	color: var(--gr-semantic-foreground-tertiary);
+	font-size: var(--gr-typography-fontSize-sm);
+}
+
+.timeline-virtualized__reply-link {
+	color: inherit;
+	text-decoration: none;
+}
+
+.timeline-virtualized__reply-link:hover {
+	text-decoration: underline;
+}
+
 .timeline-virtualized__meta-actions {
 	display: flex;
 	align-items: center;

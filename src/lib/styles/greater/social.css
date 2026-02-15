@@ -14725,6 +14725,20 @@
 	white-space: nowrap;
 }
 
+.status-header__reply-context {
+	color: var(--status-text-secondary, #536471);
+	font-size: var(--status-font-size-sm, 0.875rem);
+}
+
+.status-header__reply-link {
+	color: inherit;
+	text-decoration: none;
+}
+
+.status-header__reply-link:hover {
+	text-decoration: underline;
+}
+
 .status-header__timestamp {
 	flex-shrink: 0;
 }

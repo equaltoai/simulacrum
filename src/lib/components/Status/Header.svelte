@@ -19,6 +19,7 @@ Handles reblog indicators automatically from context.
 	import { formatDateTime } from '$lib/greater/utils';
 	import { Avatar } from '$lib/greater/primitives';
 	import { RepeatIcon } from '$lib/greater/icons';
+	import { base } from '$app/paths';
 
 	interface Props {
 		/**
@@ -49,6 +50,10 @@ Handles reblog indicators automatically from context.
 
 	const dateTime = $derived(formatDateTime(actualStatus.createdAt));
 	const avatarSize = $derived(config.density === 'compact' ? 'sm' : 'md');
+
+	function profileHref(acct: string) {
+		return `${base}/profile/${encodeURIComponent(acct)}`;
+	}
 </script>
 
 <div class={`status-header ${className}`}>
@@ -99,6 +104,21 @@ Handles reblog indicators automatically from context.
 				<div class="status-header__username">
 					@{account.acct}
 				</div>
+				{#if actualStatus.inReplyToAccount}
+					{@const replyAcct = actualStatus.inReplyToAccount.acct ?? actualStatus.inReplyToAccount.username}
+					<div class="status-header__reply-context">
+						Replying to{' '}
+						{#if replyAcct}
+							<a class="status-header__reply-link" href={profileHref(replyAcct)}>
+								@{replyAcct}
+							</a>
+						{:else}
+							<a class="status-header__reply-link" href={actualStatus.inReplyToAccount.url}>
+								this account
+							</a>
+						{/if}
+					</div>
+				{/if}
 			{/if}
 		</div>
 

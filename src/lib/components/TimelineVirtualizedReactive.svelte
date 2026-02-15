@@ -316,6 +316,21 @@
 						<a class="timeline-virtualized__handle" href={profileHref(status.account.acct)}>
 							@{status.account.acct}
 						</a>
+						{#if status.inReplyToAccount}
+							{@const replyAcct = status.inReplyToAccount.acct ?? status.inReplyToAccount.username}
+							<span class="timeline-virtualized__reply-context">
+								Replying to{' '}
+								{#if replyAcct}
+									<a class="timeline-virtualized__reply-link" href={profileHref(replyAcct)}>
+										@{replyAcct}
+									</a>
+								{:else}
+									<a class="timeline-virtualized__reply-link" href={status.inReplyToAccount.url}>
+										this account
+									</a>
+								{/if}
+							</span>
+						{/if}
 						{#if status.createdAt}
 							{@const createdAtLabel = formatDateTime(status.createdAt)}
 							<time
