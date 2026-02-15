@@ -564,6 +564,9 @@ a {
 .profile-card__actions {
 	display: flex;
 	justify-content: flex-end;
+	align-items: center;
+	gap: var(--gr-spacing-scale-2);
+	flex-wrap: wrap;
 }
 
 .profile-trust {

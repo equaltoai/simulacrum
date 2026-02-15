@@ -10,16 +10,72 @@
 	import type { Account, Status } from '$lib/types';
 	import { toActivityPubActor } from '$lib/utils/activitypub';
 	import AvatarImage from '$lib/components/AvatarImage.svelte';
+	import { getStreamingAdapter } from '$lib/realtime/adapter';
 
 	let account = $state<Account | null>(null);
 	let items = $state<Status[]>([]);
 	let isLoading = $state(false);
 	let error = $state<string | null>(null);
+	let viewerId = $state<string | null>(null);
+	let relationship = $state<{ following?: boolean | null; requested?: boolean | null } | null>(null);
+	let relationshipError = $state<string | null>(null);
+	let relationshipLoading = $state(false);
+	let followError = $state<string | null>(null);
+	let followLoading = $state(false);
 	let trustEdges = $state<Array<{ category: string; score: number; updatedAt: string; from: Account; to: Account }>>(
 		[]
 	);
 	let trustLoading = $state(false);
 	let trustError = $state<string | null>(null);
+
+	const canFollow = $derived(Boolean(account && viewerId && account.id !== viewerId));
+	const isFollowing = $derived(Boolean(relationship?.following || relationship?.requested));
+
+	async function refreshRelationship(targetId: string, token: string) {
+		relationshipLoading = true;
+		relationshipError = null;
+		try {
+			const adapter = getStreamingAdapter(token);
+			if (!adapter) {
+				relationship = null;
+				return;
+			}
+			relationship = (await adapter.getRelationship(targetId)) ?? null;
+		} catch (err) {
+			relationshipError = err instanceof Error ? err.message : String(err);
+		} finally {
+			relationshipLoading = false;
+		}
+	}
+
+	async function toggleFollow() {
+		const token = $authSession?.accessToken ?? null;
+		if (!token || !account) return;
+		if (!canFollow) return;
+
+		followLoading = true;
+		followError = null;
+
+		try {
+			const adapter = getStreamingAdapter(token);
+			if (!adapter) throw new Error('GraphQL adapter unavailable');
+
+			const wasFollowing = Boolean(relationship?.following || relationship?.requested);
+			if (wasFollowing) {
+				await adapter.unfollowActor(account.id);
+				account = { ...account, followersCount: Math.max(0, (account.followersCount ?? 0) - 1) };
+			} else {
+				await adapter.followActor(account.id);
+				account = { ...account, followersCount: (account.followersCount ?? 0) + 1 };
+			}
+
+			await refreshRelationship(account.id, token);
+		} catch (err) {
+			followError = err instanceof Error ? err.message : String(err);
+		} finally {
+			followLoading = false;
+		}
+	}
 
 	$effect(() => {
 		const token = $authSession?.accessToken ?? null;
@@ -29,6 +85,12 @@
 		items = [];
 		error = null;
 		isLoading = false;
+		viewerId = null;
+		relationship = null;
+		relationshipError = null;
+		relationshipLoading = false;
+		followError = null;
+		followLoading = false;
 		trustEdges = [];
 		trustLoading = false;
 		trustError = null;
@@ -38,15 +100,19 @@
 		const controller = new AbortController();
 		isLoading = true;
 
-		void (async () => {
-			try {
-				const actor = await api.fetchActorProfile({ username: acct, signal: controller.signal });
+			void (async () => {
+				try {
+					const viewer = await api.fetchViewer({ signal: controller.signal });
+					viewerId = viewer.id;
 
-				account = actor;
+					const actor = await api.fetchActorProfile({ username: acct, signal: controller.signal });
 
-				const [timeline] = await Promise.all([
-					api.fetchActorTimeline({ actorId: actor.id, signal: controller.signal }),
-					(async () => {
+					account = actor;
+					void refreshRelationship(actor.id, token);
+
+					const [timeline] = await Promise.all([
+						api.fetchActorTimeline({ actorId: actor.id, signal: controller.signal }),
+						(async () => {
 						trustLoading = true;
 						trustError = null;
 						try {
@@ -114,6 +180,25 @@
 					</div>
 
 					<div class="profile-card__actions" aria-label="Account moderation">
+						{#if canFollow}
+							<button
+								type="button"
+								class={`gr-button ${isFollowing ? 'gr-button--outline' : 'gr-button--solid'}`}
+								disabled={followLoading || relationshipLoading}
+								onclick={toggleFollow}
+							>
+								{#if followLoading}
+									…
+								{:else if relationship?.requested}
+									Requested
+								{:else if relationship?.following}
+									Following
+								{:else}
+									Follow
+								{/if}
+							</button>
+						{/if}
+
 						{#if account.tipAddress}
 							<TipButton recipient={account} mode="button" label="Tip" />
 						{/if}
@@ -136,6 +221,12 @@
 							}}
 						/>
 					</div>
+
+					{#if followError || relationshipError}
+						<div class="page__notice page__notice--error" role="alert">
+							{followError || relationshipError}
+						</div>
+					{/if}
 
 					<div class="profile-trust">
 						<div class="profile-trust__summary">
