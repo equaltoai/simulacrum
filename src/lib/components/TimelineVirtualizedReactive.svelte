@@ -15,6 +15,7 @@
 	import TranslationPanel from '$lib/components/TranslationPanel.svelte';
 	import TipButton from '$lib/components/Tips/TipButton.svelte';
 	import { toActivityPubActor } from '$lib/utils/activitypub';
+	import { Avatar } from '$lib/greater/primitives';
 
 	interface Props {
 		items?: Status[];
@@ -296,6 +297,18 @@
 			<article class="timeline-virtualized__item">
 				<header class="timeline-virtualized__meta">
 					<div class="timeline-virtualized__byline">
+						<a
+							class="timeline-virtualized__avatar-link"
+							href={profileHref(status.account.acct)}
+							aria-label={`View ${status.account.displayName || status.account.username}'s profile`}
+						>
+							<Avatar
+								src={status.account.avatar}
+								name={status.account.displayName || status.account.username}
+								size="sm"
+								alt=""
+							/>
+						</a>
 						<a class="timeline-virtualized__author" href={profileHref(status.account.acct)}>
 							{status.account.displayName || status.account.username}
 						</a>

@@ -443,10 +443,20 @@ a {
 
 .timeline-virtualized__byline {
 	display: flex;
-	align-items: baseline;
+	align-items: center;
 	gap: var(--gr-spacing-scale-2);
 	flex-wrap: wrap;
 	min-width: 0;
+}
+
+.timeline-virtualized__avatar-link {
+	display: inline-flex;
+	text-decoration: none;
+	flex-shrink: 0;
+}
+
+.timeline-virtualized__avatar-link .gr-avatar {
+	border: 1px solid var(--gr-semantic-border-default);
 }
 
 .timeline-virtualized__author {
