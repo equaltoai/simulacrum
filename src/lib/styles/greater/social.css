@@ -50,6 +50,17 @@
 	background-color: var(--gr-semantic-action-error-default);
 }
 
+/* Bookmark button specific styles */
+.gr-action-bar :global(.gr-action-bar__button--bookmark:hover:not(:disabled)) {
+	color: var(--gr-semantic-background-primary);
+	background-color: var(--gr-semantic-action-primary-default);
+}
+
+.gr-action-bar :global(.gr-action-bar__button--bookmark.gr-action-bar__button--active) {
+	color: var(--gr-semantic-background-primary);
+	background-color: var(--gr-semantic-action-primary-default);
+}
+
 /* Share button specific styles */
 .gr-action-bar :global(.gr-action-bar__button--share:hover:not(:disabled)) {
 	color: var(--gr-semantic-background-primary);
