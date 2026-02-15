@@ -239,8 +239,12 @@
 	/**
 	 * Menu for dropdown mode
 	 */
+	let menuOpen = $state(false);
 	const menu = createMenu({
 		closeOnSelect: true,
+		onOpenChange: (open) => {
+			menuOpen = open;
+		},
 		onSelect: (value: unknown) => initiateAction(value as ModerationType),
 	});
 
@@ -352,7 +356,7 @@
 			</svg>
 		</button>
 
-		{#if menu.state.open}
+		{#if menuOpen}
 			<div use:menu.actions.menu class="moderation-tools__menu">
 				{#each availableActions as action (action.type)}
 					<button
