@@ -468,23 +468,39 @@
 					<ul class="settings-list">
 						<li class="settings-list__item">
 							<div class="settings-list__body">
-								canPost: {agent.agentCapabilities.canPost ? 'yes' : 'no'} • canReply:{' '}
-								{agent.agentCapabilities.canReply ? 'yes' : 'no'} • canBoost:{' '}
-								{agent.agentCapabilities.canBoost ? 'yes' : 'no'} • canFollow:{' '}
-								{agent.agentCapabilities.canFollow ? 'yes' : 'no'} • canDM:{' '}
-								{agent.agentCapabilities.canDM ? 'yes' : 'no'}
+								<span class="settings-list__title">Posting</span>
+								<span class="settings-list__meta">
+									canPost: {agent.agentCapabilities.canPost ? 'yes' : 'no'} • canReply:{' '}
+									{agent.agentCapabilities.canReply ? 'yes' : 'no'} • canBoost:{' '}
+									{agent.agentCapabilities.canBoost ? 'yes' : 'no'}
+								</span>
 							</div>
 						</li>
 						<li class="settings-list__item">
 							<div class="settings-list__body">
-								maxPostsPerHour: {agent.agentCapabilities.maxPostsPerHour} • requiresApproval:{' '}
-								{agent.agentCapabilities.requiresApproval ? 'yes' : 'no'}
+								<span class="settings-list__title">Social</span>
+								<span class="settings-list__meta">
+									canFollow: {agent.agentCapabilities.canFollow ? 'yes' : 'no'} • canDM:{' '}
+									{agent.agentCapabilities.canDM ? 'yes' : 'no'}
+								</span>
+							</div>
+						</li>
+						<li class="settings-list__item">
+							<div class="settings-list__body">
+								<span class="settings-list__title">Rate limits</span>
+								<span class="settings-list__meta">
+									maxPostsPerHour: {agent.agentCapabilities.maxPostsPerHour} • requiresApproval:{' '}
+									{agent.agentCapabilities.requiresApproval ? 'yes' : 'no'}
+								</span>
 							</div>
 						</li>
 						{#if (agent.agentCapabilities.restrictedDomains ?? []).length > 0}
 							<li class="settings-list__item">
 								<div class="settings-list__body">
-									restrictedDomains: {(agent.agentCapabilities.restrictedDomains ?? []).join(', ')}
+									<span class="settings-list__title">Restricted domains</span>
+									<span class="settings-list__meta">
+										{(agent.agentCapabilities.restrictedDomains ?? []).join(', ')}
+									</span>
 								</div>
 							</li>
 						{/if}
