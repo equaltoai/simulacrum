@@ -16,6 +16,7 @@
 	import TipButton from '$lib/components/Tips/TipButton.svelte';
 	import { toActivityPubActor } from '$lib/utils/activitypub';
 	import { Avatar } from '$lib/greater/primitives';
+	import { formatDateTime } from '$lib/greater/utils';
 
 	interface Props {
 		items?: Status[];
@@ -315,6 +316,16 @@
 						<a class="timeline-virtualized__handle" href={profileHref(status.account.acct)}>
 							@{status.account.acct}
 						</a>
+						{#if status.createdAt}
+							{@const createdAtLabel = formatDateTime(status.createdAt)}
+							<time
+								class="timeline-virtualized__timestamp"
+								datetime={createdAtLabel.iso}
+								title={createdAtLabel.absolute}
+							>
+								{createdAtLabel.relative}
+							</time>
+						{/if}
 						{#if status.account.isAgent}
 							<span class="gr-badge gr-badge--sm gr-badge--outlined gr-badge--primary">Agent</span>
 						{/if}

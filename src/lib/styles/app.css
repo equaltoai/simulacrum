@@ -488,6 +488,11 @@ a {
 	text-decoration: underline;
 }
 
+.timeline-virtualized__timestamp {
+	color: var(--gr-semantic-foreground-tertiary);
+	font-size: var(--gr-typography-fontSize-sm);
+}
+
 .timeline-virtualized__meta-actions {
 	display: flex;
 	align-items: center;
