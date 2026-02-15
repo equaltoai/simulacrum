@@ -8,6 +8,26 @@
 	import type { Account, Status } from '$lib/types';
 
 	const initialQuery = $derived($page.url.searchParams.get('q') ?? '');
+	let viewerId = $state<string | null>(null);
+
+	$effect(() => {
+		const token = $authSession?.accessToken ?? null;
+		viewerId = null;
+		if (!token) return;
+
+		const controller = new AbortController();
+		void (async () => {
+			try {
+				const viewer = await api.fetchViewer({ signal: controller.signal });
+				viewerId = viewer.id;
+			} catch (err) {
+				if (err instanceof DOMException && err.name === 'AbortError') return;
+				console.warn('Failed to fetch viewer id for search page:', err);
+			}
+		})();
+
+		return () => controller.abort();
+	});
 
 	function profileHref(acct: string) {
 		return `${base}/profile/${encodeURIComponent(acct)}`;
@@ -32,6 +52,7 @@
 				avatar: account.avatar || undefined,
 				bio: account.note,
 				followersCount: account.followersCount,
+				isSelf: viewerId !== null && account.id === viewerId,
 			}));
 
 			const notes: Search.SearchNote[] = result.statuses.map((status: Status) => ({
@@ -94,4 +115,3 @@
 		</Search.Root>
 	{/if}
 </section>
-

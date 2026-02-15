@@ -91,15 +91,17 @@
 		</div>
 	</div>
 
-	<button
-		use:followButton.actions.button
-		class="actor-result__follow"
-		class:actor-result__follow--following={actor.isFollowing}
-		onclick={(e) => {
-			e.stopPropagation();
-			handleFollow();
-		}}
-	>
-		{actor.isFollowing ? 'Following' : 'Follow'}
-	</button>
+	{#if !actor.isSelf}
+		<button
+			use:followButton.actions.button
+			class="actor-result__follow"
+			class:actor-result__follow--following={actor.isFollowing}
+			onclick={(e) => {
+				e.stopPropagation();
+				handleFollow();
+			}}
+		>
+			{actor.isFollowing ? 'Following' : 'Follow'}
+		</button>
+	{/if}
 </article>
