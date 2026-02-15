@@ -9,6 +9,7 @@
 	import { onMount } from 'svelte';
 
 	import { IdProvider } from '$lib/greater/utils';
+	import { ThemeProvider, ThemeSwitcher } from '$lib/greater/primitives';
 	import favicon from '$lib/assets/favicon.svg';
 	import { authSession, clearAuthSession, initAuthFromStorage, startOAuthLogin } from '$lib/auth/session';
 
@@ -64,39 +65,48 @@
 </svelte:head>
 
 <IdProvider>
-	<div class="shell">
-		<header class="shell__header">
-			<a class="shell__brand" href={`${base}/`}>
-				<span class="shell__mark" aria-hidden="true">S</span>
-				<span class="shell__title">
-					<strong>Simulacrum</strong>
-					<span>Instance client</span>
-				</span>
-			</a>
+	<ThemeProvider>
+		<div class="shell">
+			<header class="shell__header">
+				<a class="shell__brand" href={`${base}/`}>
+					<span class="shell__mark" aria-hidden="true">S</span>
+					<span class="shell__title">
+						<strong>Simulacrum</strong>
+						<span>Instance client</span>
+					</span>
+				</a>
 
-			<div class="shell__actions">
-				{#if $authSession}
-					<button type="button" class="gr-button gr-button--outline" onclick={handleLogout}>
-						Log out
-					</button>
-				{:else}
-					<button type="button" class="gr-button gr-button--solid" onclick={handleLogin} disabled={isLoggingIn}>
-						Sign in
-					</button>
-				{/if}
+				<div class="shell__actions">
+					<ThemeSwitcher variant="compact" />
+
+					{#if $authSession}
+						<button type="button" class="gr-button gr-button--outline" onclick={handleLogout}>
+							Log out
+						</button>
+					{:else}
+						<button
+							type="button"
+							class="gr-button gr-button--solid"
+							onclick={handleLogin}
+							disabled={isLoggingIn}
+						>
+							Sign in
+						</button>
+					{/if}
+				</div>
+			</header>
+
+			<div class="shell__body">
+				<nav class="shell__nav" aria-label="Primary">
+					{#each navItems as item (item.href)}
+						<a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>{item.label}</a>
+					{/each}
+				</nav>
+
+				<main class="shell__main">
+					{@render children()}
+				</main>
 			</div>
-		</header>
-
-		<div class="shell__body">
-			<nav class="shell__nav" aria-label="Primary">
-				{#each navItems as item (item.href)}
-					<a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>{item.label}</a>
-				{/each}
-			</nav>
-
-			<main class="shell__main">
-				{@render children()}
-			</main>
 		</div>
-	</div>
+	</ThemeProvider>
 </IdProvider>
