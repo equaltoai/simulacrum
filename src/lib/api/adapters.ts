@@ -401,38 +401,61 @@ export function statusToTimelineItem(status: Status): TimelineItem {
 }
 
 function toNotificationType(type: string): Notification['type'] {
-	switch (type) {
+	const key = type.trim().toUpperCase();
+
+	switch (key) {
 		case 'MENTION':
+		case 'MENTIONED':
+		case 'MENTION_NOTIFICATION':
 			return 'mention';
 		case 'FOLLOW':
+		case 'FOLLOWED':
 			return 'follow';
 		case 'FOLLOW_REQUEST':
+		case 'FOLLOWREQUEST':
+		case 'FOLLOW_REQUESTED':
 			return 'follow_request';
+		case 'REBLOG':
 		case 'SHARE':
+		case 'BOOST':
 			return 'reblog';
+		case 'FAVOURITE':
 		case 'FAVORITE':
+		case 'LIKE':
 			return 'favourite';
+		case 'STATUS':
 		case 'POST':
 			return 'status';
+		case 'POLL':
 		case 'POLL_ENDED':
 			return 'poll';
+		case 'UPDATE':
 		case 'STATUS_UPDATE':
 			return 'update';
 		case 'ADMIN_SIGNUP':
+		case 'ADMIN_SIGN_UP':
+		case 'ADMIN.SIGN_UP':
 			return 'admin.sign_up';
 		case 'ADMIN_REPORT':
+		case 'ADMIN.REPORT':
 			return 'admin.report';
 		case 'QUOTE':
 			return 'quote';
 		case 'COMMUNITY_NOTE':
+		case 'COMMUNITYNOTE':
 			return 'community_note';
 		case 'TRUST_UPDATE':
+		case 'TRUSTUPDATE':
 			return 'trust_update';
 		case 'COST_ALERT':
+		case 'COSTALERT':
 			return 'cost_alert';
 		case 'MODERATION_ACTION':
+		case 'MODERATIONACTION':
 			return 'moderation_action';
 		default:
+			// Mastodon-style notification types come back lowercased (follow/mention/reblog/favourite).
+			// Fall back to matching those by normalizing to upper-case above.
 			return 'mention';
 	}
 }
