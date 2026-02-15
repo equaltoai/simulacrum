@@ -47,8 +47,11 @@
 
 			const actors: Search.SearchActor[] = result.accounts.map((account: Account) => ({
 				id: account.id,
-				username: account.acct,
-				displayName: account.displayName || account.username,
+				username: (account.acct || account.username || '').trim(),
+				displayName:
+					(account.displayName || '').trim() ||
+					(account.acct || account.username || '').trim() ||
+					'Unknown User',
 				avatar: account.avatar || undefined,
 				bio: account.note,
 				followersCount: account.followersCount,
@@ -60,8 +63,11 @@
 				content: status.content,
 				author: {
 					id: status.account.id,
-					username: status.account.acct,
-					displayName: status.account.displayName || status.account.username,
+					username: (status.account.acct || status.account.username || '').trim(),
+					displayName:
+						(status.account.displayName || '').trim() ||
+						(status.account.acct || status.account.username || '').trim() ||
+						'Unknown User',
 					avatar: status.account.avatar || undefined,
 				},
 				createdAt: typeof status.createdAt === 'string' ? status.createdAt : status.createdAt.toISOString(),

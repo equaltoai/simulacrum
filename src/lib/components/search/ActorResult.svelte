@@ -76,7 +76,9 @@
 		<div class="actor-result__content">
 			<div class="actor-result__header">
 				<h4 class="actor-result__name">{actor.displayName}</h4>
-				<span class="actor-result__username">@{actor.username}</span>
+				{#if actor.username.trim()}
+					<span class="actor-result__username">@{actor.username}</span>
+				{/if}
 			</div>
 			{#if sanitizedBio}
 				<div class="actor-result__bio">

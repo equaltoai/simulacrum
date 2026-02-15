@@ -81,7 +81,9 @@
 		<div class="note-result__content">
 			<div class="note-result__header">
 				<span class="note-result__author">{note.author.displayName}</span>
-				<span class="note-result__username">@{note.author.username}</span>
+				{#if note.author.username.trim()}
+					<span class="note-result__username">@{note.author.username}</span>
+				{/if}
 				<span class="note-result__separator">·</span>
 				<time class="note-result__time">{formatDate(note.createdAt)}</time>
 			</div>
