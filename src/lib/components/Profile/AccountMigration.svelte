@@ -31,7 +31,6 @@ Handles account migration workflow:
 <script lang="ts">
 	import type { AccountMigration } from './context.js';
 	import { getProfileContext } from './context.js';
-	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		/**
@@ -186,7 +185,11 @@ Handles account migration workflow:
 						href={`/profile/${migration.targetAccount.username}`}
 						class="account-migration__target-link"
 					>
-						<AvatarImage src={migration.targetAccount.avatar} alt="" class="account-migration__target-avatar" />
+						<img
+							src={migration.targetAccount.avatar}
+							alt=""
+							class="account-migration__target-avatar"
+						/>
 						<div class="account-migration__target-info">
 							<span class="account-migration__target-name">
 								{migration.targetAccount.displayName}
@@ -237,7 +240,11 @@ Handles account migration workflow:
 							<p class="account-migration__target-label">Migrating to:</p>
 							<div class="account-migration__target-account">
 								{#if migration.targetAccount.avatar}
-									<AvatarImage src={migration.targetAccount.avatar} alt="" class="account-migration__target-avatar" />
+									<img
+										src={migration.targetAccount.avatar}
+										alt=""
+										class="account-migration__target-avatar"
+									/>
 								{:else}
 									<div
 										class="account-migration__target-avatar account-migration__target-avatar--placeholder"

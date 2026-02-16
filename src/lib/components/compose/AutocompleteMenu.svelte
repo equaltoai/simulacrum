@@ -14,7 +14,6 @@ Shows hashtag, mention, and emoji suggestions while typing.
 
 <script lang="ts">
 	import type { AutocompleteSuggestion } from './Autocomplete.js';
-	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		/**
@@ -129,7 +128,7 @@ Shows hashtag, mention, and emoji suggestions while typing.
 				type="button"
 			>
 				{#if suggestion.type === 'mention' && suggestion.metadata?.avatar}
-					<AvatarImage src={suggestion.metadata.avatar} alt="" class="autocomplete-menu__avatar" />
+					<img src={suggestion.metadata.avatar} alt="" class="autocomplete-menu__avatar" />
 				{/if}
 
 				<div class="autocomplete-menu__content">

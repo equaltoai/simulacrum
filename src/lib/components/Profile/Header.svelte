@@ -16,7 +16,6 @@
 	import { createButton } from '$lib/greater/headless/button';
 	import { sanitizeHtml } from '$lib/greater/utils';
 	import { getProfileContext, getRelationshipText } from './context.js';
-	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		/**
@@ -184,7 +183,7 @@
 			<div class="profile-header__avatar-wrapper">
 				<div class="profile-header__avatar">
 					{#if profileState.profile.avatar}
-						<AvatarImage src={profileState.profile.avatar} alt={profileState.profile.displayName} />
+						<img src={profileState.profile.avatar} alt={profileState.profile.displayName} />
 					{:else}
 						<div class="profile-header__avatar-placeholder">
 							{profileState.profile.displayName[0]?.toUpperCase() ||

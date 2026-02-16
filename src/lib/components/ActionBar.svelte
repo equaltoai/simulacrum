@@ -386,13 +386,16 @@
 			class={`gr-action-bar__button gr-action-bar__button--bookmark${isBookmarked ? ' gr-action-bar__button--active' : ''}`}
 			aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark this post'}
 			aria-pressed={ariaPressed(states.bookmarked)}
-			id={`${idPrefix}-bookmark`}
-		>
-			{#snippet prefix()}
-				<Bookmark size={size === 'sm' ? 16 : size === 'md' ? 18 : 20} />
-			{/snippet}
-		</Button>
-	{/if}
+				id={`${idPrefix}-bookmark`}
+			>
+				{#snippet prefix()}
+					<Bookmark
+						size={size === 'sm' ? 16 : size === 'md' ? 18 : 20}
+						fill={isBookmarked ? 'currentColor' : undefined}
+					/>
+				{/snippet}
+			</Button>
+		{/if}
 
 	<!-- Pin Button -->
 	{#if handlers.onPin}

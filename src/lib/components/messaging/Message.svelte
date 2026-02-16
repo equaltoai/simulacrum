@@ -4,7 +4,6 @@
 <script lang="ts">
 	import { formatMessageTime } from './utils.js';
 	import type { DirectMessage } from './context.svelte.js';
-	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		message: DirectMessage;
@@ -21,7 +20,7 @@
 	{#if !isOwnMessage}
 		<div class="message__avatar">
 			{#if message.sender.avatar}
-				<AvatarImage src={message.sender.avatar} alt={message.sender.displayName} />
+				<img src={message.sender.avatar} alt={message.sender.displayName} />
 			{:else}
 				<div class="message__avatar-placeholder">
 					{message.sender.displayName[0]?.toUpperCase()}

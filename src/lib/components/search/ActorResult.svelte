@@ -6,7 +6,6 @@
 	import { sanitizeHtml } from '$lib/greater/utils';
 	import { getSearchContext, formatCount } from './context.svelte.js';
 	import type { SearchActor } from './context.svelte.js';
-	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		actor: SearchActor;
@@ -65,7 +64,7 @@
 	>
 		<div class="actor-result__avatar">
 			{#if actor.avatar}
-				<AvatarImage src={actor.avatar} alt={actor.displayName || actor.username} />
+				<img src={actor.avatar} alt={actor.displayName || actor.username} />
 			{:else}
 				<div class="actor-result__avatar-placeholder">
 					{actor.displayName[0]?.toUpperCase() || actor.username[0]?.toUpperCase()}
@@ -76,9 +75,7 @@
 		<div class="actor-result__content">
 			<div class="actor-result__header">
 				<h4 class="actor-result__name">{actor.displayName}</h4>
-				{#if actor.username.trim()}
-					<span class="actor-result__username">@{actor.username}</span>
-				{/if}
+				<span class="actor-result__username">@{actor.username}</span>
 			</div>
 			{#if sanitizedBio}
 				<div class="actor-result__bio">
@@ -93,7 +90,7 @@
 		</div>
 	</div>
 
-	{#if !actor.isSelf}
+	{#if handlers.onFollow && !actor.isSelf}
 		<button
 			use:followButton.actions.button
 			class="actor-result__follow"
