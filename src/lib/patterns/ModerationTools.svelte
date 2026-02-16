@@ -239,12 +239,8 @@
 	/**
 	 * Menu for dropdown mode
 	 */
-	let menuOpen = $state(false);
 	const menu = createMenu({
 		closeOnSelect: true,
-		onOpenChange: (open) => {
-			menuOpen = open;
-		},
 		onSelect: (value: unknown) => initiateAction(value as ModerationType),
 	});
 
@@ -356,7 +352,7 @@
 			</svg>
 		</button>
 
-		{#if menuOpen}
+		{#if menu.state.open}
 			<div use:menu.actions.menu class="moderation-tools__menu">
 				{#each availableActions as action (action.type)}
 					<button
@@ -635,18 +631,19 @@
 		z-index: 1000;
 	}
 
-	.moderation-tools__action {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		width: 100%;
-		padding: 0.75rem 1rem;
-		background: transparent;
-		border: none;
-		cursor: pointer;
-		text-align: left;
-		transition: background-color 0.2s;
-	}
+		.moderation-tools__action {
+			display: flex;
+			align-items: center;
+			gap: 0.75rem;
+			width: 100%;
+			padding: 0.75rem 1rem;
+			background: transparent;
+			border: none;
+			color: var(--text-primary, #0f1419);
+			cursor: pointer;
+			text-align: left;
+			transition: background-color 0.2s;
+		}
 
 	.moderation-tools__action:hover {
 		background: var(--bg-hover, #eff3f4);

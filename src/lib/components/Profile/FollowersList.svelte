@@ -22,7 +22,6 @@ Supports removing followers (for own profile).
 <script lang="ts">
 	import type { ProfileData } from './context.js';
 	import { formatCount, getProfileContext } from './context.js';
-	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		/**
@@ -200,7 +199,7 @@ Supports removing followers (for own profile).
 					<div class="followers-list__item">
 						<div class="followers-list__account">
 							{#if follower.avatar}
-								<AvatarImage src={follower.avatar} alt="" class="followers-list__avatar" loading="lazy" />
+								<img src={follower.avatar} alt="" class="followers-list__avatar" loading="lazy" />
 							{:else}
 								<div class="followers-list__avatar-placeholder" aria-hidden="true">
 									{follower.displayName[0]?.toUpperCase() || '?'}

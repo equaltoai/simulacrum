@@ -3,6 +3,26 @@ body {
 	height: 100%;
 }
 
+:root {
+	/* Bridge legacy Greater pattern tokens → semantic tokens. */
+	--bg-primary: var(--gr-semantic-background-surface);
+	--bg-secondary: var(--gr-semantic-background-secondary);
+	--bg-tertiary: var(--gr-semantic-background-tertiary);
+	--bg-hover: var(--gr-semantic-background-secondary);
+	--bg-selected: color-mix(in srgb, var(--gr-semantic-action-primary-default) 12%, transparent);
+
+	--text-primary: var(--gr-semantic-foreground-primary);
+	--text-secondary: var(--gr-semantic-foreground-secondary);
+	--text-tertiary: var(--gr-semantic-foreground-tertiary);
+
+	--border-color: var(--gr-semantic-border-default);
+	--border-hover: var(--gr-semantic-border-strong, var(--gr-semantic-border-default));
+
+	--primary-color: var(--gr-semantic-action-primary-default);
+	--danger-color: var(--gr-semantic-action-error-default);
+	--focus-color: var(--gr-semantic-focus-ring);
+}
+
 body {
 	margin: 0;
 	background: var(--gr-semantic-background-base);
@@ -972,6 +992,50 @@ a {
 .settings-list__meta {
 	color: var(--gr-semantic-foreground-secondary);
 	font-size: var(--gr-typography-fontSize-sm);
+}
+
+.capability-list {
+	margin: 0;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	column-gap: var(--gr-spacing-scale-4);
+	row-gap: var(--gr-spacing-scale-1);
+}
+
+.capability-list__row {
+	display: contents;
+}
+
+.capability-list dt {
+	margin: 0;
+	color: var(--gr-semantic-foreground-secondary);
+	font-size: var(--gr-typography-fontSize-sm);
+	font-weight: var(--gr-typography-fontWeight-medium);
+}
+
+.capability-list dd {
+	margin: 0;
+	justify-self: end;
+	font-size: var(--gr-typography-fontSize-sm);
+	font-variant-numeric: tabular-nums;
+}
+
+.capability-list__value {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--gr-spacing-scale-1);
+}
+
+.capability-list__value--yes {
+	color: var(--gr-semantic-action-success-default);
+}
+
+.capability-list__value--no {
+	color: var(--gr-semantic-action-error-default);
+}
+
+.capability-list__value--neutral {
+	color: var(--gr-semantic-foreground-primary);
 }
 
 .settings-token {

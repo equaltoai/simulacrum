@@ -19,7 +19,6 @@ Displays a single notification with type-specific rendering.
 	import type { Snippet } from 'svelte';
 	import type { Notification, NotificationType } from './types.js';
 	import { getNotificationsContext } from './context.svelte.js';
-	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		/**
@@ -176,7 +175,7 @@ Displays a single notification with type-specific rendering.
 			onkeydown={handleKeyDown}
 		>
 			{#if context.config.showAvatars && notification.account?.avatar}
-				<AvatarImage
+				<img
 					src={notification.account.avatar}
 					alt={`${notification.account.displayName || notification.account.username} avatar`}
 					class="notification-item__avatar"

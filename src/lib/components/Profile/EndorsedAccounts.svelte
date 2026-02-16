@@ -22,7 +22,6 @@ Supports drag-and-drop reordering (for own profile).
 <script lang="ts">
 	import type { ProfileData } from './context.js';
 	import { getProfileContext } from './context.js';
-	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		/**
@@ -209,7 +208,7 @@ Supports drag-and-drop reordering (for own profile).
 
 					<div class="endorsed-accounts__account">
 						{#if account.avatar}
-							<AvatarImage src={account.avatar} alt="" class="endorsed-accounts__avatar" loading="lazy" />
+							<img src={account.avatar} alt="" class="endorsed-accounts__avatar" loading="lazy" />
 						{:else}
 							<div class="endorsed-accounts__avatar-placeholder" aria-hidden="true">
 								{account.displayName[0]?.toUpperCase() || '?'}

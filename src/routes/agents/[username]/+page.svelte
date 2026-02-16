@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { base } from '$app/paths';
-	import { page } from '$app/stores';
-	import { api, type Agent, type AgentActivityConnection, type AgentDelegation } from '$lib/api';
-	import { authSession } from '$lib/auth/session';
-	import type { Account } from '$lib/types';
-	import { getStreamingAdapter } from '$lib/realtime/adapter';
-	import type { AgentType } from '$lib/greater/adapters/graphql';
+		import { base } from '$app/paths';
+		import { page } from '$app/stores';
+		import { api, type Agent, type AgentActivityConnection, type AgentDelegation } from '$lib/api';
+		import { authSession } from '$lib/auth/session';
+		import { hasAdminScope } from '$lib/auth/scopes';
+		import type { Account } from '$lib/types';
+		import { getStreamingAdapter } from '$lib/realtime/adapter';
+		import type { AgentType } from '$lib/greater/adapters/graphql';
 
 	const AGENT_TYPES: Array<{ value: AgentType; label: string }> = [
 		{ value: 'ASSISTANT', label: 'Assistant' },
@@ -35,12 +36,7 @@
 	let activityLoading = $state(false);
 	let activityError = $state<string | null>(null);
 
-	function hasAdminScope(scope: string | undefined) {
-		const tokens = (scope ?? '').split(/\s+/).filter(Boolean);
-		return tokens.includes('admin') || tokens.includes('admin:read') || tokens.includes('admin:write');
-	}
-
-	let canAdmin = $derived(hasAdminScope($authSession?.scope));
+		let canAdmin = $derived(hasAdminScope($authSession?.scope));
 	let canManage = $derived(
 		(agent?.agentOwner && viewer?.username === agent.agentOwner) || canAdmin
 	);
@@ -463,49 +459,101 @@
 					</p>
 				{/if}
 
-				<section class="page__notice">
-					<strong>Capabilities</strong>
-					<ul class="settings-list">
-						<li class="settings-list__item">
-							<div class="settings-list__body">
-								<span class="settings-list__title">Posting</span>
-								<span class="settings-list__meta">
-									canPost: {agent.agentCapabilities.canPost ? 'yes' : 'no'} • canReply:{' '}
-									{agent.agentCapabilities.canReply ? 'yes' : 'no'} • canBoost:{' '}
-									{agent.agentCapabilities.canBoost ? 'yes' : 'no'}
-								</span>
-							</div>
-						</li>
-						<li class="settings-list__item">
-							<div class="settings-list__body">
-								<span class="settings-list__title">Social</span>
-								<span class="settings-list__meta">
-									canFollow: {agent.agentCapabilities.canFollow ? 'yes' : 'no'} • canDM:{' '}
-									{agent.agentCapabilities.canDM ? 'yes' : 'no'}
-								</span>
-							</div>
-						</li>
-						<li class="settings-list__item">
-							<div class="settings-list__body">
-								<span class="settings-list__title">Rate limits</span>
-								<span class="settings-list__meta">
-									maxPostsPerHour: {agent.agentCapabilities.maxPostsPerHour} • requiresApproval:{' '}
-									{agent.agentCapabilities.requiresApproval ? 'yes' : 'no'}
-								</span>
-							</div>
-						</li>
-						{#if (agent.agentCapabilities.restrictedDomains ?? []).length > 0}
+					<section class="page__notice">
+						<strong>Capabilities</strong>
+						<ul class="settings-list">
 							<li class="settings-list__item">
 								<div class="settings-list__body">
-									<span class="settings-list__title">Restricted domains</span>
-									<span class="settings-list__meta">
-										{(agent.agentCapabilities.restrictedDomains ?? []).join(', ')}
-									</span>
+									<span class="settings-list__title">Posting</span>
+									<dl class="capability-list" aria-label="Posting capabilities">
+										<div class="capability-list__row">
+											<dt>Can post</dt>
+											<dd
+												class={`capability-list__value ${agent.agentCapabilities.canPost ? 'capability-list__value--yes' : 'capability-list__value--no'}`}
+											>
+												{agent.agentCapabilities.canPost ? '✓ Yes' : '✗ No'}
+											</dd>
+										</div>
+										<div class="capability-list__row">
+											<dt>Can reply</dt>
+											<dd
+												class={`capability-list__value ${agent.agentCapabilities.canReply ? 'capability-list__value--yes' : 'capability-list__value--no'}`}
+											>
+												{agent.agentCapabilities.canReply ? '✓ Yes' : '✗ No'}
+											</dd>
+										</div>
+										<div class="capability-list__row">
+											<dt>Can boost</dt>
+											<dd
+												class={`capability-list__value ${agent.agentCapabilities.canBoost ? 'capability-list__value--yes' : 'capability-list__value--no'}`}
+											>
+												{agent.agentCapabilities.canBoost ? '✓ Yes' : '✗ No'}
+											</dd>
+										</div>
+									</dl>
 								</div>
 							</li>
-						{/if}
-					</ul>
-				</section>
+							<li class="settings-list__item">
+								<div class="settings-list__body">
+									<span class="settings-list__title">Social</span>
+									<dl class="capability-list" aria-label="Social capabilities">
+										<div class="capability-list__row">
+											<dt>Can follow</dt>
+											<dd
+												class={`capability-list__value ${agent.agentCapabilities.canFollow ? 'capability-list__value--yes' : 'capability-list__value--no'}`}
+											>
+												{agent.agentCapabilities.canFollow ? '✓ Yes' : '✗ No'}
+											</dd>
+										</div>
+										<div class="capability-list__row">
+											<dt>Can DM</dt>
+											<dd
+												class={`capability-list__value ${agent.agentCapabilities.canDM ? 'capability-list__value--yes' : 'capability-list__value--no'}`}
+											>
+												{agent.agentCapabilities.canDM ? '✓ Yes' : '✗ No'}
+											</dd>
+										</div>
+									</dl>
+								</div>
+							</li>
+							<li class="settings-list__item">
+								<div class="settings-list__body">
+									<span class="settings-list__title">Rate limits</span>
+									<dl class="capability-list" aria-label="Rate limits">
+										<div class="capability-list__row">
+											<dt>Max posts per hour</dt>
+											<dd class="capability-list__value capability-list__value--neutral">
+												{agent.agentCapabilities.maxPostsPerHour} posts/hour
+											</dd>
+										</div>
+										<div class="capability-list__row">
+											<dt>Requires approval</dt>
+											<dd
+												class={`capability-list__value ${agent.agentCapabilities.requiresApproval ? 'capability-list__value--yes' : 'capability-list__value--no'}`}
+											>
+												{agent.agentCapabilities.requiresApproval ? '✓ Yes' : '✗ No'}
+											</dd>
+										</div>
+									</dl>
+								</div>
+							</li>
+							{#if (agent.agentCapabilities.restrictedDomains ?? []).length > 0}
+								<li class="settings-list__item">
+									<div class="settings-list__body">
+										<span class="settings-list__title">Restricted domains</span>
+										<dl class="capability-list" aria-label="Restricted domains">
+											<div class="capability-list__row">
+												<dt>Domains</dt>
+												<dd class="capability-list__value capability-list__value--neutral">
+													{(agent.agentCapabilities.restrictedDomains ?? []).join(', ')}
+												</dd>
+											</div>
+										</dl>
+									</div>
+								</li>
+							{/if}
+						</ul>
+					</section>
 			</div>
 		</header>
 

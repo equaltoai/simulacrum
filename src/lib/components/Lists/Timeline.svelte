@@ -11,7 +11,6 @@
 	import type { LesserGraphQLAdapter } from '$lib/greater/adapters';
 	import { tryGetListsContext } from './context.js';
 	import TimelineVirtualizedReactive from '../TimelineVirtualizedReactive.svelte';
-	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		/**
@@ -102,7 +101,7 @@
 							<div class="lists-timeline__member">
 								<div class="lists-timeline__member-avatar">
 									{#if member.actor.avatar}
-										<AvatarImage src={member.actor.avatar} alt={member.actor.displayName} />
+										<img src={member.actor.avatar} alt={member.actor.displayName} />
 									{:else}
 										<div class="lists-timeline__member-avatar-placeholder">
 											{member.actor.displayName[0]?.toUpperCase()}

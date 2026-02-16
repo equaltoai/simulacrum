@@ -30,7 +30,6 @@ Supports batch operations and request filtering.
 <script lang="ts">
 	import type { FollowRequest } from './context.js';
 	import { getProfileContext } from './context.js';
-	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		/**
@@ -302,7 +301,12 @@ Supports batch operations and request filtering.
 
 					<div class="follow-requests__account">
 						{#if request.account.avatar}
-							<AvatarImage src={request.account.avatar} alt="" class="follow-requests__avatar" loading="lazy" />
+							<img
+								src={request.account.avatar}
+								alt=""
+								class="follow-requests__avatar"
+								loading="lazy"
+							/>
 						{:else}
 							<div class="follow-requests__avatar-placeholder" aria-hidden="true">
 								{request.account.displayName[0]?.toUpperCase() || '?'}

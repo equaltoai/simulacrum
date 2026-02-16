@@ -18,7 +18,6 @@ Displays multiple similar notifications grouped together.
 	import type { Snippet } from 'svelte';
 	import type { NotificationGroup, NotificationType } from './types.js';
 	import { getNotificationsContext } from './context.svelte.js';
-	import AvatarImage from '$lib/components/AvatarImage.svelte';
 
 	interface Props {
 		/**
@@ -152,7 +151,7 @@ Displays multiple similar notifications grouped together.
 				<div class="notification-group__avatars">
 					{#each group.notifications.slice(0, 3) as notification (notification.id)}
 						{#if notification.account?.avatar}
-							<AvatarImage
+							<img
 								src={notification.account.avatar}
 								alt={`${notification.account.displayName || notification.account.username} avatar`}
 								class="notification-group__avatar"

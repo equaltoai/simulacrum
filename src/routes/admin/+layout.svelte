@@ -1,10 +1,11 @@
-<script lang="ts">
-	import { base } from '$app/paths';
-	import { page } from '$app/stores';
+	<script lang="ts">
+		import { base } from '$app/paths';
+		import { page } from '$app/stores';
 
-	import { DEFAULT_OAUTH_SCOPE, authSession, startOAuthLogin } from '$lib/auth/session';
+		import { DEFAULT_OAUTH_SCOPE, authSession, startOAuthLogin } from '$lib/auth/session';
+		import { hasAdminScope } from '$lib/auth/scopes';
 
-	let { children } = $props();
+		let { children } = $props();
 
 	const ADMIN_OAUTH_SCOPE = `${DEFAULT_OAUTH_SCOPE} admin`;
 
@@ -24,14 +25,8 @@
 		return pathname === href;
 	}
 
-	function hasAdminScope(scope?: string) {
-		const value = scope ?? '';
-		const parts = value.split(/\s+/g).filter(Boolean);
-		return parts.includes('admin') || parts.includes('admin:read') || parts.includes('admin:write');
-	}
-
-	let isUpgrading = $state(false);
-	let upgradeError = $state<string | null>(null);
+		let isUpgrading = $state(false);
+		let upgradeError = $state<string | null>(null);
 
 	async function handleUpgrade() {
 		if (isUpgrading) return;
