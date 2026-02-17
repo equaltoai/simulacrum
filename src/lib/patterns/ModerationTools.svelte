@@ -631,19 +631,18 @@
 		z-index: 1000;
 	}
 
-		.moderation-tools__action {
-			display: flex;
-			align-items: center;
-			gap: 0.75rem;
-			width: 100%;
-			padding: 0.75rem 1rem;
-			background: transparent;
-			border: none;
-			color: var(--text-primary, #0f1419);
-			cursor: pointer;
-			text-align: left;
-			transition: background-color 0.2s;
-		}
+	.moderation-tools__action {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		width: 100%;
+		padding: 0.75rem 1rem;
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		text-align: left;
+		transition: background-color 0.2s;
+	}
 
 	.moderation-tools__action:hover {
 		background: var(--bg-hover, #eff3f4);

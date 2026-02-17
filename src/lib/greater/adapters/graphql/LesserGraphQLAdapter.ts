@@ -6,7 +6,7 @@
  * and object accessors rather than the legacy Mastodon-style wrappers.
  */
 
-import { Observable, type FetchResult, type OperationVariables } from '@apollo/client';
+import type { Observable, FetchResult, OperationVariables } from '@apollo/client';
 import type { ApolloClient as ApolloClientNamespace } from '@apollo/client';
 
 type QueryOptionsFor<
@@ -482,9 +482,23 @@ export class LesserGraphQLAdapter {
 
 		const result = await this.client.client.query<TData, TVariables>(options);
 
+		const transportError = (result as { error?: unknown }).error;
+		if (transportError) {
+			throw transportError instanceof Error ? transportError : new Error(String(transportError));
+		}
+
+		const graphQLErrors = (result as { errors?: Array<{ message?: string }> }).errors;
+		if (Array.isArray(graphQLErrors) && graphQLErrors.length > 0) {
+			const message = graphQLErrors
+				.map((err) => (typeof err?.message === 'string' ? err.message : null))
+				.filter((value): value is string => Boolean(value))
+				.join('\n');
+			throw new Error(message || 'GraphQL request failed.');
+		}
+
 		const { data } = result;
-		if (data === undefined) {
-			throw new Error('Query completed without returning data.');
+		if (data == null) {
+			return {} as TData;
 		}
 
 		return data;
