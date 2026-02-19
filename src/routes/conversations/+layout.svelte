@@ -8,6 +8,7 @@
 	import { createLesserMessagesHandlers } from '$lib/greater/adapters';
 	import * as Messages from '$lib/components/messaging';
 	import type { MessagesHandlers } from '$lib/components/messaging';
+	import MessagesFallbackPolling from '$lib/patterns/MessagesFallbackPolling.svelte';
 
 	let { children } = $props<{ children?: Snippet }>();
 
@@ -76,13 +77,14 @@
 			<div class="page__notice page__notice--error" role="alert">{error}</div>
 		{/if}
 
-		<div class="messages-page__body">
-			<Messages.Root {handlers}>
-				{#if children}
-					{@render children()}
-				{/if}
+			<div class="messages-page__body">
+				<Messages.Root {handlers}>
+					<MessagesFallbackPolling />
+					{#if children}
+						{@render children()}
+					{/if}
 
-				<Messages.Conversations currentUserId={viewerId ?? 'me'} />
+					<Messages.Conversations currentUserId={viewerId ?? 'me'} />
 
 				<div class="messages-page__thread">
 					<Messages.Thread currentUserId={viewerId ?? 'me'} />
