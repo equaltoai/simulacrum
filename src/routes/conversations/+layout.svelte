@@ -30,12 +30,27 @@
 			return;
 		}
 
-		handlers = {
-			...createLesserMessagesHandlers({ adapter }),
+		const baseHandlers = createLesserMessagesHandlers({ adapter }) as unknown as MessagesHandlers;
+		const baseOnDeleteConversation = baseHandlers.onDeleteConversation;
+
+		const nextHandlers: MessagesHandlers = {
+			...baseHandlers,
 			onConversationClick: (conversation) => {
 				void goto(`${base}/conversations/${encodeURIComponent(conversation.id)}`);
 			},
 		};
+
+		if (baseOnDeleteConversation) {
+			nextHandlers.onDeleteConversation = async (conversationId) => {
+				const ok = await baseOnDeleteConversation(conversationId);
+				if (ok === false) return false;
+
+				void goto(`${base}/conversations`);
+				return ok;
+			};
+		}
+
+		handlers = nextHandlers;
 
 		void (async () => {
 			try {
@@ -70,11 +85,10 @@
 				<Messages.Conversations currentUserId={viewerId ?? 'me'} />
 
 				<div class="messages-page__thread">
-					<Messages.Thread />
+					<Messages.Thread currentUserId={viewerId ?? 'me'} />
 					<Messages.Composer />
 				</div>
 			</Messages.Root>
 		</div>
 	</section>
 {/if}
-
