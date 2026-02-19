@@ -90,17 +90,15 @@
 		</div>
 	</div>
 
-	{#if handlers.onFollow && !actor.isSelf}
-		<button
-			use:followButton.actions.button
-			class="actor-result__follow"
-			class:actor-result__follow--following={actor.isFollowing}
-			onclick={(e) => {
-				e.stopPropagation();
-				handleFollow();
-			}}
-		>
-			{actor.isFollowing ? 'Following' : 'Follow'}
-		</button>
-	{/if}
+	<button
+		use:followButton.actions.button
+		class="actor-result__follow"
+		class:actor-result__follow--following={actor.isFollowing}
+		onclick={(e) => {
+			e.stopPropagation();
+			handleFollow();
+		}}
+	>
+		{actor.isFollowing ? 'Following' : 'Follow'}
+	</button>
 </article>
