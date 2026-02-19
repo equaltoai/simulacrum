@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { api } from '$lib/api';
 	import { authSession } from '$lib/auth/session';
@@ -11,6 +12,7 @@
 	import { toActivityPubActor } from '$lib/utils/activitypub';
 	import AvatarImage from '$lib/components/AvatarImage.svelte';
 	import { getStreamingAdapter } from '$lib/realtime/adapter';
+	import { CreateConversationDocument } from '$lib/greater/adapters/graphql/generated/types';
 
 	let account = $state<Account | null>(null);
 	let items = $state<Status[]>([]);
@@ -22,6 +24,8 @@
 	let relationshipLoading = $state(false);
 	let followError = $state<string | null>(null);
 	let followLoading = $state(false);
+	let dmError = $state<string | null>(null);
+	let dmLoading = $state(false);
 	let trustEdges = $state<Array<{ category: string; score: number; updatedAt: string; from: Account; to: Account }>>(
 		[]
 	);
@@ -30,6 +34,30 @@
 
 	const canFollow = $derived(Boolean(account && viewerId && account.id !== viewerId));
 	const isFollowing = $derived(Boolean(relationship?.following || relationship?.requested));
+
+	async function handleMessage() {
+		const token = $authSession?.accessToken ?? null;
+		if (!token || !account) return;
+		if (!canFollow) return;
+
+		dmLoading = true;
+		dmError = null;
+
+		try {
+			const adapter = getStreamingAdapter(token);
+			if (!adapter) throw new Error('GraphQL adapter unavailable');
+
+			const data = await adapter.mutate(CreateConversationDocument, {
+				participantId: account.id,
+			});
+
+			await goto(`${base}/conversations/${encodeURIComponent(data.createConversation.id)}`);
+		} catch (err) {
+			dmError = err instanceof Error ? err.message : String(err);
+		} finally {
+			dmLoading = false;
+		}
+	}
 
 	async function refreshRelationship(targetId: string, token: string) {
 		relationshipLoading = true;
@@ -91,6 +119,8 @@
 		relationshipLoading = false;
 		followError = null;
 		followLoading = false;
+		dmError = null;
+		dmLoading = false;
 		trustEdges = [];
 		trustLoading = false;
 		trustError = null;
@@ -180,13 +210,13 @@
 					</div>
 
 					<div class="profile-card__actions" aria-label="Account moderation">
-						{#if canFollow}
-							<button
-								type="button"
-								class={`gr-button ${isFollowing ? 'gr-button--outline' : 'gr-button--solid'}`}
+					{#if canFollow}
+						<button
+							type="button"
+							class={`gr-button ${isFollowing ? 'gr-button--outline' : 'gr-button--solid'}`}
 								disabled={followLoading || relationshipLoading}
 								onclick={toggleFollow}
-							>
+						>
 								{#if followLoading}
 									…
 								{:else if relationship?.requested}
@@ -196,6 +226,14 @@
 								{:else}
 									Follow
 								{/if}
+							</button>
+							<button
+								type="button"
+								class="gr-button gr-button--outline"
+								disabled={dmLoading}
+								onclick={handleMessage}
+							>
+								{dmLoading ? 'Starting…' : 'Message'}
 							</button>
 						{/if}
 
@@ -225,6 +263,11 @@
 					{#if followError || relationshipError}
 						<div class="page__notice page__notice--error" role="alert">
 							{followError || relationshipError}
+						</div>
+					{/if}
+					{#if dmError}
+						<div class="page__notice page__notice--error" role="alert">
+							{dmError}
 						</div>
 					{/if}
 

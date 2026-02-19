@@ -7996,6 +7996,38 @@
 	color: var(--text-primary, #0f1419);
 }
 
+.messages-conversations__tabs {
+	display: flex;
+	gap: 0.5rem;
+	margin-top: 0.75rem;
+}
+
+.messages-conversations__tab {
+	flex: 1;
+	padding: 0.375rem 0.75rem;
+	border: 1px solid var(--border-color, #e1e8ed);
+	border-radius: 9999px;
+	background: transparent;
+	color: var(--text-secondary, #536471);
+	font-size: 0.875rem;
+	font-weight: 700;
+	cursor: pointer;
+	transition:
+		background-color 0.2s,
+		color 0.2s,
+		border-color 0.2s;
+}
+
+.messages-conversations__tab:hover {
+	background: var(--bg-hover, #eff3f4);
+}
+
+.messages-conversations__tab--active {
+	background: rgba(29, 155, 240, 0.1);
+	border-color: rgba(29, 155, 240, 0.3);
+	color: var(--primary-color, #1d9bf0);
+}
+
 .messages-conversations__loading,
 .messages-conversations__empty {
 	display: flex;
@@ -8820,6 +8852,63 @@
 	flex-direction: column;
 	background: var(--bg-primary, #ffffff);
 	overflow: hidden;
+}
+
+.messages-thread__request-banner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.75rem 1rem;
+	border-bottom: 1px solid var(--border-color, #e1e8ed);
+	background: var(--bg-secondary, #f7f9fa);
+}
+
+.messages-thread__request-text {
+	font-size: 0.875rem;
+	font-weight: 700;
+	color: var(--text-primary, #0f1419);
+}
+
+.messages-thread__request-actions {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.messages-thread__request-button {
+	border: 1px solid var(--border-color, #e1e8ed);
+	border-radius: 9999px;
+	padding: 0.375rem 0.75rem;
+	font-size: 0.8125rem;
+	font-weight: 700;
+	cursor: pointer;
+	transition:
+		background-color 0.2s,
+		opacity 0.2s;
+}
+
+.messages-thread__request-button:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.messages-thread__request-button--secondary {
+	background: transparent;
+	color: var(--text-primary, #0f1419);
+}
+
+.messages-thread__request-button--secondary:hover:not(:disabled) {
+	background: rgba(15, 20, 25, 0.08);
+}
+
+.messages-thread__request-button--primary {
+	background: var(--primary-color, #1d9bf0);
+	border-color: var(--primary-color, #1d9bf0);
+	color: #fff;
+}
+
+.messages-thread__request-button--primary:hover:not(:disabled) {
+	background: var(--primary-color-dark, #1a8cd8);
 }
 
 .messages-thread__loading,
