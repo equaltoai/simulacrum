@@ -3,7 +3,7 @@
 	import { api, type LinkedWallet, type UserPreferences } from '$lib/api';
 	import { authSession } from '$lib/auth/session';
 	import type { Account } from '$lib/types';
-	import type { ExpandMediaPreference, Visibility } from '$lib/greater/adapters/graphql';
+	import type { DirectMessagesFrom, ExpandMediaPreference, Visibility } from '$lib/greater/adapters/graphql';
 	import { getStreamingAdapter } from '$lib/realtime/adapter';
 	import {
 		PushNotificationsController,
@@ -43,6 +43,7 @@
 	let prefExpandSpoilers = $state(false);
 	let prefExpandMedia = $state<ExpandMediaPreference>('DEFAULT');
 	let prefAutoplayGifs = $state(false);
+	let prefDirectMessagesFrom = $state<DirectMessagesFrom>('FOLLOWING_ONLY');
 	let prefReblogFilters = $state<Array<{ key: string; enabled: boolean }>>([]);
 	let isSavingPreferences = $state(false);
 	let preferencesMessage = $state<string | null>(null);
@@ -96,6 +97,7 @@
 		prefExpandSpoilers = nextPreferences.reading.expandSpoilers;
 		prefExpandMedia = nextPreferences.reading.expandMedia;
 		prefAutoplayGifs = nextPreferences.reading.autoplayGifs;
+		prefDirectMessagesFrom = nextPreferences.privacy.directMessagesFrom;
 		prefReblogFilters = nextPreferences.reblogFilters.map((filter) => ({
 			key: filter.key,
 			enabled: filter.enabled,
@@ -401,6 +403,7 @@
 					expandSpoilers: prefExpandSpoilers,
 					expandMedia: prefExpandMedia,
 					autoplayGifs: prefAutoplayGifs,
+					directMessagesFrom: prefDirectMessagesFrom,
 					reblogFilters: prefReblogFilters,
 				},
 			});
@@ -410,6 +413,7 @@
 			prefExpandSpoilers = next.reading.expandSpoilers;
 			prefExpandMedia = next.reading.expandMedia;
 			prefAutoplayGifs = next.reading.autoplayGifs;
+			prefDirectMessagesFrom = next.privacy.directMessagesFrom;
 			prefReblogFilters = next.reblogFilters.map((filter) => ({
 				key: filter.key,
 				enabled: filter.enabled,
@@ -629,6 +633,14 @@
 						<label class="settings-field settings-field--toggle">
 							<span class="settings-field__label">Autoplay GIFs</span>
 							<input class="settings-field__checkbox" type="checkbox" bind:checked={prefAutoplayGifs} />
+						</label>
+
+						<label class="settings-field">
+							<span class="settings-field__label">Direct messages from</span>
+							<select class="settings-field__select" bind:value={prefDirectMessagesFrom}>
+								<option value="FOLLOWING_ONLY">People you follow</option>
+								<option value="ANYONE">Anyone</option>
+							</select>
 						</label>
 					</div>
 

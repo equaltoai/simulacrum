@@ -1,7 +1,7 @@
 {
   "$schema": "https://greater.components.dev/schema.json",
   "version": "1.0.0",
-  "ref": "greater-v0.1.12",
+  "ref": "fba11d52",
   "installMode": "vendored",
   "style": "default",
   "rsc": false,
@@ -24,211 +24,211 @@
   "installed": [
     {
       "name": "icons",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.587Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:41:19.781Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "utils",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.596Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:41:23.538Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "tokens",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.599Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:41:24.994Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "primitives",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.620Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:41:38.922Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "content",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.624Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:41:39.378Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "adapters",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.641Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:41:50.736Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "headless",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.646Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:41:54.286Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "social-generics",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.649Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:41:54.581Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "timeline",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.655Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:41:55.402Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "status",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.660Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:41:56.413Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "profile",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.694Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:41:59.592Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "auth",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.717Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:01.870Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "compose",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.731Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:04.498Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "notifications",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.737Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:05.821Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "search",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.744Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:06.830Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "admin",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.758Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:11.078Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "messaging",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.767Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:12.697Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "thread-view",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.769Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:13.830Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "moderation-tools",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.778Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:14.047Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "visibility-selector",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.783Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:14.228Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "content-warning-handler",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.787Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:14.328Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "custom-emoji-picker",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.789Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:14.529Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "federation-indicator",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.792Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:14.646Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "instance-picker",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.799Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:14.858Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "poll-composer",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.811Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:14.966Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "media-composer",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.813Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:15.087Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "bookmark-manager",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.828Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:15.220Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "lists",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.836Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:16.438Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "filters",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.841Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:17.342Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "hashtags",
-      "version": "greater-v0.1.12",
-      "installedAt": "2026-02-17T19:10:30.844Z",
+      "version": "fba11d52",
+      "installedAt": "2026-02-19T16:42:18.120Z",
       "modified": false,
       "checksums": []
     }

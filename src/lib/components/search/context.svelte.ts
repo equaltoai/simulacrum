@@ -27,7 +27,6 @@ export interface SearchActor {
 	bio?: string;
 	followersCount?: number;
 	isFollowing?: boolean;
-	isSelf?: boolean;
 }
 
 /**
