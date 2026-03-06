@@ -107,4 +107,3 @@ export async function copyCodeBlock(codeElement: HTMLElement): Promise<CopyResul
 	// Trim leading/trailing whitespace often found in code blocks
 	return copyToClipboard(text.trim());
 }
-

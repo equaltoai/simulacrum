@@ -12,6 +12,12 @@ import {
 
 export type ConversationFolder = 'INBOX' | 'REQUESTS';
 export type DmRequestState = 'PENDING' | 'ACCEPTED' | 'DECLINED';
+export type RealtimeConnectionStatus =
+	| 'idle'
+	| 'connecting'
+	| 'connected'
+	| 'disconnected'
+	| 'error';
 
 export interface MessageParticipant {
 	id: string;
@@ -48,6 +54,16 @@ export interface Conversation {
 	updatedAt: string;
 }
 
+export interface ConversationRealtimeUpdate {
+	conversation: Conversation;
+	message?: DirectMessage;
+}
+
+export interface MessagesRealtimeCallbacks {
+	onConversationUpdate: (update: ConversationRealtimeUpdate) => void;
+	onConnectionStatusChange?: (status: RealtimeConnectionStatus, reason?: string) => void;
+}
+
 export interface MessagesHandlers {
 	onFetchConversations?: (folder?: ConversationFolder) => Promise<Conversation[]>;
 	onFetchMessages?: (
@@ -66,6 +82,7 @@ export interface MessagesHandlers {
 	onAcceptMessageRequest?: (conversationId: string) => Promise<Conversation>;
 	onDeclineMessageRequest?: (conversationId: string) => Promise<boolean>;
 	onSearchParticipants?: (query: string) => Promise<MessageParticipant[]>;
+	onSubscribeToConversationUpdates?: (callbacks: MessagesRealtimeCallbacks) => () => void;
 }
 
 export interface LesserMessagesHandlersConfig {
@@ -98,22 +115,15 @@ function mapActorToParticipant(actor: ActorSummaryFragment): MessageParticipant 
 	};
 }
 
-function stripHtml(input: string): string {
-	if (typeof document === 'undefined') {
-		return input.replace(/<[^>]*>/g, '').trim();
-	}
-
-	const el = document.createElement('div');
-	el.innerHTML = input;
-	return (el.textContent ?? '').trim();
-}
-
-function mapObjectToDirectMessage(object: ObjectFieldsFragment, conversationId: string): DirectMessage {
+function mapObjectToDirectMessage(
+	object: ObjectFieldsFragment,
+	conversationId: string
+): DirectMessage {
 	return {
 		id: object.id,
 		conversationId,
 		sender: mapActorToParticipant(object.actor),
-		content: stripHtml(object.content),
+		content: object.content,
 		createdAt: object.createdAt,
 		read: true,
 		mediaAttachments: object.attachments.map((attachment) => ({
@@ -145,7 +155,9 @@ function mapConversationToUiConversation(
 	};
 }
 
-export function createLesserMessagesHandlers(config: LesserMessagesHandlersConfig): MessagesHandlers {
+export function createLesserMessagesHandlers(
+	config: LesserMessagesHandlersConfig
+): MessagesHandlers {
 	const { adapter, pageSize = 20, messagePageSize = 50, searchLimit = 10 } = config;
 
 	return {
@@ -155,7 +167,9 @@ export function createLesserMessagesHandlers(config: LesserMessagesHandlersConfi
 				first: pageSize,
 			})) as unknown as LesserConversationLike[];
 
-			return conversations.map((conversation) => mapConversationToUiConversation(conversation, folder));
+			return conversations.map((conversation) =>
+				mapConversationToUiConversation(conversation, folder)
+			);
 		},
 		onFetchMessages: async (conversationId, options) => {
 			const data = await adapter.query(ConversationMessagesDocument, {
@@ -227,6 +241,54 @@ export function createLesserMessagesHandlers(config: LesserMessagesHandlersConfi
 			});
 
 			return results.accounts.map(mapActorToParticipant);
+		},
+		onSubscribeToConversationUpdates: (callbacks) => {
+			callbacks.onConnectionStatusChange?.('connecting');
+
+			const sub = adapter.subscribeToConversationUpdates().subscribe({
+				next: ({ data }) => {
+					const conversationId = data?.conversationUpdates?.id;
+					if (!conversationId) {
+						return;
+					}
+
+					void adapter
+						.getConversation(conversationId)
+						.then((conversation) => {
+							if (!conversation) {
+								return;
+							}
+
+							const requestState = conversation.viewerMetadata.requestState ?? 'ACCEPTED';
+							const folder: ConversationFolder = requestState === 'PENDING' ? 'REQUESTS' : 'INBOX';
+							const uiConversation = mapConversationToUiConversation(
+								conversation as unknown as LesserConversationLike,
+								folder
+							);
+
+							callbacks.onConversationUpdate({
+								conversation: uiConversation,
+								message: uiConversation.lastMessage,
+							});
+						})
+						.catch(() => {
+							// Ignore per-event fetch errors; the caller can fall back to polling.
+						});
+				},
+				error: (error) => {
+					const message = error instanceof Error ? error.message : 'Realtime unavailable';
+					callbacks.onConnectionStatusChange?.('error', message);
+				},
+				complete: () => {
+					callbacks.onConnectionStatusChange?.('disconnected');
+				},
+			});
+
+			callbacks.onConnectionStatusChange?.('connected');
+
+			return () => {
+				sub.unsubscribe();
+			};
 		},
 	};
 }

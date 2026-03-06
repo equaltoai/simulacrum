@@ -70,4 +70,3 @@ export function slideIn(node: Element, params: SlideInParams = {}): TransitionCo
 }
 
 export default slideIn;
-

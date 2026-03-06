@@ -67,4 +67,3 @@ export function scaleIn(node: Element, params: ScaleInParams = {}): TransitionCo
 }
 
 export default scaleIn;
-

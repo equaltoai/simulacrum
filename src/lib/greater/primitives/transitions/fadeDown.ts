@@ -59,4 +59,3 @@ export function fadeDown(node: Element, params: FadeDownParams = {}): Transition
 }
 
 export default fadeDown;
-

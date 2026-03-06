@@ -6,7 +6,7 @@
  * and object accessors rather than the legacy Mastodon-style wrappers.
  */
 
-import type { Observable, FetchResult, OperationVariables } from '@apollo/client';
+import { Observable, type FetchResult, type OperationVariables } from '@apollo/client';
 import type { ApolloClient as ApolloClientNamespace } from '@apollo/client';
 
 type QueryOptionsFor<
@@ -432,9 +432,9 @@ export class LesserGraphQLAdapter {
 		} catch (error) {
 			if (error instanceof Error) {
 				if (error.message.includes('401') || error.message.includes('403')) {
-					throw new Error('Authentication failed: Invalid or expired token');
+					throw new Error('Authentication failed: Invalid or expired token', { cause: error });
 				}
-				throw new Error(`Failed to verify credentials: ${error.message}`);
+				throw new Error(`Failed to verify credentials: ${error.message}`, { cause: error });
 			}
 			throw error;
 		}
@@ -482,21 +482,25 @@ export class LesserGraphQLAdapter {
 
 		const result = await this.client.client.query<TData, TVariables>(options);
 
-		const transportError = (result as { error?: unknown }).error;
-		if (transportError) {
-			throw transportError instanceof Error ? transportError : new Error(String(transportError));
-		}
-
-		const graphQLErrors = (result as { errors?: Array<{ message?: string }> }).errors;
-		if (Array.isArray(graphQLErrors) && graphQLErrors.length > 0) {
-			const message = graphQLErrors
-				.map((err) => (typeof err?.message === 'string' ? err.message : null))
-				.filter((value): value is string => Boolean(value))
-				.join('\n');
-			throw new Error(message || 'GraphQL request failed.');
-		}
-
 		const { data } = result;
+
+		const errors = (result as unknown as { errors?: Array<{ message?: string }> }).errors;
+		if (Array.isArray(errors) && errors.length > 0) {
+			throw new Error(
+				errors
+					.map((error) => error.message)
+					.filter(Boolean)
+					.join('; ')
+			);
+		}
+
+		const transportError = (result as unknown as { error?: unknown }).error;
+		if (transportError) {
+			throw new Error(
+				transportError instanceof Error ? transportError.message : String(transportError)
+			);
+		}
+
 		if (data == null) {
 			return {} as TData;
 		}
@@ -789,7 +793,8 @@ export class LesserGraphQLAdapter {
 
 	async getConversations(variables: ConversationsQueryVariables) {
 		const data = await this.query(ConversationsDocument, variables);
-		return data.conversations;
+		const conversations = (data as Partial<typeof data>).conversations;
+		return Array.isArray(conversations) ? conversations : [];
 	}
 
 	async getConversation(id: string) {
