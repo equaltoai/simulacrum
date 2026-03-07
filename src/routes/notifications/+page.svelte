@@ -5,7 +5,7 @@
 	import { toNotification } from '$lib/api/adapters';
 	import { getStreamingAdapter } from '$lib/realtime/adapter';
 	import ContentRenderer from '$lib/components/ContentRenderer.svelte';
-	import type { Notification, Status } from '$lib/types';
+	import type { CommunicationInboundNotification, Notification, Status } from '$lib/types';
 
 	let items = $state<Notification[]>([]);
 	let unreadCount = $state(0);
@@ -27,8 +27,30 @@
 		return `${base}/status/${encodeURIComponent(id)}`;
 	}
 
+	function reachabilityHref(query: string) {
+		return `${base}/reachability?q=${encodeURIComponent(query)}`;
+	}
+
 	function getNotificationStatus(notification: Notification): Status | null {
 		return 'status' in notification ? (notification.status as Status) : null;
+	}
+
+	function getCommunication(notification: Notification): CommunicationInboundNotification['communication'] | null {
+		if (notification.type !== 'communication_inbound') return null;
+		return (notification as CommunicationInboundNotification).communication ?? null;
+	}
+
+	function formatTimestamp(value: string | Date): string {
+		const d = typeof value === 'string' ? new Date(value) : value;
+		if (Number.isNaN(d.getTime())) return String(value);
+		return d.toLocaleString();
+	}
+
+	function formatBytes(bytes: number): string {
+		if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+		return `${Math.round(bytes / (1024 * 1024))} MB`;
 	}
 
 	async function handleMarkAllRead() {
@@ -159,19 +181,39 @@
 			<div class="notifications-list" role="feed" aria-label="Notifications">
 				{#each items as notification (notification.id)}
 					{@const maybeStatus = getNotificationStatus(notification)}
+					{@const communication = getCommunication(notification)}
 					<article class="notification-card" aria-label={`Notification: ${notification.type}`}>
 						<header class="notification-card__meta">
 							<div class="notification-card__byline">
 								<span class="notification-card__type">{notification.type}</span>
-								<a class="notification-card__author" href={profileHref(notification.account.acct)}>
-									{notification.account.displayName || notification.account.username}
-								</a>
-								<a class="notification-card__handle" href={profileHref(notification.account.acct)}>
-									@{notification.account.acct}
-								</a>
+								{#if communication}
+									<span class="notification-card__author">
+										{communication.from.displayName || communication.from.address}
+									</span>
+									{#if communication.from.soulAgentId}
+										<a
+											class="notification-card__handle"
+											href={reachabilityHref(communication.from.soulAgentId)}
+										>
+											soul: {communication.from.soulAgentId}
+										</a>
+									{/if}
+								{:else}
+									<a class="notification-card__author" href={profileHref(notification.account.acct)}>
+										{notification.account.displayName || notification.account.username}
+									</a>
+									<a class="notification-card__handle" href={profileHref(notification.account.acct)}>
+										@{notification.account.acct}
+									</a>
+								{/if}
 							</div>
 
 							<div class="notification-card__actions">
+								{#if communication?.from.soulAgentId}
+									<a class="notification-card__link" href={reachabilityHref(communication.from.soulAgentId)}
+										>Reachability</a
+									>
+								{/if}
 								{#if maybeStatus}
 									<a class="notification-card__link" href={statusHref(maybeStatus.id)}>Open</a>
 								{/if}
@@ -187,7 +229,56 @@
 							</div>
 						</header>
 
-						{#if maybeStatus}
+						{#if communication}
+							<div class="notification-card__content">
+								<p class="notification-card__comm-meta">
+									<span class="notification-card__comm-channel">
+										{communication.channel.toUpperCase()}
+									</span>
+									<span aria-hidden="true">·</span>
+									<span class="notification-card__comm-time">
+										{formatTimestamp(communication.receivedAt)}
+									</span>
+								</p>
+
+								{#if communication.subject}
+									<p class="notification-card__comm-subject">{communication.subject}</p>
+								{/if}
+
+								{#if communication.body}
+									<pre class="notification-card__comm-body">{communication.body}</pre>
+								{/if}
+
+								{#if communication.attachments.length}
+									<ul class="notification-card__comm-attachments" aria-label="Attachments">
+										{#each communication.attachments as attachment (attachment.id)}
+											<li class="notification-card__comm-attachment">
+												<span class="notification-card__comm-attachment-name">
+													{attachment.filename}
+												</span>
+												<span class="notification-card__comm-attachment-meta">
+													{formatBytes(attachment.sizeBytes)} · {attachment.contentType}
+												</span>
+											</li>
+										{/each}
+									</ul>
+								{/if}
+
+								{#if communication.messageId || communication.threadId || communication.inReplyTo}
+									<p class="notification-card__comm-thread">
+										{#if communication.messageId}
+											<span>message {communication.messageId}</span>
+										{/if}
+										{#if communication.threadId}
+											<span>thread {communication.threadId}</span>
+										{/if}
+										{#if communication.inReplyTo}
+											<span>in reply to {communication.inReplyTo}</span>
+										{/if}
+									</p>
+								{/if}
+							</div>
+						{:else if maybeStatus}
 							<ContentRenderer
 								class="notification-card__content"
 								content={maybeStatus.content}

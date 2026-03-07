@@ -1670,6 +1670,7 @@ export async function fetchNotifications({
 				createdAt: edge.node.account.updatedAt,
 			},
 			status: edge.node.status ?? null,
+			communication: edge.node.communication ?? null,
 		})
 	);
 

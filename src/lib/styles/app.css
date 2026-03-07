@@ -866,6 +866,64 @@ a {
 	text-decoration: underline;
 }
 
+.notification-card__comm-meta {
+	margin: 0;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--gr-spacing-scale-2);
+	color: var(--gr-semantic-foreground-tertiary);
+	font-size: var(--gr-typography-fontSize-sm);
+}
+
+.notification-card__comm-subject {
+	margin: 0;
+	font-weight: var(--gr-typography-fontWeight-semibold);
+}
+
+.notification-card__comm-body {
+	margin: 0;
+	padding: var(--gr-spacing-scale-3);
+	border-radius: var(--gr-radii-lg);
+	background: var(--gr-semantic-background-subtle);
+	border: 1px solid var(--gr-semantic-border-default);
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 18rem;
+	overflow: auto;
+	font-family: inherit;
+	font-size: var(--gr-typography-fontSize-sm);
+	line-height: var(--gr-typography-lineHeight-normal);
+}
+
+.notification-card__comm-attachments {
+	margin: 0;
+	padding-left: 1.25rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	color: var(--gr-semantic-foreground-tertiary);
+	font-size: var(--gr-typography-fontSize-sm);
+}
+
+.notification-card__comm-attachment-name {
+	color: var(--gr-semantic-foreground-secondary);
+}
+
+.notification-card__comm-attachment-meta {
+	margin-left: 0.35rem;
+}
+
+.notification-card__comm-thread {
+	margin: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--gr-spacing-scale-2);
+	color: var(--gr-semantic-foreground-tertiary);
+	font-size: var(--gr-typography-fontSize-sm);
+	word-break: break-word;
+}
+
 .settings {
 	display: flex;
 	flex-direction: column;
