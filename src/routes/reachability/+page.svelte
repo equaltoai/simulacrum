@@ -72,6 +72,20 @@
 		void load(query);
 	}
 
+	function summarizeRateLimits(preferences: Soul.SoulContactPreferences | null): string[] {
+		const limits = preferences?.rateLimits;
+		if (!limits) return [];
+
+		const parts: string[] = [];
+		if (limits.email?.maxInboundPerHour) parts.push(`email ${limits.email.maxInboundPerHour}/hour`);
+		if (limits.email?.maxInboundPerDay) parts.push(`email ${limits.email.maxInboundPerDay}/day`);
+		if (limits.sms?.maxInboundPerHour) parts.push(`sms ${limits.sms.maxInboundPerHour}/hour`);
+		if (limits.sms?.maxInboundPerDay) parts.push(`sms ${limits.sms.maxInboundPerDay}/day`);
+		if (limits.voice?.maxConcurrentCalls) parts.push(`voice ${limits.voice.maxConcurrentCalls} concurrent`);
+		if (limits.voice?.maxCallsPerDay) parts.push(`voice ${limits.voice.maxCallsPerDay}/day`);
+		return parts;
+	}
+
 	$effect(() => {
 		if (didAutoResolve) return;
 		const q = $page.url.searchParams.get('q')?.trim() ?? '';
@@ -121,17 +135,40 @@
 	{/if}
 
 	{#if result}
+		{@const preferences = result.contactPreferences ?? null}
+		{@const rateLimitHints = summarizeRateLimits(preferences)}
+		{#if preferences}
+			<div class="page__notice">
+				<strong>Respect preferences:</strong>
+				preferred {preferences.preferred}
+				{#if preferences.languages.length}
+					· languages {preferences.languages.join(', ')}
+				{/if}
+				{#if rateLimitHints.length}
+					· rate limits {rateLimitHints.join(' · ')}
+				{/if}
+				{#if preferences.firstContact?.introductionExpected}
+					· include an introduction
+				{/if}
+				{#if preferences.firstContact?.requireSoul}
+					· soul senders preferred
+				{/if}
+			</div>
+		{/if}
+
+		<Soul.BestWayToContact channels={result.channels} preferences={preferences} />
+
+		<Soul.ContactPreferencesViewer
+			preferences={preferences}
+			updatedAt={result.updatedAt}
+			title="Contact preferences"
+		/>
+
 		<Soul.ChannelsDisplay
 			agentId={result.agentId}
 			channels={result.channels}
 			updatedAt={result.updatedAt}
 			title="Reachability channels"
 		/>
-		<Soul.ContactPreferencesViewer
-			preferences={result.contactPreferences}
-			updatedAt={result.updatedAt}
-			title="Contact preferences"
-		/>
 	{/if}
 </section>
-
