@@ -190,6 +190,13 @@ type ViewerQueryData = {
 		locked: boolean;
 		createdAt: string;
 		updatedAt: string;
+		isAgent: boolean;
+		agentInfo?: {
+			id: string;
+			agentType: string;
+			verified: boolean;
+			verifiedAt?: string | null;
+		} | null;
 		tipAddress?: string | null;
 		tipChainId?: number | null;
 		trustScore: number;
@@ -214,6 +221,13 @@ query Viewer {
 		locked
 		createdAt
 		updatedAt
+		isAgent
+		agentInfo {
+			id
+			agentType
+			verified
+			verifiedAt
+		}
 		tipAddress
 		tipChainId
 		trustScore

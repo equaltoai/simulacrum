@@ -20,6 +20,7 @@
 		const navItems = [
 			{ label: 'Home', href: `${base}/` },
 			{ label: 'Search', href: `${base}/search` },
+			{ label: 'Reachability', href: `${base}/reachability` },
 			{ label: 'Explore', href: `${base}/explore` },
 		{ label: 'Agents', href: `${base}/agents` },
 		{ label: 'Lists', href: `${base}/lists` },

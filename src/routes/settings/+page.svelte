@@ -451,6 +451,24 @@
 		<div class="settings">
 			<section class="settings__section">
 				<header class="settings__header">
+					<h2 class="settings__title">Reachability</h2>
+					<p class="settings__subtitle">View channels and edit soul contact preferences.</p>
+				</header>
+
+				<div class="settings-form">
+					<div class="settings-form__actions">
+						<a class="gr-button gr-button--solid" href={`${base}/settings/reachability`}>
+							Open reachability settings
+						</a>
+						<a class="gr-button gr-button--outline" href={`${base}/reachability`}>
+							Lookup another agent
+						</a>
+					</div>
+				</div>
+			</section>
+
+			<section class="settings__section">
+				<header class="settings__header">
 					<h2 class="settings__title">Account</h2>
 					<p class="settings__subtitle">Update display name, bio, and profile images.</p>
 				</header>
