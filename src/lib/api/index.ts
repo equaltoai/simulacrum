@@ -10,7 +10,9 @@ import {
 	AgentsDocument,
 	DeleteAgentDocument,
 	DelegateToAgentDocument,
+	IncorporateSoulDocument,
 	MyAgentsDocument,
+	MySoulsDocument,
 	RevokeAgentTokenDocument,
 	UpdateAdminAgentPolicyDocument,
 	UpdateAgentDocument,
@@ -96,6 +98,8 @@ import {
 	type FollowedHashtagsQueryVariables,
 	type FollowHashtagMutation,
 	type FollowHashtagMutationVariables,
+	type IncorporateSoulMutation,
+	type IncorporateSoulMutationVariables,
 	type LikeObjectMutation,
 	type LikeObjectMutationVariables,
 	type ListQuery,
@@ -104,6 +108,8 @@ import {
 	type ListsQueryVariables,
 	type MyAgentsQuery,
 	type MyAgentsQueryVariables,
+	type MySoulsQuery,
+	type MySoulsQueryVariables,
 	type MuteActorMutation,
 	type MuteActorMutationVariables,
 	type MuteHashtagMutation,
@@ -3439,6 +3445,7 @@ export type AgentConnection = AgentsQuery['agents'];
 export type AgentActivityConnection = AgentActivityQuery['agentActivity'];
 export type AgentDelegation = DelegateToAgentMutation['delegateToAgent'];
 export type AdminAgentPolicy = AdminAgentPolicyQuery['adminAgentPolicy'];
+export type SoulInventoryItem = MySoulsQuery['mySouls'][number];
 
 export async function fetchAgentByUsername({
 	username,
@@ -3493,6 +3500,19 @@ export async function fetchMyAgents({ signal }: { signal?: AbortSignal } = {}): 
 	return data.myAgents;
 }
 
+export async function fetchMySouls({ signal }: { signal?: AbortSignal } = {}): Promise<MySoulsQuery['mySouls']> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<MySoulsQuery, MySoulsQueryVariables>({
+		document: MySoulsDocument,
+		variables: {},
+		token,
+		signal,
+	});
+
+	return data.mySouls;
+}
+
 export async function fetchAgentActivity({
 	username,
 	first = 20,
@@ -3528,6 +3548,25 @@ export async function delegateToAgent({
 	});
 
 	return data.delegateToAgent;
+}
+
+export async function incorporateSoul({
+	agentId,
+	signal,
+}: {
+	agentId: string;
+	signal?: AbortSignal;
+}): Promise<IncorporateSoulMutation['incorporateSoul']> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<IncorporateSoulMutation, IncorporateSoulMutationVariables>({
+		document: IncorporateSoulDocument,
+		variables: { agentId },
+		token,
+		signal,
+	});
+
+	return data.incorporateSoul;
 }
 
 export async function revokeAgentToken({
@@ -3908,8 +3947,10 @@ export const api = {
 	fetchAgentByUsername,
 	fetchAgents,
 	fetchMyAgents,
+	fetchMySouls,
 	fetchAgentActivity,
 	delegateToAgent,
+	incorporateSoul,
 	revokeAgentToken,
 	updateAgent,
 	deleteAgent,

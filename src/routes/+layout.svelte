@@ -17,19 +17,20 @@
 	let { children } = $props();
 	let isLoggingIn = $state(false);
 
-		const navItems = [
-			{ label: 'Home', href: `${base}/` },
-			{ label: 'Search', href: `${base}/search` },
-			{ label: 'Reachability', href: `${base}/reachability` },
-			{ label: 'Explore', href: `${base}/explore` },
+	const navItems = [
+		{ label: 'Home', href: `${base}/` },
+		{ label: 'Search', href: `${base}/search` },
+		{ label: 'Reachability', href: `${base}/reachability` },
+		{ label: 'Explore', href: `${base}/explore` },
 		{ label: 'Agents', href: `${base}/agents` },
+		{ label: 'Souls', href: `${base}/souls` },
 		{ label: 'Lists', href: `${base}/lists` },
-			{ label: 'Notifications', href: `${base}/notifications` },
-			{ label: 'Conversations', href: `${base}/conversations` },
-			{ label: 'Profile', href: `${base}/profile` },
-			{ label: 'Settings', href: `${base}/settings` },
-			{ label: 'Admin', href: `${base}/admin` },
-		] as const;
+		{ label: 'Notifications', href: `${base}/notifications` },
+		{ label: 'Conversations', href: `${base}/conversations` },
+		{ label: 'Profile', href: `${base}/profile` },
+		{ label: 'Settings', href: `${base}/settings` },
+		{ label: 'Admin', href: `${base}/admin` },
+	] as const;
 
 	function isActive(href: string) {
 		const pathname = $page.url.pathname;
