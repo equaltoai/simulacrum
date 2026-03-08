@@ -195,8 +195,7 @@ export type Notification =
 	| CommunityNoteNotification
 	| TrustUpdateNotification
 	| CostAlertNotification
-	| ModerationActionNotification
-	| CommunicationInboundNotification;
+	| ModerationActionNotification;
 
 export interface QuoteNotification extends BaseNotification {
 	type: 'quote';
@@ -236,11 +235,6 @@ export interface ModerationActionNotification extends BaseNotification {
 	status?: Status;
 	action: string;
 	reason: string;
-}
-
-export interface CommunicationInboundNotification extends BaseNotification {
-	type: 'communication_inbound';
-	communication: CommunicationNotification;
 }
 
 export interface NotificationGroup {
