@@ -1,12 +1,13 @@
 <script lang="ts">
-		import { base } from '$app/paths';
-		import { page } from '$app/stores';
-		import { api, type Agent, type AgentActivityConnection, type AgentDelegation } from '$lib/api';
-		import { authSession } from '$lib/auth/session';
-		import { hasAdminScope } from '$lib/auth/scopes';
-		import type { Account } from '$lib/types';
-		import { getStreamingAdapter } from '$lib/realtime/adapter';
-		import type { AgentType } from '$lib/greater/adapters/graphql';
+	import { base } from '$app/paths';
+	import { page } from '$app/stores';
+	import { api, type Agent, type AgentActivityConnection, type AgentDelegation } from '$lib/api';
+	import { authSession } from '$lib/auth/session';
+	import { hasAdminScope } from '$lib/auth/scopes';
+	import AgentMcpPanel from '$lib/components/agents/AgentMcpPanel.svelte';
+	import type { Account } from '$lib/types';
+	import { getStreamingAdapter } from '$lib/realtime/adapter';
+	import type { AgentType } from '$lib/greater/adapters/graphql';
 
 	const AGENT_TYPES: Array<{ value: AgentType; label: string }> = [
 		{ value: 'ASSISTANT', label: 'Assistant' },
@@ -663,6 +664,8 @@
 				{/if}
 			{/if}
 		</section>
+
+		<AgentMcpPanel agentUsername={agent.username} {canManage} {delegation} />
 
 		<section class="page__notice">
 			<h2>Manage agent</h2>
