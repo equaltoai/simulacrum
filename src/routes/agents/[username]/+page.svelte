@@ -26,6 +26,21 @@
 		return `${base}/profile/${encodeURIComponent(acct)}`;
 	}
 
+	function normalizeUsername(value?: string | null) {
+		const trimmed = value?.trim();
+		if (!trimmed) return '';
+		return trimmed.replace(/^@/, '').toLowerCase();
+	}
+
+	function isAgentOwner(agent: Agent | null, viewer: Account | null) {
+		const viewerUsername = normalizeUsername(viewer?.username);
+		if (!viewerUsername || !agent) return false;
+
+		return [agent.agentOwner, agent.ownerActor?.username].some(
+			(candidate) => normalizeUsername(candidate) === viewerUsername
+		);
+	}
+
 	let viewer = $state<Account | null>(null);
 	let agent = $state<Agent | null>(null);
 	let isLoading = $state(false);
@@ -36,9 +51,9 @@
 	let activityLoading = $state(false);
 	let activityError = $state<string | null>(null);
 
-		let canAdmin = $derived(hasAdminScope($authSession?.scope));
+	let canAdmin = $derived(hasAdminScope($authSession?.scope));
 	let canManage = $derived(
-		(agent?.agentOwner && viewer?.username === agent.agentOwner) || canAdmin
+		isAgentOwner(agent, viewer) || canAdmin
 	);
 
 	async function refreshAgent({ signal }: { signal?: AbortSignal } = {}) {

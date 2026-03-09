@@ -3552,16 +3552,18 @@ export async function delegateToAgent({
 
 export async function incorporateSoul({
 	agentId,
+	targetAgentUsername,
 	signal,
 }: {
 	agentId: string;
+	targetAgentUsername: string;
 	signal?: AbortSignal;
 }): Promise<IncorporateSoulMutation['incorporateSoul']> {
 	const token = requireAccessToken();
 
 	const data = await graphqlRequest<IncorporateSoulMutation, IncorporateSoulMutationVariables>({
 		document: IncorporateSoulDocument,
-		variables: { agentId },
+		variables: { agentId, targetAgentUsername },
 		token,
 		signal,
 	});

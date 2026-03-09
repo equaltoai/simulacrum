@@ -2225,6 +2225,19 @@ a {
 	word-break: break-word;
 }
 
+.souls-card__bind {
+	display: flex;
+	flex-direction: column;
+	gap: var(--gr-spacing-scale-2);
+	max-width: 32rem;
+}
+
+.souls-card__hint {
+	margin: 0;
+	color: var(--gr-semantic-foreground-secondary);
+	font-size: var(--gr-typography-fontSize-sm);
+}
+
 .souls-card__actions {
 	display: flex;
 	flex-wrap: wrap;
