@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { base } from '$app/paths';
 	import { page } from '$app/stores';
 	import { api, type Agent, type AgentActivityConnection, type AgentDelegation } from '$lib/api';
@@ -31,6 +32,37 @@
 		const trimmed = value?.trim();
 		if (!trimmed) return '';
 		return trimmed.replace(/^@/, '').toLowerCase();
+	}
+
+	const DELEGATION_STORAGE_KEY_PREFIX = 'simulacrum:agent_delegation:';
+
+	function delegationStorageKey(username: string) {
+		return `${DELEGATION_STORAGE_KEY_PREFIX}${normalizeUsername(username)}`;
+	}
+
+	function readDelegationFromStorage(username: string): AgentDelegation | null {
+		if (!browser) return null;
+
+		const key = delegationStorageKey(username);
+		const raw = sessionStorage.getItem(key);
+		if (!raw) return null;
+
+		try {
+			return JSON.parse(raw) as AgentDelegation;
+		} catch {
+			sessionStorage.removeItem(key);
+			return null;
+		}
+	}
+
+	function writeDelegationToStorage(username: string, value: AgentDelegation) {
+		if (!browser) return;
+		sessionStorage.setItem(delegationStorageKey(username), JSON.stringify(value));
+	}
+
+	function clearDelegationFromStorage(username: string) {
+		if (!browser) return;
+		sessionStorage.removeItem(delegationStorageKey(username));
 	}
 
 	function isAgentOwner(agent: Agent | null, viewer: Account | null) {
@@ -140,9 +172,6 @@
 		activityError = null;
 		activityLoading = false;
 
-		delegation = null;
-		delegationError = null;
-
 		updateError = null;
 		updateMessage = null;
 
@@ -153,6 +182,12 @@
 		void refreshActivity({ signal: controller.signal });
 
 		return () => controller.abort();
+	});
+
+	$effect(() => {
+		const username = $page.params.username;
+		delegationError = null;
+		delegation = username ? readDelegationFromStorage(username) : null;
 	});
 
 	$effect(() => {
@@ -231,10 +266,9 @@
 
 		delegationLoading = true;
 		delegationError = null;
-		delegation = null;
 
 		try {
-			delegation = await api.delegateToAgent({
+			const nextDelegation = await api.delegateToAgent({
 				input: {
 					agentUsername: agent.username,
 					displayName: agent.displayName,
@@ -246,6 +280,8 @@
 					version: agent.agentVersion,
 				},
 			});
+			delegation = nextDelegation;
+			writeDelegationToStorage(agent.username, nextDelegation);
 		} catch (err) {
 			delegationError = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -265,6 +301,7 @@
 			await api.revokeAgentToken({ username: agent.username });
 			delegation = null;
 			delegationError = null;
+			clearDelegationFromStorage(agent.username);
 		} catch (err) {
 			delegationError = err instanceof Error ? err.message : String(err);
 		}
@@ -591,13 +628,7 @@
 			{#if !canManage}
 				<p class="page__meta">You can view this agent, but only the owner (or admin) can delegate tokens.</p>
 			{:else}
-				<form
-					class="settings-form"
-					onsubmit={(event) => {
-						event.preventDefault();
-						void handleDelegateToken();
-					}}
-				>
+				<div class="settings-form">
 					<div class="settings-field">
 						<label class="settings-field__label" for="agent-token-exp">Token expires in (seconds)</label>
 						<input
@@ -634,14 +665,19 @@
 					{/if}
 
 					<div class="settings-form__actions">
-						<button type="submit" class="gr-button gr-button--solid" disabled={delegationLoading}>
+						<button
+							type="button"
+							class="gr-button gr-button--solid"
+							disabled={delegationLoading}
+							onclick={() => void handleDelegateToken()}
+						>
 							{delegationLoading ? 'Delegating…' : 'Issue new token'}
 						</button>
 						<button type="button" class="gr-button gr-button--outline" onclick={handleRevokeToken}>
 							Revoke token
 						</button>
 					</div>
-				</form>
+				</div>
 
 				<div class="settings-token" aria-live="polite">
 					<div class="settings-token__row">

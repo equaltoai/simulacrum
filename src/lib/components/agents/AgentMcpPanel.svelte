@@ -33,8 +33,6 @@
 
 	let { agentUsername, canManage, delegation }: Props = $props();
 
-	let transport = $state<McpTransportConfig | null>(null);
-
 	let discoveryStatus = $state<PanelStatus>('idle');
 	let discoveryDoc = $state<McpWellKnownDocument | null>(null);
 	let discoveryError = $state<string | null>(null);
@@ -84,14 +82,17 @@
 		await navigator.clipboard.writeText(value);
 	}
 
-	async function refreshDiscovery({ signal }: { signal?: AbortSignal } = {}) {
-		if (!browser || !transport) return;
+	async function refreshDiscovery(
+		discoveryUrl: string,
+		{ signal }: { signal?: AbortSignal } = {}
+	) {
+		if (!browser || !discoveryUrl) return;
 
 		discoveryStatus = 'loading';
 		discoveryError = null;
 
 		try {
-			discoveryDoc = await fetchMcpWellKnown(transport.discoveryUrl, signal);
+			discoveryDoc = await fetchMcpWellKnown(discoveryUrl, signal);
 			discoveryStatus = 'ready';
 		} catch (error) {
 			if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -103,16 +104,19 @@
 		}
 	}
 
-	async function refreshInspection({ signal }: { signal?: AbortSignal } = {}) {
-		const token = delegation?.accessToken?.trim();
-		if (!browser || !transport || !token) return;
+	async function refreshInspection(
+		endpoint: string,
+		token: string,
+		{ signal }: { signal?: AbortSignal } = {}
+	) {
+		if (!browser || !endpoint || !token) return;
 
 		inspectionStatus = 'loading';
 		inspectionError = null;
 
 		try {
 			inspection = await inspectMcpServer({
-				endpoint: discoveryDoc?.endpoint?.trim() || transport.endpoint,
+				endpoint,
 				token,
 				signal,
 			});
@@ -127,13 +131,16 @@
 		}
 	}
 
-	$effect(() => {
-		if (!browser) return;
+	const transport = $derived.by<McpTransportConfig | null>(() =>
+		browser ? resolveMcpTransport(window.location.origin) : null
+	);
 
-		transport = resolveMcpTransport(window.location.origin);
+	$effect(() => {
+		const discoveryUrl = transport?.discoveryUrl ?? '';
+		if (!browser || !discoveryUrl) return;
 
 		const controller = new AbortController();
-		void refreshDiscovery({ signal: controller.signal });
+		void refreshDiscovery(discoveryUrl, { signal: controller.signal });
 
 		return () => controller.abort();
 	});
@@ -152,7 +159,7 @@
 		}
 
 		const controller = new AbortController();
-		void refreshInspection({ signal: controller.signal });
+		void refreshInspection(endpoint, token, { signal: controller.signal });
 
 		return () => controller.abort();
 	});
@@ -277,15 +284,23 @@
 				Connect this agent body to Claude Code, Cursor, or any Streamable HTTP MCP client.
 			</p>
 		</div>
-		<div class="mcp-panel__actions">
-			<button type="button" class="gr-button gr-button--outline" onclick={() => void refreshDiscovery()}>
+			<div class="mcp-panel__actions">
+			<button
+				type="button"
+				class="gr-button gr-button--outline"
+				onclick={() => transport && void refreshDiscovery(transport.discoveryUrl)}
+			>
 				Refresh discovery
 			</button>
 			<button
 				type="button"
 				class="gr-button gr-button--outline"
 				disabled={!delegation?.accessToken}
-				onclick={() => void refreshInspection()}
+				onclick={() =>
+					delegation?.accessToken &&
+					mcpEndpoint &&
+					void refreshInspection(mcpEndpoint, delegation.accessToken.trim())
+				}
 			>
 				Refresh live check
 			</button>
