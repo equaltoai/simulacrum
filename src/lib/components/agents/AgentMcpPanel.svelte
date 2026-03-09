@@ -200,7 +200,6 @@
 					description: tool.description?.trim() || known?.description || 'Tool exposed by the MCP server.',
 					scope: known?.scope ?? 'read',
 					category: known?.category ?? 'Core',
-					implemented: known?.implemented ?? true,
 					source,
 				} satisfies DisplayTool;
 			})
@@ -468,9 +467,6 @@
 							<span class={`gr-badge gr-badge--sm gr-badge--outlined gr-badge--${tool.scope === 'write' ? 'warning' : 'info'}`}>
 								{tool.scope}
 							</span>
-							{#if tool.implemented === false}
-								<span class="gr-badge gr-badge--sm gr-badge--outlined gr-badge--error">Not implemented</span>
-							{/if}
 						</div>
 						<span class="mcp-panel__tool-source">{tool.source}</span>
 					</div>

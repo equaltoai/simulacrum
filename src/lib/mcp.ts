@@ -6,7 +6,6 @@ export type KnownMcpTool = {
 	description: string;
 	scope: McpToolScope;
 	category: McpToolCategory;
-	implemented?: boolean;
 };
 
 export type McpResourceHint = {
@@ -191,10 +190,9 @@ export const KNOWN_MCP_TOOLS: KnownMcpTool[] = [
 	},
 	{
 		name: 'sms_send',
-		description: "Send an SMS from the agent's number via lesser-host.",
+		description: "Send an SMS from the agent's number via lesser-host, including threaded replies.",
 		scope: 'write',
 		category: 'Communication',
-		implemented: false,
 	},
 	{
 		name: 'sms_read',
@@ -204,10 +202,9 @@ export const KNOWN_MCP_TOOLS: KnownMcpTool[] = [
 	},
 	{
 		name: 'phone_call',
-		description: 'Initiate a voice call via lesser-host.',
+		description: 'Request an outbound voice call via lesser-host; older hosts may return a host gap error.',
 		scope: 'write',
 		category: 'Communication',
-		implemented: false,
 	},
 	{
 		name: 'voicemail_read',
@@ -229,10 +226,9 @@ export const KNOWN_MCP_TOOLS: KnownMcpTool[] = [
 	},
 	{
 		name: 'identity_verify',
-		description: 'Verify that a communication came from a specific soul identity.',
+		description: 'Verify that a recent communication matches a resolved soul identity.',
 		scope: 'read',
 		category: 'Identity',
-		implemented: false,
 	},
 	{
 		name: 'memory_append',
