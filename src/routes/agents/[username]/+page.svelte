@@ -187,6 +187,19 @@
 	let delegation = $state<AgentDelegation | null>(null);
 	let delegationLoading = $state(false);
 	let delegationError = $state<string | null>(null);
+	const accessTokenValue = $derived.by(
+		() =>
+			delegation?.accessToken?.trim() ||
+			(delegationLoading ? 'Issuing token…' : 'A newly issued access token will appear here.')
+	);
+	const refreshTokenValue = $derived.by(
+		() =>
+			delegation?.refreshToken?.trim() ||
+			(delegationLoading ? 'Issuing token…' : 'A newly issued refresh token will appear here.')
+	);
+	const delegationHasTokens = $derived.by(
+		() => Boolean(delegation?.accessToken?.trim() || delegation?.refreshToken?.trim())
+	);
 
 	function selectedScopes(): string[] {
 		const scopes: string[] = [];
@@ -630,38 +643,48 @@
 					</div>
 				</form>
 
-				{#if delegation}
-					{@const tokenPayload = delegation}
-					<div class="settings-token">
-						<div class="settings-token__row">
-							<strong>Access token</strong>
-							<button
-								type="button"
-								class="gr-button gr-button--outline"
-								onclick={() => copy(tokenPayload.accessToken)}
-							>
-								Copy
-							</button>
-						</div>
-						<pre class="settings-token__value">{tokenPayload.accessToken}</pre>
-
-						<div class="settings-token__row">
-							<strong>Refresh token</strong>
-							<button
-								type="button"
-								class="gr-button gr-button--outline"
-								onclick={() => copy(tokenPayload.refreshToken)}
-							>
-								Copy
-							</button>
-						</div>
-						<pre class="settings-token__value">{tokenPayload.refreshToken}</pre>
-
-						<div class="settings-token__meta">
-							Scope: {tokenPayload.scope} • Expires in: {tokenPayload.expiresIn}s
-						</div>
+				<div class="settings-token" aria-live="polite">
+					<div class="settings-token__row">
+						<strong>Access token</strong>
+						<button
+							type="button"
+							class="gr-button gr-button--outline"
+							disabled={!delegation?.accessToken?.trim()}
+							onclick={() => delegation?.accessToken && copy(delegation.accessToken)}
+						>
+							Copy
+						</button>
 					</div>
-				{/if}
+					<pre class="settings-token__value">{accessTokenValue}</pre>
+
+					<div class="settings-token__row">
+						<strong>Refresh token</strong>
+						<button
+							type="button"
+							class="gr-button gr-button--outline"
+							disabled={!delegation?.refreshToken?.trim()}
+							onclick={() => delegation?.refreshToken && copy(delegation.refreshToken)}
+						>
+							Copy
+						</button>
+					</div>
+					<pre class="settings-token__value">{refreshTokenValue}</pre>
+
+					{#if delegation}
+						<div class="settings-token__meta">
+							Scope: {delegation.scope} • Expires in: {delegation.expiresIn}s
+						</div>
+						{#if !delegationHasTokens}
+							<div class="settings-form__notice settings-form__notice--error" role="alert">
+								Token delegation returned metadata, but no token strings were present in the response.
+							</div>
+						{/if}
+					{:else}
+						<div class="settings-token__meta">
+							Issue a token above and it will appear here once so you can copy it into your MCP client.
+						</div>
+					{/if}
+				</div>
 			{/if}
 		</section>
 
