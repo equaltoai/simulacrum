@@ -1,7 +1,7 @@
 {
   "$schema": "https://greater.components.dev/schema.json",
   "version": "1.0.0",
-  "ref": "greater-v0.4.0",
+  "ref": "eb512c7fc9dc970368a8b0c2848deecaf90f2f46",
   "installMode": "vendored",
   "style": "default",
   "rsc": false,
@@ -59,8 +59,8 @@
     },
     {
       "name": "adapters",
-      "version": "greater-v0.4.0",
-      "installedAt": "2026-03-09T02:26:47.016Z",
+      "version": "eb512c7fc9dc970368a8b0c2848deecaf90f2f46",
+      "installedAt": "2026-03-09T03:36:56.725Z",
       "modified": false,
       "checksums": []
     },

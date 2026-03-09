@@ -572,6 +572,10 @@ a {
 	border: 1px solid var(--gr-semantic-border-default);
 }
 
+.profile-card--no-avatar {
+	grid-template-columns: minmax(0, 1fr);
+}
+
 .profile-card__avatar {
 	width: 64px;
 	height: 64px;

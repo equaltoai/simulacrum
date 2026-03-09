@@ -308,6 +308,15 @@
 			return;
 		}
 
+		const targetAgent = selectableAgentBodies(item).find(
+			(agent) => normalizeLower(agent.username) === normalizeLower(targetAgentUsername)
+		);
+		if (!targetAgent) {
+			actionError = 'Choose a valid agent body before binding this soul.';
+			actionMessage = null;
+			return;
+		}
+
 		actionLoadingId = item.agent.agentId;
 		actionError = null;
 		actionMessage = null;
@@ -315,7 +324,7 @@
 		try {
 			const updated = await api.incorporateSoul({
 				agentId: item.agent.agentId,
-				targetAgentUsername,
+				targetAgentUsername: targetAgent.username,
 			});
 			const nextSouls = sortSouls(
 				souls.map((entry) => (entry.agent.agentId === updated.agent.agentId ? updated : entry))

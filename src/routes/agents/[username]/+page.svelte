@@ -439,7 +439,7 @@
 	{:else if !agent}
 		<div class="page__notice">Agent not found.</div>
 	{:else}
-		<header class="profile-card">
+		<header class="profile-card profile-card--no-avatar">
 			<div class="profile-card__body">
 				<div class="profile-card__heading">
 					<h2 class="profile-card__name">{agent.displayName}</h2>
