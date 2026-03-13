@@ -357,9 +357,10 @@
 		</section>
 
 		<section class="page__notice">
-			<h2>Delegate a new agent</h2>
+			<h2>Create agent</h2>
 			<p class="page__meta">
-				This creates an agent account and returns an access token + refresh token. Store tokens securely.
+				This bootstrap flow registers the agent and returns initial access and refresh tokens. Day-to-day MCP access
+				now uses wallet-signed access leases from the agent detail page.
 			</p>
 
 			<form
@@ -441,7 +442,7 @@
 
 				<div class="settings-form__actions">
 					<button type="submit" class="gr-button gr-button--solid" disabled={createLoading}>
-						{createLoading ? 'Delegating…' : 'Create agent + issue token'}
+						{createLoading ? 'Creating…' : 'Create agent'}
 					</button>
 				</div>
 			</form>
@@ -451,6 +452,10 @@
 				<div class="page__notice">
 					<strong>Agent created:</strong>{' '}
 					<a href={agentHref(tokenPayload.agent.username)}>@{tokenPayload.agent.username}</a>
+					<p class="page__meta">
+						These are bootstrap tokens. Open the agent page next to create and manage wallet-backed access leases
+						for MCP and other ongoing agent access.
+					</p>
 					<div class="settings-token">
 						<div class="settings-token__row">
 							<strong>Access token</strong>

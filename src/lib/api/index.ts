@@ -5,14 +5,23 @@ import {
 	AdminSuspendAgentDocument,
 	AdminUnverifyAgentDocument,
 	AdminVerifyAgentDocument,
+	AgentAccessLeasesDocument,
 	AgentActivityDocument,
 	AgentByUsernameDocument,
 	AgentsDocument,
+	AuthorizeAgentAccessLeaseSessionKeyDocument,
+	CreateAgentAccessLeaseAgentChallengeDocument,
+	CreateAgentAccessLeaseDocument,
+	CreateAgentAccessLeasePrincipalChallengeDocument,
+	CreateAgentAccessLeaseRenewChallengeDocument,
+	CreateAgentAccessLeaseSessionKeyChallengeDocument,
 	DeleteAgentDocument,
 	DelegateToAgentDocument,
+	ExchangeAgentAccessLeaseTokenDocument,
 	IncorporateSoulDocument,
 	MyAgentsDocument,
 	MySoulsDocument,
+	RevokeAgentAccessLeaseDocument,
 	RevokeAgentTokenDocument,
 	UpdateAdminAgentPolicyDocument,
 	UpdateAgentDocument,
@@ -67,18 +76,32 @@ import {
 	type AddCommunityNoteMutationVariables,
 	type AddAccountsToListMutation,
 	type AddAccountsToListMutationVariables,
+	type AgentAccessLeasesQuery,
+	type AgentAccessLeasesQueryVariables,
 	type AgentActivityQuery,
 	type AgentActivityQueryVariables,
 	type AgentByUsernameQuery,
 	type AgentByUsernameQueryVariables,
 	type AgentsQuery,
 	type AgentsQueryVariables,
+	type AuthorizeAgentAccessLeaseSessionKeyMutation,
+	type AuthorizeAgentAccessLeaseSessionKeyMutationVariables,
 	type BlockActorMutation,
 	type BlockActorMutationVariables,
 	type BookmarkObjectMutation,
 	type BookmarkObjectMutationVariables,
 	type ClearNotificationsMutation,
 	type ClearNotificationsMutationVariables,
+	type CreateAgentAccessLeaseAgentChallengeMutation,
+	type CreateAgentAccessLeaseAgentChallengeMutationVariables,
+	type CreateAgentAccessLeaseMutation,
+	type CreateAgentAccessLeaseMutationVariables,
+	type CreateAgentAccessLeasePrincipalChallengeMutation,
+	type CreateAgentAccessLeasePrincipalChallengeMutationVariables,
+	type CreateAgentAccessLeaseRenewChallengeMutation,
+	type CreateAgentAccessLeaseRenewChallengeMutationVariables,
+	type CreateAgentAccessLeaseSessionKeyChallengeMutation,
+	type CreateAgentAccessLeaseSessionKeyChallengeMutationVariables,
 	type CreateListMutation,
 	type CreateListMutationVariables,
 	type CreateNoteMutationVariables,
@@ -98,6 +121,8 @@ import {
 	type FollowedHashtagsQueryVariables,
 	type FollowHashtagMutation,
 	type FollowHashtagMutationVariables,
+	type ExchangeAgentAccessLeaseTokenMutation,
+	type ExchangeAgentAccessLeaseTokenMutationVariables,
 	type IncorporateSoulMutation,
 	type IncorporateSoulMutationVariables,
 	type LikeObjectMutation,
@@ -167,6 +192,8 @@ import {
 	type Poll as GraphQLPoll,
 	type RevokeAgentTokenMutation,
 	type RevokeAgentTokenMutationVariables,
+	type RevokeAgentAccessLeaseMutation,
+	type RevokeAgentAccessLeaseMutationVariables,
 	type UpdateAdminAgentPolicyMutation,
 	type UpdateAdminAgentPolicyMutationVariables,
 	type UpdateAgentMutation,
@@ -3442,6 +3469,10 @@ mutation DeleteEmoji($shortcode: String!) {
 
 export type Agent = NonNullable<AgentByUsernameQuery['agent']>;
 export type AgentConnection = AgentsQuery['agents'];
+export type AgentAccessLease = AgentAccessLeasesQuery['agentAccessLeases'][number];
+export type AgentAccessLeaseChallenge =
+	CreateAgentAccessLeasePrincipalChallengeMutation['createAgentAccessLeasePrincipalChallenge'];
+export type AgentLeaseToken = ExchangeAgentAccessLeaseTokenMutation['exchangeAgentAccessLeaseToken'];
 export type AgentActivityConnection = AgentActivityQuery['agentActivity'];
 export type AgentDelegation = DelegateToAgentMutation['delegateToAgent'];
 export type AdminAgentPolicy = AdminAgentPolicyQuery['adminAgentPolicy'];
@@ -3531,6 +3562,25 @@ export async function fetchAgentActivity({
 	return data.agentActivity;
 }
 
+export async function fetchAgentAccessLeases({
+	username,
+	signal,
+}: {
+	username: string;
+	signal?: AbortSignal;
+}): Promise<AgentAccessLease[]> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<AgentAccessLeasesQuery, AgentAccessLeasesQueryVariables>({
+		document: AgentAccessLeasesDocument,
+		variables: { username },
+		token,
+		signal,
+	});
+
+	return [...data.agentAccessLeases];
+}
+
 export async function delegateToAgent({
 	input,
 	signal,
@@ -3548,6 +3598,75 @@ export async function delegateToAgent({
 	});
 
 	return data.delegateToAgent;
+}
+
+export async function createAgentAccessLeasePrincipalChallenge({
+	username,
+	input,
+	signal,
+}: {
+	username: string;
+	input: CreateAgentAccessLeasePrincipalChallengeMutationVariables['input'];
+	signal?: AbortSignal;
+}): Promise<AgentAccessLeaseChallenge> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		CreateAgentAccessLeasePrincipalChallengeMutation,
+		CreateAgentAccessLeasePrincipalChallengeMutationVariables
+	>({
+		document: CreateAgentAccessLeasePrincipalChallengeDocument,
+		variables: { username, input },
+		token,
+		signal,
+	});
+
+	return data.createAgentAccessLeasePrincipalChallenge;
+}
+
+export async function createAgentAccessLeaseAgentChallenge({
+	username,
+	input,
+	signal,
+}: {
+	username: string;
+	input: CreateAgentAccessLeaseAgentChallengeMutationVariables['input'];
+	signal?: AbortSignal;
+}): Promise<CreateAgentAccessLeaseAgentChallengeMutation['createAgentAccessLeaseAgentChallenge']> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		CreateAgentAccessLeaseAgentChallengeMutation,
+		CreateAgentAccessLeaseAgentChallengeMutationVariables
+	>({
+		document: CreateAgentAccessLeaseAgentChallengeDocument,
+		variables: { username, input },
+		token,
+		signal,
+	});
+
+	return data.createAgentAccessLeaseAgentChallenge;
+}
+
+export async function createAgentAccessLease({
+	username,
+	input,
+	signal,
+}: {
+	username: string;
+	input: CreateAgentAccessLeaseMutationVariables['input'];
+	signal?: AbortSignal;
+}): Promise<AgentAccessLease> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<CreateAgentAccessLeaseMutation, CreateAgentAccessLeaseMutationVariables>({
+		document: CreateAgentAccessLeaseDocument,
+		variables: { username, input },
+		token,
+		signal,
+	});
+
+	return data.createAgentAccessLease;
 }
 
 export async function incorporateSoul({
@@ -3588,6 +3707,131 @@ export async function revokeAgentToken({
 	});
 
 	return data.revokeAgentToken;
+}
+
+export async function revokeAgentAccessLease({
+	username,
+	leaseID,
+	input,
+	signal,
+}: {
+	username: string;
+	leaseID: string;
+	input?: RevokeAgentAccessLeaseMutationVariables['input'];
+	signal?: AbortSignal;
+}): Promise<AgentAccessLease> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<RevokeAgentAccessLeaseMutation, RevokeAgentAccessLeaseMutationVariables>({
+		document: RevokeAgentAccessLeaseDocument,
+		variables: { username, leaseID, input },
+		token,
+		signal,
+	});
+
+	return data.revokeAgentAccessLease;
+}
+
+export async function createAgentAccessLeaseSessionKeyChallenge({
+	username,
+	leaseID,
+	input,
+	signal,
+}: {
+	username: string;
+	leaseID: string;
+	input: CreateAgentAccessLeaseSessionKeyChallengeMutationVariables['input'];
+	signal?: AbortSignal;
+}): Promise<CreateAgentAccessLeaseSessionKeyChallengeMutation['createAgentAccessLeaseSessionKeyChallenge']> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		CreateAgentAccessLeaseSessionKeyChallengeMutation,
+		CreateAgentAccessLeaseSessionKeyChallengeMutationVariables
+	>({
+		document: CreateAgentAccessLeaseSessionKeyChallengeDocument,
+		variables: { username, leaseID, input },
+		token,
+		signal,
+	});
+
+	return data.createAgentAccessLeaseSessionKeyChallenge;
+}
+
+export async function authorizeAgentAccessLeaseSessionKey({
+	username,
+	leaseID,
+	input,
+	signal,
+}: {
+	username: string;
+	leaseID: string;
+	input: AuthorizeAgentAccessLeaseSessionKeyMutationVariables['input'];
+	signal?: AbortSignal;
+}): Promise<AgentAccessLease> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		AuthorizeAgentAccessLeaseSessionKeyMutation,
+		AuthorizeAgentAccessLeaseSessionKeyMutationVariables
+	>({
+		document: AuthorizeAgentAccessLeaseSessionKeyDocument,
+		variables: { username, leaseID, input },
+		token,
+		signal,
+	});
+
+	return data.authorizeAgentAccessLeaseSessionKey;
+}
+
+export async function createAgentAccessLeaseRenewChallenge({
+	username,
+	leaseID,
+	signal,
+}: {
+	username: string;
+	leaseID: string;
+	signal?: AbortSignal;
+}): Promise<CreateAgentAccessLeaseRenewChallengeMutation['createAgentAccessLeaseRenewChallenge']> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		CreateAgentAccessLeaseRenewChallengeMutation,
+		CreateAgentAccessLeaseRenewChallengeMutationVariables
+	>({
+		document: CreateAgentAccessLeaseRenewChallengeDocument,
+		variables: { username, leaseID },
+		token,
+		signal,
+	});
+
+	return data.createAgentAccessLeaseRenewChallenge;
+}
+
+export async function exchangeAgentAccessLeaseToken({
+	username,
+	leaseID,
+	input,
+	signal,
+}: {
+	username: string;
+	leaseID: string;
+	input: ExchangeAgentAccessLeaseTokenMutationVariables['input'];
+	signal?: AbortSignal;
+}): Promise<AgentLeaseToken> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		ExchangeAgentAccessLeaseTokenMutation,
+		ExchangeAgentAccessLeaseTokenMutationVariables
+	>({
+		document: ExchangeAgentAccessLeaseTokenDocument,
+		variables: { username, leaseID, input },
+		token,
+		signal,
+	});
+
+	return data.exchangeAgentAccessLeaseToken;
 }
 
 export async function updateAgent({
@@ -3951,9 +4195,18 @@ export const api = {
 	fetchMyAgents,
 	fetchMySouls,
 	fetchAgentActivity,
+	fetchAgentAccessLeases,
 	delegateToAgent,
+	createAgentAccessLeasePrincipalChallenge,
+	createAgentAccessLeaseAgentChallenge,
+	createAgentAccessLease,
 	incorporateSoul,
 	revokeAgentToken,
+	revokeAgentAccessLease,
+	createAgentAccessLeaseSessionKeyChallenge,
+	authorizeAgentAccessLeaseSessionKey,
+	createAgentAccessLeaseRenewChallenge,
+	exchangeAgentAccessLeaseToken,
 	updateAgent,
 	deleteAgent,
 	fetchAdminAgentPolicy,

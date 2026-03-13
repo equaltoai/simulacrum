@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import type { AgentDelegation } from '$lib/api';
+	import type { AgentAccessLease, AgentLeaseToken } from '$lib/api';
 	import {
 		KNOWN_MCP_TOOLS,
 		KNOWN_MCP_PROMPTS,
@@ -22,7 +22,8 @@
 	interface Props {
 		agentUsername: string;
 		canManage: boolean;
-		delegation: AgentDelegation | null;
+		selectedLease: AgentAccessLease | null;
+		leaseToken: AgentLeaseToken | null;
 	}
 
 	type PanelStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -31,7 +32,7 @@
 		description: string;
 	};
 
-	let { agentUsername, canManage, delegation }: Props = $props();
+	let { agentUsername, canManage, selectedLease, leaseToken }: Props = $props();
 
 	let discoveryStatus = $state<PanelStatus>('idle');
 	let discoveryDoc = $state<McpWellKnownDocument | null>(null);
@@ -49,7 +50,7 @@
 	}
 
 	function tokenValue(): string {
-		return delegation?.accessToken?.trim() || '<delegated-access-token>';
+		return leaseToken?.accessToken?.trim() || '<lease-access-token>';
 	}
 
 	function statusLabel(status: PanelStatus): string {
@@ -146,7 +147,7 @@
 	});
 
 	$effect(() => {
-		const token = delegation?.accessToken?.trim() ?? '';
+		const token = leaseToken?.accessToken?.trim() ?? '';
 		const endpoint = discoveryDoc?.endpoint?.trim() || transport?.endpoint || '';
 
 		inspection = null;
@@ -168,8 +169,8 @@
 	const mcpEndpoint = $derived.by(() => discoveryDoc?.endpoint?.trim() || transport?.endpoint || '');
 	const mcpDiscoveryUrl = $derived.by(() => transport?.discoveryUrl ?? '');
 	const authHeader = $derived.by(() => `Authorization: Bearer ${tokenValue()}`);
-	const currentScope = $derived.by(() => delegation?.scope?.trim() || 'read write');
-	const currentExpiry = $derived.by(() => delegation?.expiresIn ?? null);
+	const currentScope = $derived.by(() => leaseToken?.scope?.trim() || selectedLease?.scopes.join(' ') || 'read write');
+	const currentExpiry = $derived.by(() => leaseToken?.expiresIn ?? null);
 	const discoveryCapabilities = $derived.by(
 		() => discoveryDoc?.capabilities ?? { tools: true, resources: true, prompts: true }
 	);
@@ -284,7 +285,7 @@
 				Connect this agent body to Claude Code, Cursor, or any Streamable HTTP MCP client.
 			</p>
 		</div>
-			<div class="mcp-panel__actions">
+		<div class="mcp-panel__actions">
 			<button
 				type="button"
 				class="gr-button gr-button--outline"
@@ -295,11 +296,11 @@
 			<button
 				type="button"
 				class="gr-button gr-button--outline"
-				disabled={!delegation?.accessToken}
+				disabled={!leaseToken?.accessToken?.trim()}
 				onclick={() =>
-					delegation?.accessToken &&
+					leaseToken?.accessToken &&
 					mcpEndpoint &&
-					void refreshInspection(mcpEndpoint, delegation.accessToken.trim())
+					void refreshInspection(mcpEndpoint, leaseToken.accessToken.trim())
 				}
 			>
 				Refresh live check
@@ -344,7 +345,7 @@
 	</div>
 
 	<div class="settings-form__notice">
-		The delegated access token above is the MCP bearer token. For MCP, <code>read</code> unlocks read-only tools and
+		The current lease bearer token above is the MCP credential. For MCP, <code>read</code> unlocks read-only tools and
 		<code>write</code> unlocks posting, follow/unfollow, profile updates, memory writes, and outbound comms. The
 		legacy <code>follow</code> scope alone is not enough for MCP write tools.
 	</div>
@@ -379,12 +380,15 @@
 
 		<article class="mcp-panel__status">
 			<div class="mcp-panel__status-header">
-				<h3>Current delegated token</h3>
+				<h3>Current lease token</h3>
 				<span class={statusBadgeClass(inspectionStatus)}>{statusLabel(inspectionStatus)}</span>
 			</div>
-			{#if delegation}
+			{#if selectedLease}
 				<p class="page__meta">
-					Scope <code>{currentScope}</code>
+					Lease <code>{selectedLease.id}</code> · status <code>{selectedLease.status}</code> · scope <code>{currentScope}</code>
+					{#if selectedLease.deviceLabel}
+						· device <code>{selectedLease.deviceLabel}</code>
+					{/if}
 					{#if currentExpiry}
 						· expires in {currentExpiry}s
 					{/if}
@@ -403,13 +407,18 @@
 					<p class="mcp-panel__status-copy">{inspectionError}</p>
 				{:else}
 					<p class="mcp-panel__status-copy">
-						Issue a token above and this panel will verify authenticated MCP access for the current agent.
+						Mint a bearer token from the selected lease above and this panel will verify authenticated MCP access.
 					</p>
 				{/if}
 			{:else}
-				<p class="page__meta">No delegated token has been issued in this tab yet.</p>
+				<p class="page__meta">No access lease is selected yet.</p>
 				<p class="mcp-panel__status-copy">
-					Issue a token above, then use it as <code>Authorization: Bearer &lt;token&gt;</code> for your MCP client.
+					{#if canManage}
+						Select a lease above, mint a short-lived bearer token, then use it as
+						<code>Authorization: Bearer &lt;token&gt;</code> for your MCP client.
+					{:else}
+						Only the agent owner or an admin with lease access can mint the bearer token this MCP endpoint needs.
+					{/if}
 				</p>
 			{/if}
 		</article>
@@ -459,7 +468,7 @@
 				<h3>MCP tool catalog</h3>
 				<p class="page__meta">
 					{#if inspection?.tools.length}
-						Live from the current delegated token.
+						Live from the current lease token.
 					{:else if discoveryDoc?.tools?.length}
 						Live from the public discovery document.
 					{:else}
@@ -468,7 +477,7 @@
 				</p>
 			</div>
 			{#if !canManage}
-				<p class="page__meta">Only the owner or an admin can mint a new token here, but discovery stays public.</p>
+				<p class="page__meta">Only the owner or an admin can manage leases here, but discovery stays public.</p>
 			{/if}
 		</div>
 

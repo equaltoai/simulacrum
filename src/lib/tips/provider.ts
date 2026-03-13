@@ -91,6 +91,54 @@ export async function personalSign(
 	return result as `0x${string}`;
 }
 
+export async function signTypedDataJson(
+	provider: EthereumProvider,
+	{ address, typedDataJson }: { address: `0x${string}`; typedDataJson: string }
+): Promise<`0x${string}`> {
+	const payload = typedDataJson.trim();
+	if (!payload) {
+		throw new Error('Wallet signing challenge did not include typed data.');
+	}
+
+	const parsedPayload = (() => {
+		try {
+			return JSON.parse(payload);
+		} catch {
+			return null;
+		}
+	})();
+
+	const attempts: Array<{ method: string; params: readonly unknown[] }> = [
+		{ method: 'eth_signTypedData_v4', params: [address, payload] },
+		...(parsedPayload ? [{ method: 'eth_signTypedData', params: [address, parsedPayload] as const }] : []),
+		{ method: 'eth_signTypedData', params: [address, payload] },
+	];
+
+	let lastError: unknown = null;
+	for (const attempt of attempts) {
+		try {
+			const result = await provider.request({
+				method: attempt.method,
+				params: attempt.params,
+			});
+
+			if (typeof result !== 'string' || !result.startsWith('0x')) {
+				throw new Error('Wallet provider returned invalid typed-data signature');
+			}
+
+			return result as `0x${string}`;
+		} catch (error) {
+			const code = typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
+			if (code === 4001) {
+				throw error instanceof Error ? error : new Error('Wallet signing was rejected.');
+			}
+			lastError = error;
+		}
+	}
+
+	throw lastError instanceof Error ? lastError : new Error('Failed to sign wallet challenge.');
+}
+
 export async function waitForReceipt(
 	provider: EthereumProvider,
 	txHash: `0x${string}`,
