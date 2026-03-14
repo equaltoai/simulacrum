@@ -5,6 +5,9 @@ type ProviderRequest = {
 
 export interface EthereumProvider {
 	request: (args: ProviderRequest) => Promise<unknown>;
+	on?: (event: string, listener: (...args: unknown[]) => void) => void;
+	removeListener?: (event: string, listener: (...args: unknown[]) => void) => void;
+	selectedAddress?: string | null;
 }
 
 export type TransactionReceipt = {
@@ -20,12 +23,23 @@ export function getInjectedProvider(): EthereumProvider | null {
 	return candidate;
 }
 
-export async function requestAccounts(provider: EthereumProvider): Promise<readonly `0x${string}`[]> {
-	const result = await provider.request({ method: 'eth_requestAccounts' });
+async function readAccountsWithMethod(
+	provider: EthereumProvider,
+	method: 'eth_accounts' | 'eth_requestAccounts'
+): Promise<readonly `0x${string}`[]> {
+	const result = await provider.request({ method });
 	if (!Array.isArray(result) || !result.every((item) => typeof item === 'string')) {
 		throw new Error('Wallet provider returned invalid accounts response');
 	}
 	return result as readonly `0x${string}`[];
+}
+
+export async function getAccounts(provider: EthereumProvider): Promise<readonly `0x${string}`[]> {
+	return readAccountsWithMethod(provider, 'eth_accounts');
+}
+
+export async function requestAccounts(provider: EthereumProvider): Promise<readonly `0x${string}`[]> {
+	return readAccountsWithMethod(provider, 'eth_requestAccounts');
 }
 
 export async function getChainId(provider: EthereumProvider): Promise<number> {

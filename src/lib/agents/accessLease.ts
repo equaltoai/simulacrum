@@ -1,6 +1,34 @@
 import { browser } from '$app/environment';
 import { requestAccounts, signTypedDataJson, type EthereumProvider } from '$lib/tips/provider';
 
+function normalizeAddress(value?: string | null): string {
+	return value?.trim().toLowerCase() ?? '';
+}
+
+function isWalletSignerMismatch(error: unknown): boolean {
+	const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+	return (
+		message.includes('selected address') ||
+		message.includes('eth_accounts') ||
+		message.includes('active account') ||
+		message.includes('current account') ||
+		message.includes('switch accounts') ||
+		message.includes('switch the connected wallet')
+	);
+}
+
+export class WalletSwitchRequiredError extends Error {
+	expectedAddress: `0x${string}`;
+	connectedAddress: `0x${string}` | null;
+
+	constructor(expectedAddress: `0x${string}`, connectedAddress: `0x${string}` | null = null) {
+		super(`Switch the connected wallet to ${expectedAddress} and try again.`);
+		this.name = 'WalletSwitchRequiredError';
+		this.expectedAddress = expectedAddress;
+		this.connectedAddress = connectedAddress;
+	}
+}
+
 export type StoredLeaseSessionKey = {
 	publicKey: string;
 	privateKeyPkcs8: string;
@@ -134,19 +162,31 @@ export async function signLeaseTypedDataWithWallet(
 		typedDataJson: string;
 	}
 ): Promise<`0x${string}`> {
-	const [connected] = await requestAccounts(provider);
+	const connectedAccounts = await requestAccounts(provider);
+	const connected =
+		connectedAccounts.find((candidate) => normalizeAddress(candidate) === normalizeAddress(address)) ??
+		connectedAccounts[0] ??
+		null;
+
 	if (!connected) {
 		throw new Error('No wallet account selected.');
 	}
 
-	if (connected.toLowerCase() !== address.toLowerCase()) {
-		throw new Error(`Switch the connected wallet to ${address} and try again.`);
+	if (normalizeAddress(connected) !== normalizeAddress(address)) {
+		throw new WalletSwitchRequiredError(address, connected);
 	}
 
-	return signTypedDataJson(provider, {
-		address: connected,
-		typedDataJson,
-	});
+	try {
+		return await signTypedDataJson(provider, {
+			address,
+			typedDataJson,
+		});
+	} catch (error) {
+		if (isWalletSignerMismatch(error)) {
+			throw new WalletSwitchRequiredError(address, connected);
+		}
+		throw error;
+	}
 }
 
 export function readStoredLeaseToken(username: string, leaseID: string): StoredLeaseToken | null {

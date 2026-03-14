@@ -5,6 +5,7 @@
 		api,
 		type Agent,
 		type AgentAccessLease,
+		type AgentAccessLeaseChallenge,
 		type AgentActivityConnection,
 		type AgentLeaseToken,
 		type LinkedWallet,
@@ -18,13 +19,15 @@
 		readStoredLeaseToken,
 		signLeaseSessionMessage,
 		signLeaseTypedDataWithWallet,
+		type StoredLeaseSessionKey,
+		WalletSwitchRequiredError,
 		writeStoredLeaseSessionKey,
 		writeStoredLeaseToken,
 	} from '$lib/agents/accessLease';
 	import { authSession } from '$lib/auth/session';
 	import { hasAdminScope } from '$lib/auth/scopes';
 	import AgentMcpPanel from '$lib/components/agents/AgentMcpPanel.svelte';
-	import { getInjectedProvider } from '$lib/tips';
+	import { getAccounts, getInjectedProvider } from '$lib/tips';
 	import type { Account } from '$lib/types';
 	import { getStreamingAdapter } from '$lib/realtime/adapter';
 	import type { AgentType } from '$lib/greater/adapters/graphql';
@@ -117,6 +120,14 @@
 			(candidate) => normalizeUsername(candidate) === viewerUsername
 		);
 	}
+
+	type PendingLeaseEnrollment = {
+		pendingSessionKey: StoredLeaseSessionKey | null;
+		principalChallenge: AgentAccessLeaseChallenge;
+		agentChallenge: AgentAccessLeaseChallenge;
+		principalSignature: `0x${string}` | null;
+		agentSignature: `0x${string}` | null;
+	};
 
 	let viewer = $state<Account | null>(null);
 	let agent = $state<Agent | null>(null);
@@ -254,6 +265,29 @@
 		return () => subscription.unsubscribe();
 	});
 
+	$effect(() => {
+		const provider = getInjectedProvider();
+		if (!provider) {
+			injectedWalletAddress = null;
+			return;
+		}
+
+		void refreshInjectedWallet();
+
+		const handleAccountsChanged = (accounts: unknown) => {
+			if (Array.isArray(accounts) && accounts.every((item) => typeof item === 'string')) {
+				injectedWalletAddress = (accounts[0] as string | undefined) ?? null;
+				return;
+			}
+
+			void refreshInjectedWallet();
+		};
+
+		provider.on?.('accountsChanged', handleAccountsChanged);
+
+		return () => provider.removeListener?.('accountsChanged', handleAccountsChanged);
+	});
+
 	// Agent access leases
 	let linkedWallets = $state<LinkedWallet[]>([]);
 	let mySouls = $state<SoulInventoryItem[]>([]);
@@ -277,6 +311,8 @@
 	let leaseLoadError = $state<string | null>(null);
 	let leaseActionError = $state<string | null>(null);
 	let leaseActionMessage = $state<string | null>(null);
+	let injectedWalletAddress = $state<string | null>(null);
+	let pendingLeaseEnrollment = $state<PendingLeaseEnrollment | null>(null);
 
 	const boundSoul = $derived.by(() => {
 		if (!agent) return null;
@@ -296,6 +332,30 @@
 			currentLeaseToken?.accessToken?.trim() ||
 			(leaseTokenLoading ? 'Minting bearer token…' : 'Mint a bearer token from the selected lease.')
 	);
+	const pendingLeaseSigner = $derived.by(() => {
+		if (!pendingLeaseEnrollment) return null;
+		if (!pendingLeaseEnrollment.principalSignature) return 'principal';
+		if (!pendingLeaseEnrollment.agentSignature) return 'agent';
+		return 'finalize';
+	});
+	const pendingLeaseWallet = $derived.by(() => {
+		if (!pendingLeaseEnrollment || pendingLeaseSigner === 'finalize') return null;
+		return pendingLeaseSigner === 'principal'
+			? pendingLeaseEnrollment.principalChallenge.walletAddress
+			: pendingLeaseEnrollment.agentChallenge.walletAddress;
+	});
+	const leaseCreateButtonLabel = $derived.by(() => {
+		if (leaseEnrollLoading) {
+			if (pendingLeaseSigner === 'principal') return 'Waiting for principal signature…';
+			if (pendingLeaseSigner === 'agent') return 'Waiting for agent signature…';
+			if (pendingLeaseSigner === 'finalize') return 'Finalizing lease…';
+			return 'Creating lease…';
+		}
+		if (pendingLeaseSigner === 'principal') return 'Continue with principal wallet';
+		if (pendingLeaseSigner === 'agent') return 'Continue with agent wallet';
+		if (pendingLeaseSigner === 'finalize') return 'Finalize access lease';
+		return 'Create access lease';
+	});
 
 	function selectedScopes(): string[] {
 		const scopes: string[] = [];
@@ -349,6 +409,147 @@
 			address: address as `0x${string}`,
 			typedDataJson,
 		});
+	}
+
+	async function refreshInjectedWallet() {
+		const provider = getInjectedProvider();
+		if (!provider) {
+			injectedWalletAddress = null;
+			return;
+		}
+
+		const selected = provider.selectedAddress?.trim();
+		if (selected) {
+			injectedWalletAddress = selected;
+			return;
+		}
+
+		try {
+			const [connected] = await getAccounts(provider);
+			injectedWalletAddress = connected ?? null;
+		} catch {
+			injectedWalletAddress = null;
+		}
+	}
+
+	function resetPendingLeaseEnrollment(message?: string) {
+		pendingLeaseEnrollment = null;
+		if (message) leaseActionMessage = message;
+	}
+
+	function leaseChallengeExpired(challenge: AgentAccessLeaseChallenge): boolean {
+		const expiresAt = Date.parse(challenge.expiresAt);
+		return Number.isFinite(expiresAt) && expiresAt <= Date.now();
+	}
+
+	function expectedWalletSwitchMessage(
+		role: 'principal' | 'agent',
+		address: string,
+		{ signatureCaptured = false }: { signatureCaptured?: boolean } = {}
+	): string {
+		const prefix = signatureCaptured
+			? `${role === 'principal' ? 'Principal' : 'Agent'} signature recorded. `
+			: '';
+		return `${prefix}Switch the connected wallet to ${address} and click "${role === 'principal' ? 'Continue with principal wallet' : 'Continue with agent wallet'}".`;
+	}
+
+	async function continuePendingLeaseEnrollment(pending: PendingLeaseEnrollment) {
+		if (!agent) throw new Error('Agent details are unavailable.');
+		if (leaseChallengeExpired(pending.principalChallenge) || leaseChallengeExpired(pending.agentChallenge)) {
+			resetPendingLeaseEnrollment();
+			throw new Error('The pending lease challenges expired. Create a new access lease and sign again.');
+		}
+
+		const provider = requireInjectedWallet();
+
+		if (!pending.principalSignature) {
+			try {
+				const principalSignature = await signWalletChallenge(
+					provider,
+					pending.principalChallenge.walletAddress,
+					pending.principalChallenge
+				);
+				const nextPending = {
+					...pending,
+					principalSignature,
+				};
+				pendingLeaseEnrollment = nextPending;
+				pending = nextPending;
+				leaseActionMessage = null;
+				await refreshInjectedWallet();
+			} catch (error) {
+				if (error instanceof WalletSwitchRequiredError) {
+					leaseActionError = null;
+					leaseActionMessage = expectedWalletSwitchMessage(
+						'principal',
+						pending.principalChallenge.walletAddress
+					);
+					await refreshInjectedWallet();
+					return;
+				}
+				throw error;
+			}
+		}
+
+		if (!pending.agentSignature) {
+			try {
+				const agentSignature = await signWalletChallenge(
+					provider,
+					pending.agentChallenge.walletAddress,
+					pending.agentChallenge
+				);
+				const nextPending = {
+					...pending,
+					agentSignature,
+				};
+				pendingLeaseEnrollment = nextPending;
+				pending = nextPending;
+				leaseActionMessage = null;
+				await refreshInjectedWallet();
+			} catch (error) {
+				if (error instanceof WalletSwitchRequiredError) {
+					leaseActionError = null;
+					leaseActionMessage = expectedWalletSwitchMessage(
+						'agent',
+						pending.agentChallenge.walletAddress,
+						{ signatureCaptured: !!pending.principalSignature }
+					);
+					await refreshInjectedWallet();
+					return;
+				}
+				throw error;
+			}
+		}
+
+		const nextLease = await api.createAgentAccessLease({
+			username: agent.username,
+			input: {
+				principalChallengeID: pending.principalChallenge.id,
+				principalSignature: pending.principalSignature!,
+				agentChallengeID: pending.agentChallenge.id,
+				agentSignature: pending.agentSignature!,
+			},
+		});
+
+		upsertLease(nextLease);
+
+		if (pending.pendingSessionKey) {
+			writeStoredLeaseSessionKey(nextLease.username, nextLease.id, pending.pendingSessionKey);
+			refreshStoredLeaseSessionIds(nextLease.username);
+		}
+
+		resetPendingLeaseEnrollment();
+
+		try {
+			await mintLeaseToken(nextLease, { announce: false });
+			leaseActionMessage = pending.pendingSessionKey
+				? 'Access lease created, browser session key attached, and bearer token minted.'
+				: 'Access lease created and bearer token minted.';
+		} catch {
+			leaseActionMessage = pending.pendingSessionKey
+				? 'Access lease created and browser session key attached.'
+				: 'Access lease created.';
+		}
 	}
 
 	async function loadLeaseData({ signal }: { signal?: AbortSignal } = {}) {
@@ -419,6 +620,7 @@
 		leaseLoadError = null;
 		leaseActionError = null;
 		leaseActionMessage = null;
+		pendingLeaseEnrollment = null;
 		leaseLoading = false;
 		leaseEnrollLoading = false;
 		leaseTokenLoading = false;
@@ -518,6 +720,19 @@
 		if (!canEnrollLease) return;
 		if (leaseEnrollLoading) return;
 
+		if (pendingLeaseEnrollment) {
+			leaseEnrollLoading = true;
+			leaseActionError = null;
+			try {
+				await continuePendingLeaseEnrollment(pendingLeaseEnrollment);
+			} catch (err) {
+				leaseActionError = err instanceof Error ? err.message : String(err);
+			} finally {
+				leaseEnrollLoading = false;
+			}
+			return;
+		}
+
 		const principalWallet = leasePrincipalWallet.trim();
 		const agentWallet = leaseAgentWallet.trim();
 		const deviceLabel = leaseDeviceLabel.trim() || 'simulacrum-browser';
@@ -541,7 +756,8 @@
 		leaseActionMessage = null;
 
 		try {
-			const provider = requireInjectedWallet();
+			await refreshInjectedWallet();
+			requireInjectedWallet();
 			const pendingSessionKey = attachBrowserSessionKey ? await generateStoredLeaseSessionKey() : null;
 			const idleTimeoutHours = parseOptionalPositiveInt(leaseIdleHours);
 			const absoluteTTLHours = parseOptionalPositiveInt(leaseAbsoluteHours);
@@ -566,37 +782,15 @@
 					leaseID: principalChallenge.leaseID,
 				},
 			});
-
-			const principalSignature = await signWalletChallenge(provider, principalWallet, principalChallenge);
-			const agentSignature = await signWalletChallenge(provider, agentWallet, agentChallenge);
-
-			const nextLease = await api.createAgentAccessLease({
-				username: agent.username,
-				input: {
-					principalChallengeID: principalChallenge.id,
-					principalSignature,
-					agentChallengeID: agentChallenge.id,
-					agentSignature,
-				},
-			});
-
-			upsertLease(nextLease);
-
-			if (pendingSessionKey) {
-				writeStoredLeaseSessionKey(nextLease.username, nextLease.id, pendingSessionKey);
-				refreshStoredLeaseSessionIds(nextLease.username);
-			}
-
-			try {
-				await mintLeaseToken(nextLease, { announce: false });
-				leaseActionMessage = pendingSessionKey
-					? 'Access lease created, browser session key attached, and bearer token minted.'
-					: 'Access lease created and bearer token minted.';
-			} catch {
-				leaseActionMessage = pendingSessionKey
-					? 'Access lease created and browser session key attached.'
-					: 'Access lease created.';
-			}
+			const pending: PendingLeaseEnrollment = {
+				pendingSessionKey,
+				principalChallenge,
+				agentChallenge,
+				principalSignature: null,
+				agentSignature: null,
+			};
+			pendingLeaseEnrollment = pending;
+			await continuePendingLeaseEnrollment(pending);
 		} catch (err) {
 			leaseActionError = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -1033,7 +1227,7 @@
 								class="settings-field__select"
 								id="agent-lease-wallet"
 								bind:value={leasePrincipalWallet}
-								disabled={linkedWallets.length === 0}
+								disabled={linkedWallets.length === 0 || pendingLeaseEnrollment !== null}
 							>
 								<option value="">Select one of your linked wallets</option>
 								{#each linkedWallets as wallet (wallet.id)}
@@ -1054,6 +1248,7 @@
 								type="text"
 								placeholder="0x..."
 								bind:value={leaseAgentWallet}
+								disabled={pendingLeaseEnrollment !== null}
 							/>
 							{#if boundSoul}
 								<p class="page__meta">
@@ -1076,6 +1271,7 @@
 								type="text"
 								placeholder="simulacrum-browser"
 								bind:value={leaseDeviceLabel}
+								disabled={pendingLeaseEnrollment !== null}
 							/>
 						</div>
 
@@ -1089,6 +1285,7 @@
 								step="1"
 								placeholder="defaults to 168"
 								bind:value={leaseIdleHours}
+								disabled={pendingLeaseEnrollment !== null}
 							/>
 						</div>
 
@@ -1102,6 +1299,7 @@
 								step="1"
 								placeholder="defaults to 2160"
 								bind:value={leaseAbsoluteHours}
+								disabled={pendingLeaseEnrollment !== null}
 							/>
 						</div>
 
@@ -1109,15 +1307,30 @@
 							<span class="settings-field__label">Scopes</span>
 							<div class="settings-scopes">
 								<label class="settings-field__checkbox-label">
-									<input class="settings-field__checkbox" type="checkbox" bind:checked={leaseScopes.read} />
+									<input
+										class="settings-field__checkbox"
+										type="checkbox"
+										bind:checked={leaseScopes.read}
+										disabled={pendingLeaseEnrollment !== null}
+									/>
 									read
 								</label>
 								<label class="settings-field__checkbox-label">
-									<input class="settings-field__checkbox" type="checkbox" bind:checked={leaseScopes.write} />
+									<input
+										class="settings-field__checkbox"
+										type="checkbox"
+										bind:checked={leaseScopes.write}
+										disabled={pendingLeaseEnrollment !== null}
+									/>
 									write
 								</label>
 								<label class="settings-field__checkbox-label">
-									<input class="settings-field__checkbox" type="checkbox" bind:checked={leaseScopes.follow} />
+									<input
+										class="settings-field__checkbox"
+										type="checkbox"
+										bind:checked={leaseScopes.follow}
+										disabled={pendingLeaseEnrollment !== null}
+									/>
 									follow
 								</label>
 							</div>
@@ -1133,14 +1346,37 @@
 									id="agent-lease-session-key"
 									type="checkbox"
 									bind:checked={attachBrowserSessionKey}
+									disabled={pendingLeaseEnrollment !== null}
 								/>
 								Attach a browser session key so renewal can happen without another wallet signature
 							</label>
 							<p class="page__meta">
-								If the principal and agent wallets differ, you will sign twice and may need to switch wallet
-								accounts between prompts.
+								If the principal and agent wallets differ, you will sign twice. After switching wallet
+								accounts, click the lease button again to continue from the pending step.
+							</p>
+							<p class="page__meta">
+								Injected wallet currently selected:
+								{#if injectedWalletAddress}
+									<code>{injectedWalletAddress}</code>
+								{:else}
+									none
+								{/if}
 							</p>
 						</div>
+
+						{#if pendingLeaseEnrollment}
+							<div class="settings-form__notice" role="status">
+								{#if pendingLeaseSigner === 'principal'}
+									Lease challenges are ready. Connect principal wallet
+									<code>{pendingLeaseWallet}</code> and continue signing.
+								{:else if pendingLeaseSigner === 'agent'}
+									Principal signature recorded. Switch to agent wallet
+									<code>{pendingLeaseWallet}</code> and continue signing.
+								{:else}
+									Both signatures are captured. Finalize the lease to mint the browser token.
+								{/if}
+							</div>
+						{/if}
 
 						{#if linkedWallets.length === 0}
 							<div class="settings-form__notice settings-form__notice--error" role="alert">
@@ -1153,10 +1389,23 @@
 							<button
 								type="submit"
 								class="gr-button gr-button--solid"
-								disabled={leaseEnrollLoading || linkedWallets.length === 0}
+								disabled={leaseEnrollLoading || (!pendingLeaseEnrollment && linkedWallets.length === 0)}
 							>
-								{leaseEnrollLoading ? 'Creating lease…' : 'Create access lease'}
+								{leaseCreateButtonLabel}
 							</button>
+							{#if pendingLeaseEnrollment}
+								<button
+									type="button"
+									class="gr-button gr-button--outline"
+									disabled={leaseEnrollLoading}
+									onclick={() => {
+										leaseActionError = null;
+										resetPendingLeaseEnrollment('Pending lease signing discarded.');
+									}}
+								>
+									Discard pending signing
+								</button>
+							{/if}
 						</div>
 					</form>
 				{:else}
