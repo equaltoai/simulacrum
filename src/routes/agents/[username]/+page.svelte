@@ -1,12 +1,36 @@
 <script lang="ts">
-		import { base } from '$app/paths';
-		import { page } from '$app/stores';
-		import { api, type Agent, type AgentActivityConnection, type AgentDelegation } from '$lib/api';
-		import { authSession } from '$lib/auth/session';
-		import { hasAdminScope } from '$lib/auth/scopes';
-		import type { Account } from '$lib/types';
-		import { getStreamingAdapter } from '$lib/realtime/adapter';
-		import type { AgentType } from '$lib/greater/adapters/graphql';
+	import { base } from '$app/paths';
+	import { page } from '$app/stores';
+	import {
+		api,
+		type Agent,
+		type AgentAccessLease,
+		type AgentAccessLeaseChallenge,
+		type AgentActivityConnection,
+		type AgentLeaseToken,
+		type LinkedWallet,
+		type SoulInventoryItem,
+	} from '$lib/api';
+	import {
+		clearStoredLeaseSessionKey,
+		clearStoredLeaseToken,
+		generateStoredLeaseSessionKey,
+		readStoredLeaseSessionKey,
+		readStoredLeaseToken,
+		signLeaseSessionMessage,
+		signLeaseTypedDataWithWallet,
+		type StoredLeaseSessionKey,
+		WalletSwitchRequiredError,
+		writeStoredLeaseSessionKey,
+		writeStoredLeaseToken,
+	} from '$lib/agents/accessLease';
+	import { authSession } from '$lib/auth/session';
+	import { hasAdminScope } from '$lib/auth/scopes';
+	import AgentMcpPanel from '$lib/components/agents/AgentMcpPanel.svelte';
+	import { getAccounts, getInjectedProvider } from '$lib/tips';
+	import type { Account } from '$lib/types';
+	import { getStreamingAdapter } from '$lib/realtime/adapter';
+	import type { AgentType } from '$lib/greater/adapters/graphql';
 
 	const AGENT_TYPES: Array<{ value: AgentType; label: string }> = [
 		{ value: 'ASSISTANT', label: 'Assistant' },
@@ -26,6 +50,85 @@
 		return `${base}/profile/${encodeURIComponent(acct)}`;
 	}
 
+	function normalizeUsername(value?: string | null) {
+		const trimmed = value?.trim();
+		if (!trimmed) return '';
+		return trimmed.replace(/^@/, '').toLowerCase();
+	}
+
+	function normalizeAddress(value?: string | null) {
+		const trimmed = value?.trim();
+		return trimmed ? trimmed.toLowerCase() : '';
+	}
+
+	function formatDateTime(value?: string | null): string {
+		const trimmed = value?.trim();
+		if (!trimmed) return '—';
+
+		const parsed = new Date(trimmed);
+		if (Number.isNaN(parsed.getTime())) return trimmed;
+		return parsed.toLocaleString();
+	}
+
+	function formatLeaseHours(value?: number | null): string {
+		if (!value || value <= 0) return '—';
+		if (value % 24 === 0) return `${value}h (${value / 24}d)`;
+		return `${value}h`;
+	}
+
+	function formatWalletAddress(value?: string | null): string {
+		const trimmed = value?.trim();
+		if (!trimmed) return '—';
+		if (trimmed.length <= 16) return trimmed;
+		return `${trimmed.slice(0, 8)}...${trimmed.slice(-6)}`;
+	}
+
+	function parseOptionalPositiveInt(value: string): number | undefined {
+		const trimmed = value.trim();
+		if (!trimmed) return undefined;
+
+		const parsed = Number.parseInt(trimmed, 10);
+		if (!Number.isFinite(parsed) || parsed <= 0) {
+			throw new Error('Lease timing values must be positive whole numbers.');
+		}
+
+		return parsed;
+	}
+
+	function parseDateMs(value?: string | null): number {
+		const parsed = Date.parse(value?.trim() ?? '');
+		return Number.isFinite(parsed) ? parsed : 0;
+	}
+
+	function sortLeases(items: readonly AgentAccessLease[]): AgentAccessLease[] {
+		return [...items].sort((left, right) => {
+			const leftStatus = left.status.trim().toLowerCase();
+			const rightStatus = right.status.trim().toLowerCase();
+			const leftRank = leftStatus === 'active' ? 0 : leftStatus === 'expired' ? 1 : 2;
+			const rightRank = rightStatus === 'active' ? 0 : rightStatus === 'expired' ? 1 : 2;
+			if (leftRank !== rightRank) return leftRank - rightRank;
+
+			return parseDateMs(right.updatedAt) - parseDateMs(left.updatedAt);
+		});
+	}
+
+	function isAgentOwner(agent: Agent | null, viewer: Account | null) {
+		const viewerUsername = normalizeUsername(viewer?.username);
+		if (!viewerUsername || !agent) return false;
+
+		return [agent.agentOwner, agent.ownerActor?.username].some(
+			(candidate) => normalizeUsername(candidate) === viewerUsername
+		);
+	}
+
+	type PendingLeaseEnrollment = {
+		pendingSessionKey: StoredLeaseSessionKey | null;
+		principalChallenge: AgentAccessLeaseChallenge;
+		agentChallenge: AgentAccessLeaseChallenge;
+		principalSignature: `0x${string}` | null;
+		agentSignature: `0x${string}` | null;
+	};
+
 	let viewer = $state<Account | null>(null);
 	let agent = $state<Agent | null>(null);
 	let isLoading = $state(false);
@@ -36,10 +139,10 @@
 	let activityLoading = $state(false);
 	let activityError = $state<string | null>(null);
 
-		let canAdmin = $derived(hasAdminScope($authSession?.scope));
-	let canManage = $derived(
-		(agent?.agentOwner && viewer?.username === agent.agentOwner) || canAdmin
-	);
+	let canAdmin = $derived(hasAdminScope($authSession?.scope));
+	let isOwner = $derived(isAgentOwner(agent, viewer));
+	let canManage = $derived(isOwner || canAdmin);
+	let canEnrollLease = $derived(isOwner);
 
 	async function refreshAgent({ signal }: { signal?: AbortSignal } = {}) {
 		const token = $authSession?.accessToken ?? null;
@@ -124,9 +227,6 @@
 		activityError = null;
 		activityLoading = false;
 
-		delegation = null;
-		delegationError = null;
-
 		updateError = null;
 		updateMessage = null;
 
@@ -165,19 +265,120 @@
 		return () => subscription.unsubscribe();
 	});
 
-	// Token delegation
-	let tokenExpiresIn = $state<string>('');
-	let tokenScopes = $state({ read: true, write: true, follow: true });
-	let delegation = $state<AgentDelegation | null>(null);
-	let delegationLoading = $state(false);
-	let delegationError = $state<string | null>(null);
+	$effect(() => {
+		const provider = getInjectedProvider();
+		if (!provider) {
+			injectedWalletAddress = null;
+			return;
+		}
+
+		void refreshInjectedWallet();
+
+		const handleAccountsChanged = (accounts: unknown) => {
+			if (Array.isArray(accounts) && accounts.every((item) => typeof item === 'string')) {
+				injectedWalletAddress = (accounts[0] as string | undefined) ?? null;
+				return;
+			}
+
+			void refreshInjectedWallet();
+		};
+
+		provider.on?.('accountsChanged', handleAccountsChanged);
+
+		return () => provider.removeListener?.('accountsChanged', handleAccountsChanged);
+	});
+
+	// Agent access leases
+	let linkedWallets = $state<LinkedWallet[]>([]);
+	let mySouls = $state<SoulInventoryItem[]>([]);
+	let leases = $state<AgentAccessLease[]>([]);
+	let selectedLeaseId = $state('');
+	let currentLeaseToken = $state<AgentLeaseToken | null>(null);
+	let storedSessionLeaseIds = $state<string[]>([]);
+	let leaseDeviceLabel = $state('simulacrum-browser');
+	let leasePrincipalWallet = $state('');
+	let leaseAgentWallet = $state('');
+	let leaseIdleHours = $state('');
+	let leaseAbsoluteHours = $state('');
+	let leaseScopes = $state({ read: true, write: true, follow: true });
+	let attachBrowserSessionKey = $state(true);
+	let revokeReason = $state('');
+	let leaseLoading = $state(false);
+	let leaseEnrollLoading = $state(false);
+	let leaseTokenLoading = $state(false);
+	let leaseSessionKeyLoading = $state(false);
+	let revokeLeaseId = $state<string | null>(null);
+	let leaseLoadError = $state<string | null>(null);
+	let leaseActionError = $state<string | null>(null);
+	let leaseActionMessage = $state<string | null>(null);
+	let injectedWalletAddress = $state<string | null>(null);
+	let pendingLeaseEnrollment = $state<PendingLeaseEnrollment | null>(null);
+
+	const boundSoul = $derived.by(() => {
+		if (!agent) return null;
+		const agentUsername = normalizeUsername(agent.username);
+		return (
+			mySouls.find((item) => normalizeUsername(item.binding?.agentUsername) === agentUsername) ?? null
+		);
+	});
+	const selectedLease = $derived.by(
+		() => leases.find((lease) => lease.id === selectedLeaseId) ?? null
+	);
+	const selectedLeaseHasStoredSessionKey = $derived.by(
+		() => !!selectedLease && storedSessionLeaseIds.includes(selectedLease.id)
+	);
+	const leaseTokenValue = $derived.by(
+		() =>
+			currentLeaseToken?.accessToken?.trim() ||
+			(leaseTokenLoading ? 'Minting bearer token…' : 'Mint a bearer token from the selected lease.')
+	);
+	const pendingLeaseSigner = $derived.by(() => {
+		if (!pendingLeaseEnrollment) return null;
+		if (!pendingLeaseEnrollment.principalSignature) return 'principal';
+		if (!pendingLeaseEnrollment.agentSignature) return 'agent';
+		return 'finalize';
+	});
+	const pendingLeaseWallet = $derived.by(() => {
+		if (!pendingLeaseEnrollment || pendingLeaseSigner === 'finalize') return null;
+		return pendingLeaseSigner === 'principal'
+			? pendingLeaseEnrollment.principalChallenge.walletAddress
+			: pendingLeaseEnrollment.agentChallenge.walletAddress;
+	});
+	const leaseCreateButtonLabel = $derived.by(() => {
+		if (leaseEnrollLoading) {
+			if (pendingLeaseSigner === 'principal') return 'Waiting for principal signature…';
+			if (pendingLeaseSigner === 'agent') return 'Waiting for agent signature…';
+			if (pendingLeaseSigner === 'finalize') return 'Finalizing lease…';
+			return 'Creating lease…';
+		}
+		if (pendingLeaseSigner === 'principal') return 'Continue with principal wallet';
+		if (pendingLeaseSigner === 'agent') return 'Continue with agent wallet';
+		if (pendingLeaseSigner === 'finalize') return 'Finalize access lease';
+		return 'Create access lease';
+	});
 
 	function selectedScopes(): string[] {
 		const scopes: string[] = [];
-		if (tokenScopes.read) scopes.push('read');
-		if (tokenScopes.write) scopes.push('write');
-		if (tokenScopes.follow) scopes.push('follow');
+		if (leaseScopes.read) scopes.push('read');
+		if (leaseScopes.write) scopes.push('write');
+		if (leaseScopes.follow) scopes.push('follow');
 		return scopes;
+	}
+
+	function refreshStoredLeaseSessionIds(username: string, nextLeases: readonly AgentAccessLease[] = leases) {
+		storedSessionLeaseIds = nextLeases
+			.filter((lease) => readStoredLeaseSessionKey(username, lease.id))
+			.map((lease) => lease.id);
+	}
+
+	function upsertLease(nextLease: AgentAccessLease) {
+		const nextLeases = sortLeases([
+			nextLease,
+			...leases.filter((existingLease) => existingLease.id !== nextLease.id),
+		]);
+		leases = nextLeases;
+		selectedLeaseId = nextLease.id;
+		refreshStoredLeaseSessionIds(nextLease.username, nextLeases);
 	}
 
 	async function copy(value: string) {
@@ -185,59 +386,490 @@
 		await navigator.clipboard.writeText(value);
 	}
 
-	async function handleDelegateToken() {
-		if (!agent) return;
-		if (!canManage) return;
-		if (delegationLoading) return;
+	function requireInjectedWallet() {
+		const provider = getInjectedProvider();
+		if (!provider) {
+			throw new Error('No injected wallet provider detected (for example MetaMask).');
+		}
+		return provider;
+	}
 
-		const scopes = selectedScopes();
-		if (scopes.length === 0) {
-			delegationError = 'Select at least one scope.';
+	async function signWalletChallenge(
+		provider: ReturnType<typeof getInjectedProvider>,
+		address: string,
+		challenge: { typedDataJson?: string | null }
+	): Promise<`0x${string}`> {
+		if (!provider) throw new Error('No injected wallet provider detected.');
+		const typedDataJson = challenge.typedDataJson?.trim();
+		if (!typedDataJson) {
+			throw new Error('The wallet challenge did not include typed data to sign.');
+		}
+
+		return signLeaseTypedDataWithWallet(provider, {
+			address: address as `0x${string}`,
+			typedDataJson,
+		});
+	}
+
+	async function refreshInjectedWallet() {
+		const provider = getInjectedProvider();
+		if (!provider) {
+			injectedWalletAddress = null;
 			return;
 		}
 
-		const expiresInRaw = tokenExpiresIn.trim();
-		const expiresIn =
-			expiresInRaw.length > 0 ? Number.parseInt(expiresInRaw, 10) : undefined;
-
-		delegationLoading = true;
-		delegationError = null;
-		delegation = null;
+		const selected = provider.selectedAddress?.trim();
+		if (selected) {
+			injectedWalletAddress = selected;
+			return;
+		}
 
 		try {
-			delegation = await api.delegateToAgent({
-				input: {
-					agentUsername: agent.username,
-					displayName: agent.displayName,
-					bio: agent.bio ?? undefined,
-					scopes,
-					expiresIn: Number.isFinite(expiresIn) ? expiresIn : undefined,
-					agentType: agent.agentType,
-					agentVersion: agent.agentVersion,
-					version: agent.agentVersion,
-				},
-			});
-		} catch (err) {
-			delegationError = err instanceof Error ? err.message : String(err);
-		} finally {
-			delegationLoading = false;
+			const [connected] = await getAccounts(provider);
+			injectedWalletAddress = connected ?? null;
+		} catch {
+			injectedWalletAddress = null;
 		}
 	}
 
-	async function handleRevokeToken() {
+	function resetPendingLeaseEnrollment(message?: string) {
+		pendingLeaseEnrollment = null;
+		if (message) leaseActionMessage = message;
+	}
+
+	function leaseChallengeExpired(challenge: AgentAccessLeaseChallenge): boolean {
+		const expiresAt = Date.parse(challenge.expiresAt);
+		return Number.isFinite(expiresAt) && expiresAt <= Date.now();
+	}
+
+	function expectedWalletSwitchMessage(
+		role: 'principal' | 'agent',
+		address: string,
+		{ signatureCaptured = false }: { signatureCaptured?: boolean } = {}
+	): string {
+		const prefix = signatureCaptured
+			? `${role === 'principal' ? 'Principal' : 'Agent'} signature recorded. `
+			: '';
+		return `${prefix}Switch the connected wallet to ${address} and click "${role === 'principal' ? 'Continue with principal wallet' : 'Continue with agent wallet'}".`;
+	}
+
+	async function continuePendingLeaseEnrollment(pending: PendingLeaseEnrollment) {
+		if (!agent) throw new Error('Agent details are unavailable.');
+		if (leaseChallengeExpired(pending.principalChallenge) || leaseChallengeExpired(pending.agentChallenge)) {
+			resetPendingLeaseEnrollment();
+			throw new Error('The pending lease challenges expired. Create a new access lease and sign again.');
+		}
+
+		const provider = requireInjectedWallet();
+
+		if (!pending.principalSignature) {
+			try {
+				const principalSignature = await signWalletChallenge(
+					provider,
+					pending.principalChallenge.walletAddress,
+					pending.principalChallenge
+				);
+				const nextPending = {
+					...pending,
+					principalSignature,
+				};
+				pendingLeaseEnrollment = nextPending;
+				pending = nextPending;
+				leaseActionMessage = null;
+				await refreshInjectedWallet();
+			} catch (error) {
+				if (error instanceof WalletSwitchRequiredError) {
+					leaseActionError = null;
+					leaseActionMessage = expectedWalletSwitchMessage(
+						'principal',
+						pending.principalChallenge.walletAddress
+					);
+					await refreshInjectedWallet();
+					return;
+				}
+				throw error;
+			}
+		}
+
+		if (!pending.agentSignature) {
+			try {
+				const agentSignature = await signWalletChallenge(
+					provider,
+					pending.agentChallenge.walletAddress,
+					pending.agentChallenge
+				);
+				const nextPending = {
+					...pending,
+					agentSignature,
+				};
+				pendingLeaseEnrollment = nextPending;
+				pending = nextPending;
+				leaseActionMessage = null;
+				await refreshInjectedWallet();
+			} catch (error) {
+				if (error instanceof WalletSwitchRequiredError) {
+					leaseActionError = null;
+					leaseActionMessage = expectedWalletSwitchMessage(
+						'agent',
+						pending.agentChallenge.walletAddress,
+						{ signatureCaptured: !!pending.principalSignature }
+					);
+					await refreshInjectedWallet();
+					return;
+				}
+				throw error;
+			}
+		}
+
+		const nextLease = await api.createAgentAccessLease({
+			username: agent.username,
+			input: {
+				principalChallengeID: pending.principalChallenge.id,
+				principalSignature: pending.principalSignature!,
+				agentChallengeID: pending.agentChallenge.id,
+				agentSignature: pending.agentSignature!,
+			},
+		});
+
+		upsertLease(nextLease);
+
+		if (pending.pendingSessionKey) {
+			writeStoredLeaseSessionKey(nextLease.username, nextLease.id, pending.pendingSessionKey);
+			refreshStoredLeaseSessionIds(nextLease.username);
+		}
+
+		resetPendingLeaseEnrollment();
+
+		try {
+			await mintLeaseToken(nextLease, { announce: false });
+			leaseActionMessage = pending.pendingSessionKey
+				? 'Access lease created, browser session key attached, and bearer token minted.'
+				: 'Access lease created and bearer token minted.';
+		} catch {
+			leaseActionMessage = pending.pendingSessionKey
+				? 'Access lease created and browser session key attached.'
+				: 'Access lease created.';
+		}
+	}
+
+	async function loadLeaseData({ signal }: { signal?: AbortSignal } = {}) {
+		if (!agent || !canManage) return;
+
+		leaseLoading = true;
+		leaseLoadError = null;
+
+		try {
+			const [leaseResult, walletResult, soulResult] = await Promise.allSettled([
+				api.fetchAgentAccessLeases({ username: agent.username, signal }),
+				canEnrollLease
+					? api.fetchLinkedWallets({ signal })
+					: Promise.resolve([] as LinkedWallet[]),
+				canEnrollLease ? api.fetchMySouls({ signal }) : Promise.resolve([] as SoulInventoryItem[]),
+			]);
+
+			if (signal?.aborted) return;
+			if (leaseResult.status === 'rejected') throw leaseResult.reason;
+
+			const nextLeases = sortLeases(leaseResult.value);
+			leases = nextLeases;
+			selectedLeaseId =
+				selectedLeaseId && nextLeases.some((lease) => lease.id === selectedLeaseId)
+					? selectedLeaseId
+					: nextLeases[0]?.id ?? '';
+			refreshStoredLeaseSessionIds(agent.username, nextLeases);
+
+			if (walletResult.status === 'fulfilled') {
+				linkedWallets = walletResult.value;
+			} else if (!(walletResult.reason instanceof DOMException && walletResult.reason.name === 'AbortError')) {
+				linkedWallets = [];
+				leaseLoadError =
+					walletResult.reason instanceof Error ? walletResult.reason.message : String(walletResult.reason);
+			}
+
+			if (soulResult.status === 'fulfilled') {
+				mySouls = [...soulResult.value];
+			} else if (!(soulResult.reason instanceof DOMException && soulResult.reason.name === 'AbortError')) {
+				mySouls = [];
+				leaseLoadError =
+					leaseLoadError ??
+					(soulResult.reason instanceof Error ? soulResult.reason.message : String(soulResult.reason));
+			}
+		} catch (err) {
+			if (err instanceof DOMException && err.name === 'AbortError') return;
+			leaseLoadError = err instanceof Error ? err.message : String(err);
+			leases = [];
+			linkedWallets = [];
+			mySouls = [];
+			selectedLeaseId = '';
+			storedSessionLeaseIds = [];
+		} finally {
+			leaseLoading = false;
+		}
+	}
+
+	$effect(() => {
+		const token = $authSession?.accessToken ?? null;
+		const username = agent?.username ?? '';
+
+		linkedWallets = [];
+		mySouls = [];
+		leases = [];
+		selectedLeaseId = '';
+		currentLeaseToken = null;
+		storedSessionLeaseIds = [];
+		leaseLoadError = null;
+		leaseActionError = null;
+		leaseActionMessage = null;
+		pendingLeaseEnrollment = null;
+		leaseLoading = false;
+		leaseEnrollLoading = false;
+		leaseTokenLoading = false;
+		leaseSessionKeyLoading = false;
+		revokeLeaseId = null;
+		revokeReason = '';
+
+		if (!token || !username || !canManage) return;
+
+		const controller = new AbortController();
+		void loadLeaseData({ signal: controller.signal });
+
+		return () => controller.abort();
+	});
+
+	$effect(() => {
+		if (!agent || !selectedLeaseId) {
+			currentLeaseToken = null;
+			return;
+		}
+
+		currentLeaseToken = readStoredLeaseToken(agent.username, selectedLeaseId);
+	});
+
+	$effect(() => {
+		if (!canEnrollLease) return;
+
+		const suggestedPrincipal =
+			linkedWallets.find(
+				(wallet) => normalizeAddress(wallet.address) === normalizeAddress(boundSoul?.agent.principalAddress)
+			)?.address ??
+			linkedWallets[0]?.address ??
+			'';
+
+		if (!leasePrincipalWallet && suggestedPrincipal) {
+			leasePrincipalWallet = suggestedPrincipal;
+		}
+
+		if (!leaseAgentWallet && boundSoul?.agent.wallet) {
+			leaseAgentWallet = boundSoul.agent.wallet;
+		}
+	});
+
+	async function mintLeaseToken(lease: AgentAccessLease, { announce = true }: { announce?: boolean } = {}) {
+		leaseTokenLoading = true;
+		leaseActionError = null;
+		if (announce) leaseActionMessage = null;
+
+		try {
+			const challenge = await api.createAgentAccessLeaseRenewChallenge({
+				username: lease.username,
+				leaseID: lease.id,
+			});
+
+			let signature: string;
+			if (challenge.action === 'renew_session') {
+				const sessionKey = readStoredLeaseSessionKey(lease.username, lease.id);
+				if (!sessionKey) {
+					throw new Error(
+						'This lease expects a browser session key, but none is stored in this browser. Re-authorize the session key first.'
+					);
+				}
+				signature = await signLeaseSessionMessage(sessionKey, challenge.message);
+			} else {
+				const provider = requireInjectedWallet();
+				signature = await signWalletChallenge(provider, lease.agentWallet, challenge);
+			}
+
+			const nextToken = await api.exchangeAgentAccessLeaseToken({
+				username: lease.username,
+				leaseID: lease.id,
+				input: {
+					challengeID: challenge.id,
+					signature,
+				},
+			});
+
+			currentLeaseToken = nextToken;
+			writeStoredLeaseToken(lease.username, lease.id, nextToken);
+			selectedLeaseId = lease.id;
+
+			if (announce) {
+				leaseActionMessage = 'Short-lived bearer token minted from the selected lease.';
+			}
+
+			return nextToken;
+		} catch (err) {
+			leaseActionError = err instanceof Error ? err.message : String(err);
+			throw err;
+		} finally {
+			leaseTokenLoading = false;
+		}
+	}
+
+	async function handleCreateLease() {
 		if (!agent) return;
+		if (!canEnrollLease) return;
+		if (leaseEnrollLoading) return;
+
+		if (pendingLeaseEnrollment) {
+			leaseEnrollLoading = true;
+			leaseActionError = null;
+			try {
+				await continuePendingLeaseEnrollment(pendingLeaseEnrollment);
+			} catch (err) {
+				leaseActionError = err instanceof Error ? err.message : String(err);
+			} finally {
+				leaseEnrollLoading = false;
+			}
+			return;
+		}
+
+		const principalWallet = leasePrincipalWallet.trim();
+		const agentWallet = leaseAgentWallet.trim();
+		const deviceLabel = leaseDeviceLabel.trim() || 'simulacrum-browser';
+		const scopes = selectedScopes();
+
+		if (!principalWallet) {
+			leaseActionError = 'Choose one of your linked principal wallets.';
+			return;
+		}
+		if (!agentWallet) {
+			leaseActionError = 'Provide the agent wallet linked to this agent body.';
+			return;
+		}
+		if (scopes.length === 0) {
+			leaseActionError = 'Select at least one lease scope.';
+			return;
+		}
+
+		leaseEnrollLoading = true;
+		leaseActionError = null;
+		leaseActionMessage = null;
+
+		try {
+			await refreshInjectedWallet();
+			requireInjectedWallet();
+			const pendingSessionKey = attachBrowserSessionKey ? await generateStoredLeaseSessionKey() : null;
+			const idleTimeoutHours = parseOptionalPositiveInt(leaseIdleHours);
+			const absoluteTTLHours = parseOptionalPositiveInt(leaseAbsoluteHours);
+			const challengeInput = {
+				principalWallet,
+				agentWallet,
+				scopes,
+				deviceLabel,
+				...(pendingSessionKey ? { sessionPublicKey: pendingSessionKey.publicKey } : {}),
+				...(idleTimeoutHours ? { idleTimeoutHours } : {}),
+				...(absoluteTTLHours ? { absoluteTTLHours } : {}),
+			};
+
+			const principalChallenge = await api.createAgentAccessLeasePrincipalChallenge({
+				username: agent.username,
+				input: challengeInput,
+			});
+			const agentChallenge = await api.createAgentAccessLeaseAgentChallenge({
+				username: agent.username,
+				input: {
+					...challengeInput,
+					leaseID: principalChallenge.leaseID,
+				},
+			});
+			const pending: PendingLeaseEnrollment = {
+				pendingSessionKey,
+				principalChallenge,
+				agentChallenge,
+				principalSignature: null,
+				agentSignature: null,
+			};
+			pendingLeaseEnrollment = pending;
+			await continuePendingLeaseEnrollment(pending);
+		} catch (err) {
+			leaseActionError = err instanceof Error ? err.message : String(err);
+		} finally {
+			leaseEnrollLoading = false;
+		}
+	}
+
+	async function handleAuthorizeSessionKey(lease: AgentAccessLease) {
+		if (leaseSessionKeyLoading) return;
+
+		leaseSessionKeyLoading = true;
+		leaseActionError = null;
+		leaseActionMessage = null;
+
+		try {
+			const provider = requireInjectedWallet();
+			const sessionKey = await generateStoredLeaseSessionKey();
+			const challenge = await api.createAgentAccessLeaseSessionKeyChallenge({
+				username: lease.username,
+				leaseID: lease.id,
+				input: {
+					sessionPublicKey: sessionKey.publicKey,
+				},
+			});
+
+			const signature = await signWalletChallenge(provider, lease.agentWallet, challenge);
+			const updatedLease = await api.authorizeAgentAccessLeaseSessionKey({
+				username: lease.username,
+				leaseID: lease.id,
+				input: {
+					challengeID: challenge.id,
+					signature,
+				},
+			});
+
+			writeStoredLeaseSessionKey(lease.username, lease.id, sessionKey);
+			upsertLease(updatedLease);
+			leaseActionMessage = 'Browser session key authorized for this lease.';
+		} catch (err) {
+			leaseActionError = err instanceof Error ? err.message : String(err);
+		} finally {
+			leaseSessionKeyLoading = false;
+		}
+	}
+
+	async function handleRevokeLease(lease: AgentAccessLease) {
 		if (!canManage) return;
+		if (revokeLeaseId) return;
 		if (typeof window !== 'undefined') {
-			const ok = window.confirm(`Revoke tokens for @${agent.username}?`);
+			const ok = window.confirm(`Revoke access lease ${lease.id} for @${lease.username}?`);
 			if (!ok) return;
 		}
 
+		revokeLeaseId = lease.id;
+		leaseActionError = null;
+		leaseActionMessage = null;
+
 		try {
-			await api.revokeAgentToken({ username: agent.username });
-			delegation = null;
-			delegationError = null;
+			const updatedLease = await api.revokeAgentAccessLease({
+				username: lease.username,
+				leaseID: lease.id,
+				input: revokeReason.trim() ? { reason: revokeReason.trim() } : undefined,
+			});
+
+			upsertLease(updatedLease);
+			clearStoredLeaseSessionKey(lease.username, lease.id);
+			clearStoredLeaseToken(lease.username, lease.id);
+			refreshStoredLeaseSessionIds(lease.username);
+
+			if (selectedLeaseId === lease.id) {
+				currentLeaseToken = null;
+			}
+
+			revokeReason = '';
+			leaseActionMessage = `Lease ${lease.id} revoked.`;
 		} catch (err) {
-			delegationError = err instanceof Error ? err.message : String(err);
+			leaseActionError = err instanceof Error ? err.message : String(err);
+		} finally {
+			revokeLeaseId = null;
 		}
 	}
 
@@ -424,7 +1056,7 @@
 	{:else if !agent}
 		<div class="page__notice">Agent not found.</div>
 	{:else}
-		<header class="profile-card">
+		<header class="profile-card profile-card--no-avatar">
 			<div class="profile-card__body">
 				<div class="profile-card__heading">
 					<h2 class="profile-card__name">{agent.displayName}</h2>
@@ -558,96 +1190,373 @@
 		</header>
 
 		<section class="page__notice">
-			<h2>Delegated token</h2>
+			<div class="settings-token__row">
+				<div>
+						<h2>Access leases</h2>
+						<p class="page__meta">
+							Lesser now uses wallet-backed access leases. The lease defines the durable access window with idle and
+							absolute expiry, while each renewal mints a short-lived bearer token for MCP. Refresh tokens are no
+							longer part of the agent flow.
+						</p>
+					</div>
+				{#if canManage}
+					<button
+						type="button"
+						class="gr-button gr-button--outline"
+						disabled={leaseLoading || leaseEnrollLoading || leaseTokenLoading || leaseSessionKeyLoading || revokeLeaseId !== null}
+						onclick={() => void loadLeaseData()}
+					>
+						Refresh
+					</button>
+				{/if}
+			</div>
+
 			{#if !canManage}
-				<p class="page__meta">You can view this agent, but only the owner (or admin) can delegate tokens.</p>
+				<p class="page__meta">You can view this agent, but only the owner or an admin can inspect its access leases.</p>
 			{:else}
-				<form
-					class="settings-form"
-					onsubmit={(event) => {
-						event.preventDefault();
-						void handleDelegateToken();
-					}}
-				>
-					<div class="settings-field">
-						<label class="settings-field__label" for="agent-token-exp">Token expires in (seconds)</label>
-						<input
-							class="settings-field__input"
-							id="agent-token-exp"
-							type="number"
-							min="60"
-							step="60"
-							placeholder="optional"
-							bind:value={tokenExpiresIn}
-						/>
-					</div>
-
-					<div class="settings-field">
-						<span class="settings-field__label">Scopes</span>
-						<div class="settings-scopes">
-							<label class="settings-field__checkbox-label">
-								<input class="settings-field__checkbox" type="checkbox" bind:checked={tokenScopes.read} />
-								read
-							</label>
-							<label class="settings-field__checkbox-label">
-								<input class="settings-field__checkbox" type="checkbox" bind:checked={tokenScopes.write} />
-								write
-							</label>
-							<label class="settings-field__checkbox-label">
-								<input class="settings-field__checkbox" type="checkbox" bind:checked={tokenScopes.follow} />
-								follow
-							</label>
+				{#if canEnrollLease}
+					<form
+						class="settings-form"
+						onsubmit={(event) => {
+							event.preventDefault();
+							void handleCreateLease();
+						}}
+					>
+						<div class="settings-field">
+							<label class="settings-field__label" for="agent-lease-wallet">Principal wallet</label>
+							<select
+								class="settings-field__select"
+								id="agent-lease-wallet"
+								bind:value={leasePrincipalWallet}
+								disabled={linkedWallets.length === 0 || pendingLeaseEnrollment !== null}
+							>
+								<option value="">Select one of your linked wallets</option>
+								{#each linkedWallets as wallet (wallet.id)}
+									<option value={wallet.address}>
+										{wallet.name ? `${wallet.name} · ` : ''}{formatWalletAddress(wallet.address)}
+										{wallet.verified ? ' · verified' : ''}
+									</option>
+								{/each}
+							</select>
+							<p class="page__meta">This must be one of the owner account’s linked wallets.</p>
 						</div>
-					</div>
 
-					{#if delegationError}
-						<div class="settings-form__notice settings-form__notice--error" role="alert">{delegationError}</div>
-					{/if}
+						<div class="settings-field">
+							<label class="settings-field__label" for="agent-lease-agent-wallet">Agent wallet</label>
+							<input
+								class="settings-field__input"
+								id="agent-lease-agent-wallet"
+								type="text"
+								placeholder="0x..."
+								bind:value={leaseAgentWallet}
+								disabled={pendingLeaseEnrollment !== null}
+							/>
+							{#if boundSoul}
+								<p class="page__meta">
+									Bound soul suggests agent wallet <code>{boundSoul.agent.wallet}</code> and principal
+									<code>{boundSoul.agent.principalAddress}</code>.
+								</p>
+							{:else}
+								<p class="page__meta">
+									Enter the wallet linked to the agent account. If this body was created from a soul, the Souls page
+									shows the expected wallet address.
+								</p>
+							{/if}
+						</div>
 
-					<div class="settings-form__actions">
-						<button type="submit" class="gr-button gr-button--solid" disabled={delegationLoading}>
-							{delegationLoading ? 'Delegating…' : 'Issue new token'}
-						</button>
-						<button type="button" class="gr-button gr-button--outline" onclick={handleRevokeToken}>
-							Revoke token
-						</button>
-					</div>
-				</form>
+						<div class="settings-field">
+							<label class="settings-field__label" for="agent-lease-label">Device label</label>
+							<input
+								class="settings-field__input"
+								id="agent-lease-label"
+								type="text"
+								placeholder="simulacrum-browser"
+								bind:value={leaseDeviceLabel}
+								disabled={pendingLeaseEnrollment !== null}
+							/>
+						</div>
 
-				{#if delegation}
-					{@const tokenPayload = delegation}
-					<div class="settings-token">
+						<div class="settings-field">
+							<label class="settings-field__label" for="agent-lease-idle">Idle timeout (hours)</label>
+							<input
+								class="settings-field__input"
+								id="agent-lease-idle"
+								type="number"
+								min="1"
+								step="1"
+								placeholder="defaults to 168"
+								bind:value={leaseIdleHours}
+								disabled={pendingLeaseEnrollment !== null}
+							/>
+						</div>
+
+						<div class="settings-field">
+							<label class="settings-field__label" for="agent-lease-absolute">Absolute max age (hours)</label>
+							<input
+								class="settings-field__input"
+								id="agent-lease-absolute"
+								type="number"
+								min="1"
+								step="1"
+								placeholder="defaults to 2160"
+								bind:value={leaseAbsoluteHours}
+								disabled={pendingLeaseEnrollment !== null}
+							/>
+						</div>
+
+						<div class="settings-field">
+							<span class="settings-field__label">Scopes</span>
+							<div class="settings-scopes">
+								<label class="settings-field__checkbox-label">
+									<input
+										class="settings-field__checkbox"
+										type="checkbox"
+										bind:checked={leaseScopes.read}
+										disabled={pendingLeaseEnrollment !== null}
+									/>
+									read
+								</label>
+								<label class="settings-field__checkbox-label">
+									<input
+										class="settings-field__checkbox"
+										type="checkbox"
+										bind:checked={leaseScopes.write}
+										disabled={pendingLeaseEnrollment !== null}
+									/>
+									write
+								</label>
+								<label class="settings-field__checkbox-label">
+									<input
+										class="settings-field__checkbox"
+										type="checkbox"
+										bind:checked={leaseScopes.follow}
+										disabled={pendingLeaseEnrollment !== null}
+									/>
+									follow
+								</label>
+							</div>
+							<p class="page__meta">
+								MCP write tools require <code>write</code>. <code>follow</code> alone is not enough.
+							</p>
+						</div>
+
+						<div class="settings-field">
+							<label class="settings-field__checkbox-label" for="agent-lease-session-key">
+								<input
+									class="settings-field__checkbox"
+									id="agent-lease-session-key"
+									type="checkbox"
+									bind:checked={attachBrowserSessionKey}
+									disabled={pendingLeaseEnrollment !== null}
+								/>
+								Attach a browser session key so renewal can happen without another wallet signature
+							</label>
+							<p class="page__meta">
+								If the principal and agent wallets differ, you will sign twice. After switching wallet
+								accounts, click the lease button again to continue from the pending step.
+							</p>
+							<p class="page__meta">
+								Injected wallet currently selected:
+								{#if injectedWalletAddress}
+									<code>{injectedWalletAddress}</code>
+								{:else}
+									none
+								{/if}
+							</p>
+						</div>
+
+						{#if pendingLeaseEnrollment}
+							<div class="settings-form__notice" role="status">
+								{#if pendingLeaseSigner === 'principal'}
+									Lease challenges are ready. Connect principal wallet
+									<code>{pendingLeaseWallet}</code> and continue signing.
+								{:else if pendingLeaseSigner === 'agent'}
+									Principal signature recorded. Switch to agent wallet
+									<code>{pendingLeaseWallet}</code> and continue signing.
+								{:else}
+									Both signatures are captured. Finalize the lease to mint the browser token.
+								{/if}
+							</div>
+						{/if}
+
+						{#if linkedWallets.length === 0}
+							<div class="settings-form__notice settings-form__notice--error" role="alert">
+								No linked principal wallets were found. Link a wallet in <a href="/auth/wallet">auth</a> before
+								creating a lease.
+							</div>
+						{/if}
+
+						<div class="settings-form__actions">
+							<button
+								type="submit"
+								class="gr-button gr-button--solid"
+								disabled={leaseEnrollLoading || (!pendingLeaseEnrollment && linkedWallets.length === 0)}
+							>
+								{leaseCreateButtonLabel}
+							</button>
+							{#if pendingLeaseEnrollment}
+								<button
+									type="button"
+									class="gr-button gr-button--outline"
+									disabled={leaseEnrollLoading}
+									onclick={() => {
+										leaseActionError = null;
+										resetPendingLeaseEnrollment('Pending lease signing discarded.');
+									}}
+								>
+									Discard pending signing
+								</button>
+							{/if}
+						</div>
+					</form>
+				{:else}
+					<p class="page__meta">
+						Admins can inspect and revoke leases here, but only the agent owner can create one because enrollment
+						requires wallet signatures from both the owner and the agent body.
+					</p>
+				{/if}
+
+				{#if leaseLoadError}
+					<div class="settings-form__notice settings-form__notice--error" role="alert">{leaseLoadError}</div>
+				{/if}
+				{#if leaseActionError}
+					<div class="settings-form__notice settings-form__notice--error" role="alert">{leaseActionError}</div>
+				{/if}
+				{#if leaseActionMessage}
+					<div class="settings-form__notice" role="status">{leaseActionMessage}</div>
+				{/if}
+
+				{#if leaseLoading}
+					<div class="page__notice">Loading access leases…</div>
+				{:else if leases.length === 0}
+					<div class="page__notice">No access leases exist for this agent yet.</div>
+				{:else}
+					<ul class="settings-list">
+						{#each leases as lease (lease.id)}
+							<li class="settings-list__item">
+								<div class="settings-list__body">
+									<div class="settings-list__title">{lease.deviceLabel}</div>
+									<div class="settings-list__meta">
+										Lease <code>{lease.id}</code> • {lease.status}
+										<span> • scope {lease.scopes.join(' ')}</span>
+										<span> • idle {formatDateTime(lease.idleExpiresAt)}</span>
+										<span> • absolute {formatDateTime(lease.absoluteExpiresAt)}</span>
+										{#if lease.sessionPublicKey}
+											<span> • session key attached</span>
+											{#if storedSessionLeaseIds.includes(lease.id)}
+												<span> • in this browser</span>
+											{/if}
+										{/if}
+									</div>
+								</div>
+								<button
+									type="button"
+									class="gr-button gr-button--outline"
+									onclick={() => {
+										selectedLeaseId = lease.id;
+										leaseActionError = null;
+										leaseActionMessage = null;
+									}}
+								>
+									{selectedLeaseId === lease.id ? 'Selected' : 'Select'}
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+
+				{#if selectedLease}
+					<div class="settings-token" aria-live="polite">
 						<div class="settings-token__row">
-							<strong>Access token</strong>
+							<strong>Current bearer token</strong>
 							<button
 								type="button"
 								class="gr-button gr-button--outline"
-								onclick={() => copy(tokenPayload.accessToken)}
+								disabled={!currentLeaseToken?.accessToken?.trim()}
+								onclick={() => currentLeaseToken?.accessToken && copy(currentLeaseToken.accessToken)}
 							>
 								Copy
 							</button>
 						</div>
-						<pre class="settings-token__value">{tokenPayload.accessToken}</pre>
-
-						<div class="settings-token__row">
-							<strong>Refresh token</strong>
-							<button
-								type="button"
-								class="gr-button gr-button--outline"
-								onclick={() => copy(tokenPayload.refreshToken)}
-							>
-								Copy
-							</button>
-						</div>
-						<pre class="settings-token__value">{tokenPayload.refreshToken}</pre>
-
+						<pre class="settings-token__value">{leaseTokenValue}</pre>
 						<div class="settings-token__meta">
-							Scope: {tokenPayload.scope} • Expires in: {tokenPayload.expiresIn}s
+							Lease <code>{selectedLease.id}</code> • status {selectedLease.status} • scope{' '}
+							{currentLeaseToken?.scope ?? selectedLease.scopes.join(' ')}
+							{#if currentLeaseToken}
+								<span> • token expires in {currentLeaseToken.expiresIn}s</span>
+							{/if}
+						</div>
+						<div class="settings-token__meta">
+							Principal {formatWalletAddress(selectedLease.principalWallet)} • Agent {formatWalletAddress(selectedLease.agentWallet)}
+							• idle {formatLeaseHours(selectedLease.idleTimeoutHours)} • last used {formatDateTime(selectedLease.lastUsedAt)}
+						</div>
+						<div class="settings-token__meta">
+							Session key:
+							{#if selectedLeaseHasStoredSessionKey}
+								authorized in this browser
+							{:else if selectedLease.sessionPublicKey}
+								authorized on lease, but not stored in this browser
+							{:else}
+								not attached
+							{/if}
+						</div>
+					</div>
+
+					<div class="settings-form">
+						<div class="settings-field">
+							<label class="settings-field__label" for="agent-lease-revoke-reason">Revoke reason (optional)</label>
+							<input
+								class="settings-field__input"
+								id="agent-lease-revoke-reason"
+								type="text"
+								placeholder="optional"
+								bind:value={revokeReason}
+							/>
+						</div>
+
+						<div class="settings-form__actions">
+							{#if canEnrollLease}
+								<button
+									type="button"
+									class="gr-button gr-button--solid"
+									disabled={leaseTokenLoading || selectedLease.status.trim().toLowerCase() !== 'active'}
+									onclick={() => void mintLeaseToken(selectedLease)}
+								>
+									{leaseTokenLoading ? 'Minting token…' : 'Mint bearer token'}
+								</button>
+								<button
+									type="button"
+									class="gr-button gr-button--outline"
+									disabled={leaseSessionKeyLoading || selectedLease.status.trim().toLowerCase() !== 'active'}
+									onclick={() => void handleAuthorizeSessionKey(selectedLease)}
+								>
+									{leaseSessionKeyLoading
+										? 'Authorizing session key…'
+										: selectedLease.sessionPublicKey
+											? 'Rotate browser session key'
+											: 'Attach browser session key'}
+								</button>
+							{/if}
+							<button
+								type="button"
+								class="gr-button gr-button--outline"
+								disabled={revokeLeaseId === selectedLease.id || selectedLease.status.trim().toLowerCase() === 'revoked'}
+								onclick={() => void handleRevokeLease(selectedLease)}
+							>
+								{revokeLeaseId === selectedLease.id ? 'Revoking…' : 'Revoke lease'}
+							</button>
 						</div>
 					</div>
 				{/if}
 			{/if}
 		</section>
+
+		<AgentMcpPanel
+			agentUsername={agent.username}
+			{canManage}
+			selectedLease={selectedLease}
+			leaseToken={currentLeaseToken}
+		/>
 
 		<section class="page__notice">
 			<h2>Manage agent</h2>

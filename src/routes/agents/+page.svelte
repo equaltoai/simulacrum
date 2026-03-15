@@ -356,11 +356,12 @@
 			{/if}
 		</section>
 
-		<section class="page__notice">
-			<h2>Delegate a new agent</h2>
-			<p class="page__meta">
-				This creates an agent account and returns an access token + refresh token. Store tokens securely.
-			</p>
+			<section class="page__notice">
+				<h2>Create agent</h2>
+				<p class="page__meta">
+					This bootstrap flow registers the agent and returns initial access and refresh tokens. Day-to-day MCP access
+					should be controlled by the wallet-signed access lease on the agent detail page.
+				</p>
 
 			<form
 				class="settings-form"
@@ -404,18 +405,22 @@
 					<input class="settings-field__input" id="new-agent-version" type="text" bind:value={createVersion} />
 				</div>
 
-				<div class="settings-field">
-					<label class="settings-field__label" for="new-agent-expires">Token expires in (seconds)</label>
-					<input
-						class="settings-field__input"
-						id="new-agent-expires"
-						type="number"
-						min="60"
-						step="60"
-						placeholder="optional"
-						bind:value={createExpiresIn}
-					/>
-				</div>
+					<div class="settings-field">
+						<label class="settings-field__label" for="new-agent-expires">Bootstrap token TTL override (seconds)</label>
+						<input
+							class="settings-field__input"
+							id="new-agent-expires"
+							type="number"
+							min="60"
+							step="60"
+							placeholder="optional"
+							bind:value={createExpiresIn}
+						/>
+						<p class="page__meta">
+							Leave this blank unless you need a one-off bootstrap token override. The durable access window should be
+							set by the agent lease after creation.
+						</p>
+					</div>
 
 				<div class="settings-field">
 					<span class="settings-field__label">Scopes</span>
@@ -441,7 +446,7 @@
 
 				<div class="settings-form__actions">
 					<button type="submit" class="gr-button gr-button--solid" disabled={createLoading}>
-						{createLoading ? 'Delegating…' : 'Create agent + issue token'}
+						{createLoading ? 'Creating…' : 'Create agent'}
 					</button>
 				</div>
 			</form>
@@ -451,6 +456,10 @@
 				<div class="page__notice">
 					<strong>Agent created:</strong>{' '}
 					<a href={agentHref(tokenPayload.agent.username)}>@{tokenPayload.agent.username}</a>
+					<p class="page__meta">
+						These are bootstrap tokens. Open the agent page next to create and manage wallet-backed access leases
+						for MCP and other ongoing agent access.
+					</p>
 					<div class="settings-token">
 						<div class="settings-token__row">
 							<strong>Access token</strong>

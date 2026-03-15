@@ -35,6 +35,20 @@
 	const canFollow = $derived(Boolean(account && viewerId && account.id !== viewerId));
 	const isFollowing = $derived(Boolean(relationship?.following || relationship?.requested));
 
+	function directMessageParticipantId(target: Account): string {
+		if (typeof window !== 'undefined') {
+			try {
+				if (new URL(target.id).host === window.location.host) {
+					return target.username;
+				}
+			} catch {
+				// Fall back to acct for non-URL or malformed IDs.
+			}
+		}
+
+		return target.acct;
+	}
+
 	async function handleMessage() {
 		const token = $authSession?.accessToken ?? null;
 		if (!token || !account) return;
@@ -48,7 +62,7 @@
 			if (!adapter) throw new Error('GraphQL adapter unavailable');
 
 			const data = await adapter.mutate(CreateConversationDocument, {
-				participantId: account.id,
+				participantId: directMessageParticipantId(account),
 			});
 
 			await goto(`${base}/conversations/${encodeURIComponent(data.createConversation.id)}`);

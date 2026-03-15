@@ -10,4 +10,3 @@ export declare function waapiTransition(
 	config: WaapiTransitionConfig
 ): TransitionConfig;
 //# sourceMappingURL=waapi.d.ts.map
-

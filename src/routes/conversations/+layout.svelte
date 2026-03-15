@@ -16,6 +16,10 @@
 	let viewerId = $state<string | null>(null);
 	let error = $state<string | null>(null);
 
+	function handleConversationCreated(conversationId: string) {
+		void goto(`${base}/conversations/${encodeURIComponent(conversationId)}`);
+	}
+
 	$effect(() => {
 		const token = $authSession?.accessToken ?? null;
 
@@ -77,14 +81,15 @@
 			<div class="page__notice page__notice--error" role="alert">{error}</div>
 		{/if}
 
-			<div class="messages-page__body">
-				<Messages.Root {handlers}>
-					<MessagesFallbackPolling />
-					{#if children}
-						{@render children()}
-					{/if}
+		<div class="messages-page__body">
+			<Messages.Root {handlers}>
+				<MessagesFallbackPolling />
+				{#if children}
+					{@render children()}
+				{/if}
 
-					<Messages.Conversations currentUserId={viewerId ?? 'me'} />
+				<Messages.NewConversation onConversationCreated={handleConversationCreated} />
+				<Messages.Conversations currentUserId={viewerId ?? 'me'} />
 
 				<div class="messages-page__thread">
 					<Messages.Thread currentUserId={viewerId ?? 'me'} />

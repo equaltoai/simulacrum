@@ -1,6 +1,7 @@
 import type { TimelineItem } from '$lib/greater/adapters';
 import type {
 	AttachmentFieldsFragment,
+	CommunicationNotificationFieldsFragment,
 	CommunityNoteFieldsFragment,
 	MentionFieldsFragment,
 	ObjectFieldsFragment,
@@ -12,6 +13,10 @@ import type {
 import type {
 	Account,
 	CommunityNote,
+	CommunicationAttachment,
+	CommunicationFrom,
+	CommunicationNotification,
+	CommunicationTo,
 	MediaAttachment,
 	Mention,
 	Notification,
@@ -401,7 +406,11 @@ export function statusToTimelineItem(status: Status): TimelineItem {
 }
 
 function toNotificationType(type: string): Notification['type'] {
-	const key = type.trim().toUpperCase();
+	const key = type.trim().replace(/[.:]/g, '_').toUpperCase();
+
+	if (key.startsWith('COMMUNICATION')) {
+		return 'communication_inbound';
+	}
 
 	switch (key) {
 		case 'MENTION':
@@ -453,11 +462,57 @@ function toNotificationType(type: string): Notification['type'] {
 		case 'MODERATION_ACTION':
 		case 'MODERATIONACTION':
 			return 'moderation_action';
+		case 'COMMUNICATION_INBOUND':
+			return 'communication_inbound';
 		default:
 			// Mastodon-style notification types come back lowercased (follow/mention/reblog/favourite).
 			// Fall back to matching those by normalizing to upper-case above.
 			return 'mention';
 	}
+}
+
+function toCommunicationFrom(from: CommunicationNotificationFieldsFragment['from']): CommunicationFrom {
+	return {
+		address: from.address,
+		displayName: from.displayName ?? null,
+		soulAgentId: from.soulAgentId ?? null,
+	};
+}
+
+function toCommunicationTo(
+	to: CommunicationNotificationFieldsFragment['to']
+): CommunicationTo | null {
+	if (!to) return null;
+	return { address: to.address };
+}
+
+function toCommunicationAttachment(
+	attachment: CommunicationNotificationFieldsFragment['attachments'][number]
+): CommunicationAttachment {
+	return {
+		id: attachment.id,
+		filename: attachment.filename,
+		contentType: attachment.contentType,
+		sizeBytes: attachment.sizeBytes,
+		sha256: attachment.sha256,
+	};
+}
+
+function toCommunicationNotification(
+	comm: CommunicationNotificationFieldsFragment
+): CommunicationNotification {
+	return {
+		channel: comm.channel,
+		from: toCommunicationFrom(comm.from),
+		to: toCommunicationTo(comm.to),
+		attachments: comm.attachments.map(toCommunicationAttachment),
+		subject: comm.subject ?? null,
+		body: comm.body ?? null,
+		receivedAt: comm.receivedAt,
+		messageId: comm.messageId,
+		inReplyTo: comm.inReplyTo ?? null,
+		threadId: comm.threadId ?? null,
+	};
 }
 
 export function toNotification(input: {
@@ -467,8 +522,9 @@ export function toNotification(input: {
 	readonly createdAt: string;
 	readonly account: ActorLike;
 	readonly status?: ObjectFieldsFragment | null;
+	readonly communication?: CommunicationNotificationFieldsFragment | null;
 }): Notification {
-	const type = toNotificationType(input.type);
+	const type = input.communication ? 'communication_inbound' : toNotificationType(input.type);
 	const base = {
 		id: input.id,
 		type,
@@ -480,6 +536,11 @@ export function toNotification(input: {
 	const mappedStatus = input.status ? toStatus(input.status) : undefined;
 
 	switch (type) {
+		case 'communication_inbound':
+			return {
+				...(base as unknown as Record<string, unknown>),
+				communication: toCommunicationNotification(input.communication!),
+			} as Notification;
 		case 'follow':
 		case 'follow_request':
 		case 'admin.sign_up':

@@ -302,6 +302,37 @@ export interface Poll {
 	}>;
 }
 
+export interface CommunicationFrom {
+	address: string;
+	displayName?: string | null;
+	soulAgentId?: string | null;
+}
+
+export interface CommunicationTo {
+	address: string;
+}
+
+export interface CommunicationAttachment {
+	id: string;
+	filename: string;
+	contentType: string;
+	sizeBytes: number;
+	sha256: string;
+}
+
+export interface CommunicationNotification {
+	channel: string;
+	from: CommunicationFrom;
+	to?: CommunicationTo | null;
+	attachments: CommunicationAttachment[];
+	subject?: string | null;
+	body?: string | null;
+	receivedAt: string;
+	messageId: string;
+	inReplyTo?: string | null;
+	threadId?: string | null;
+}
+
 export type NotificationType =
 	| 'mention'
 	| 'reblog'
@@ -318,7 +349,8 @@ export type NotificationType =
 	| 'community_note'
 	| 'trust_update'
 	| 'cost_alert'
-	| 'moderation_action';
+	| 'moderation_action'
+	| 'communication_inbound';
 
 export interface BaseNotification {
 	id: string;
@@ -452,6 +484,11 @@ export interface ModerationActionNotification extends BaseNotification {
 	reason: string;
 }
 
+export interface CommunicationInboundNotification extends BaseNotification {
+	type: 'communication_inbound';
+	communication: CommunicationNotification;
+}
+
 export type Notification =
 	| MentionNotification
 	| ReblogNotification
@@ -467,7 +504,8 @@ export type Notification =
 	| CommunityNoteNotification
 	| TrustUpdateNotification
 	| CostAlertNotification
-	| ModerationActionNotification;
+	| ModerationActionNotification
+	| CommunicationInboundNotification;
 
 export interface NotificationGroup {
 	id: string;
