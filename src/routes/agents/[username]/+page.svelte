@@ -1192,12 +1192,13 @@
 		<section class="page__notice">
 			<div class="settings-token__row">
 				<div>
-					<h2>Access leases</h2>
-					<p class="page__meta">
-						Lesser now uses wallet-backed access leases. Each lease mints short-lived bearer tokens for MCP;
-						refresh tokens are no longer part of the agent flow.
-					</p>
-				</div>
+						<h2>Access leases</h2>
+						<p class="page__meta">
+							Lesser now uses wallet-backed access leases. The lease defines the durable access window with idle and
+							absolute expiry, while each renewal mints a short-lived bearer token for MCP. Refresh tokens are no
+							longer part of the agent flow.
+						</p>
+					</div>
 				{#if canManage}
 					<button
 						type="button"
