@@ -106,9 +106,13 @@ type LesserConversationLike = {
 	};
 };
 
+function conversationParticipantId(actor: ActorSummaryFragment): string {
+	return actor.domain ? `${actor.username}@${actor.domain}` : actor.username;
+}
+
 function mapActorToParticipant(actor: ActorSummaryFragment): MessageParticipant {
 	return {
-		id: actor.id,
+		id: conversationParticipantId(actor),
 		username: actor.username,
 		displayName: actor.displayName ?? actor.username,
 		avatar: actor.avatar ?? undefined,

@@ -48,7 +48,7 @@
 			if (!adapter) throw new Error('GraphQL adapter unavailable');
 
 			const data = await adapter.mutate(CreateConversationDocument, {
-				participantId: account.id,
+				participantId: account.acct,
 			});
 
 			await goto(`${base}/conversations/${encodeURIComponent(data.createConversation.id)}`);
