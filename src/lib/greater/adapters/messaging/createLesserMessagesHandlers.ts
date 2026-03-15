@@ -106,7 +106,23 @@ type LesserConversationLike = {
 	};
 };
 
+function isLocalActorId(actorId: string): boolean {
+	if (typeof window === 'undefined') {
+		return false;
+	}
+
+	try {
+		return new URL(actorId).host === window.location.host;
+	} catch {
+		return false;
+	}
+}
+
 function conversationParticipantId(actor: ActorSummaryFragment): string {
+	if (isLocalActorId(actor.id)) {
+		return actor.username;
+	}
+
 	return actor.domain ? `${actor.username}@${actor.domain}` : actor.username;
 }
 
