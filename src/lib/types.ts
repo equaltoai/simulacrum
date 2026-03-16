@@ -105,9 +105,11 @@ export interface AgentAttribution {
 	triggerDetails?: string;
 	memoryCitations?: ReadonlyArray<string>;
 	delegatedBy?: string;
+	delegatedByDid?: string;
 	scopes?: ReadonlyArray<string>;
 	constraints?: ReadonlyArray<string>;
-	modelVersion?: string;
+	schemaVersion?: string;
+	modelId?: string;
 }
 
 /**

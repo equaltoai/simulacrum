@@ -1096,11 +1096,15 @@ components:
                     type: array
                 delegated_by:
                     type: string
+                delegated_by_did:
+                    type: string
                 memory_citations:
                     items:
                         type: string
                     type: array
-                model_version:
+                model_id:
+                    type: string
+                schema_version:
                     type: string
                 scopes:
                     items:
@@ -5685,7 +5689,7 @@ components:
                     anyOf:
                         - additionalProperties: false
                           properties:
-                            _:agentAttribution:
+                            agentAttribution:
                                 anyOf:
                                     - additionalProperties: false
                                       properties:
@@ -5695,11 +5699,15 @@ components:
                                             type: array
                                         delegated_by:
                                             type: string
+                                        delegated_by_did:
+                                            type: string
                                         memory_citations:
                                             items:
                                                 type: string
                                             type: array
-                                        model_version:
+                                        model_id:
+                                            type: string
+                                        schema_version:
                                             type: string
                                         scopes:
                                             items:
