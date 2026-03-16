@@ -66,6 +66,7 @@ export interface MessagesRealtimeCallbacks {
 
 export interface MessagesHandlers {
 	onFetchConversations?: (folder?: ConversationFolder) => Promise<Conversation[]>;
+	onFetchConversation?: (conversationId: string) => Promise<Conversation | null>;
 	onFetchMessages?: (
 		conversationId: string,
 		options?: { limit?: number; cursor?: string }
@@ -175,6 +176,19 @@ function mapConversationToUiConversation(
 	};
 }
 
+function isValidConversation(
+	conversation: Partial<LesserConversationLike> | null | undefined
+): conversation is LesserConversationLike {
+	return Boolean(
+		conversation &&
+			typeof conversation.id === 'string' &&
+			conversation.id.length > 0 &&
+			typeof conversation.updatedAt === 'string' &&
+			conversation.updatedAt.length > 0 &&
+			conversation.viewerMetadata
+	);
+}
+
 export function createLesserMessagesHandlers(
 	config: LesserMessagesHandlersConfig
 ): MessagesHandlers {
@@ -187,9 +201,23 @@ export function createLesserMessagesHandlers(
 				first: pageSize,
 			})) as unknown as LesserConversationLike[];
 
-			return conversations.map((conversation) =>
-				mapConversationToUiConversation(conversation, folder)
-			);
+			return conversations
+				.filter(isValidConversation)
+				.map((conversation) => mapConversationToUiConversation(conversation, folder));
+		},
+		onFetchConversation: async (conversationId) => {
+			const conversation = (await adapter.getConversation(
+				conversationId
+			)) as unknown as LesserConversationLike | null;
+			if (!isValidConversation(conversation)) {
+				return null;
+			}
+
+			const folder: ConversationFolder =
+				(conversation.viewerMetadata.requestState ?? 'ACCEPTED') === 'PENDING'
+					? 'REQUESTS'
+					: 'INBOX';
+			return mapConversationToUiConversation(conversation, folder);
 		},
 		onFetchMessages: async (conversationId, options) => {
 			const data = await adapter.query(ConversationMessagesDocument, {

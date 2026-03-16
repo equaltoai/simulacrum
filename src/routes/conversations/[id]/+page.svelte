@@ -3,7 +3,7 @@
 
 	import { getMessagesContext, type ConversationFolder } from '$lib/components/messaging';
 
-	const { state, fetchConversations, selectConversation } = getMessagesContext();
+	const { state, handlers, fetchConversations, selectConversation } = getMessagesContext();
 
 	async function ensureSelected(conversationId: string) {
 		if (state.selectedConversation?.id === conversationId) return;
@@ -27,6 +27,10 @@
 			found = await tryFolder(other);
 		}
 
+		if (!found) {
+			found = (await handlers.onFetchConversation?.(conversationId)) ?? null;
+		}
+
 		if (found) {
 			await selectConversation(found);
 		}
@@ -42,4 +46,3 @@
 <svelte:head>
 	<title>Conversation • Simulacrum</title>
 </svelte:head>
-
