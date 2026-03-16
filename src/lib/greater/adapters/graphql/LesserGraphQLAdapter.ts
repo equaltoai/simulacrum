@@ -6,7 +6,7 @@
  * and object accessors rather than the legacy Mastodon-style wrappers.
  */
 
-import { Observable, type FetchResult, type OperationVariables } from '@apollo/client';
+import type { Observable, FetchResult, OperationVariables } from '@apollo/client';
 import type { ApolloClient as ApolloClientNamespace } from '@apollo/client';
 
 type QueryOptionsFor<
@@ -280,47 +280,13 @@ const ViewerDocument = {
 							selections: [
 								{ kind: 'Field', name: { kind: 'Name', value: 'id' } },
 								{ kind: 'Field', name: { kind: 'Name', value: 'username' } },
-								{ kind: 'Field', name: { kind: 'Name', value: 'domain' } },
 								{ kind: 'Field', name: { kind: 'Name', value: 'displayName' } },
-								{ kind: 'Field', name: { kind: 'Name', value: 'summary' } },
 								{ kind: 'Field', name: { kind: 'Name', value: 'avatar' } },
 								{ kind: 'Field', name: { kind: 'Name', value: 'header' } },
-								{ kind: 'Field', name: { kind: 'Name', value: 'followers' } },
-								{ kind: 'Field', name: { kind: 'Name', value: 'following' } },
+								{ kind: 'Field', name: { kind: 'Name', value: 'url' } },
+								{ kind: 'Field', name: { kind: 'Name', value: 'followersCount' } },
+								{ kind: 'Field', name: { kind: 'Name', value: 'followingCount' } },
 								{ kind: 'Field', name: { kind: 'Name', value: 'statusesCount' } },
-								{ kind: 'Field', name: { kind: 'Name', value: 'bot' } },
-								{ kind: 'Field', name: { kind: 'Name', value: 'locked' } },
-								{ kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
-								{ kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
-								{ kind: 'Field', name: { kind: 'Name', value: 'isAgent' } },
-								{
-									kind: 'Field',
-									name: { kind: 'Name', value: 'agentInfo' },
-									selectionSet: {
-										kind: 'SelectionSet',
-										selections: [
-											{ kind: 'Field', name: { kind: 'Name', value: 'id' } },
-											{ kind: 'Field', name: { kind: 'Name', value: 'agentType' } },
-											{ kind: 'Field', name: { kind: 'Name', value: 'verified' } },
-											{ kind: 'Field', name: { kind: 'Name', value: 'verifiedAt' } },
-										],
-									},
-								},
-								{ kind: 'Field', name: { kind: 'Name', value: 'tipAddress' } },
-								{ kind: 'Field', name: { kind: 'Name', value: 'tipChainId' } },
-								{ kind: 'Field', name: { kind: 'Name', value: 'trustScore' } },
-								{
-									kind: 'Field',
-									name: { kind: 'Name', value: 'fields' },
-									selectionSet: {
-										kind: 'SelectionSet',
-										selections: [
-											{ kind: 'Field', name: { kind: 'Name', value: 'name' } },
-											{ kind: 'Field', name: { kind: 'Name', value: 'value' } },
-											{ kind: 'Field', name: { kind: 'Name', value: 'verifiedAt' } },
-										],
-									},
-								},
 							],
 						},
 					},

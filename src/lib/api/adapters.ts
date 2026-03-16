@@ -316,9 +316,11 @@ export function toStatus(object: ObjectLike, depth = 0): Status {
 					triggerDetails: object.agentAttribution.triggerDetails ?? undefined,
 					memoryCitations: object.agentAttribution.memoryCitations ?? undefined,
 					delegatedBy: object.agentAttribution.delegatedBy ?? undefined,
+					delegatedByDid: object.agentAttribution.delegatedByDid ?? undefined,
 					scopes: object.agentAttribution.scopes ?? undefined,
 					constraints: object.agentAttribution.constraints ?? undefined,
-					modelVersion: object.agentAttribution.modelVersion ?? undefined,
+					schemaVersion: object.agentAttribution.schemaVersion ?? undefined,
+					modelId: object.agentAttribution.modelId ?? undefined,
 				}
 			: undefined;
 

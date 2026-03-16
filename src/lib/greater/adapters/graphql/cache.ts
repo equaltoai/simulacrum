@@ -146,9 +146,16 @@ export const typePolicies: TypePolicies = {
 			 * Conversations/Messages
 			 */
 			conversations: {
-				keyArgs: ['folder'],
-				merge(_existing: unknown, incoming: unknown) {
-					return incoming;
+				keyArgs: false,
+				merge(
+					existing: PagedEdgesConnection = { edges: [], pageInfo: {} },
+					incoming: PagedEdgesConnection
+				) {
+					return {
+						...incoming,
+						edges: [...existing.edges, ...incoming.edges],
+						pageInfo: incoming.pageInfo,
+					};
 				},
 			},
 			conversationMessages: {

@@ -107,29 +107,9 @@ type LesserConversationLike = {
 	};
 };
 
-function isLocalActorId(actorId: string): boolean {
-	if (typeof window === 'undefined') {
-		return false;
-	}
-
-	try {
-		return new URL(actorId).host === window.location.host;
-	} catch {
-		return false;
-	}
-}
-
-function conversationParticipantId(actor: ActorSummaryFragment): string {
-	if (isLocalActorId(actor.id)) {
-		return actor.username;
-	}
-
-	return actor.domain ? `${actor.username}@${actor.domain}` : actor.username;
-}
-
 function mapActorToParticipant(actor: ActorSummaryFragment): MessageParticipant {
 	return {
-		id: conversationParticipantId(actor),
+		id: actor.id,
 		username: actor.username,
 		displayName: actor.displayName ?? actor.username,
 		avatar: actor.avatar ?? undefined,
@@ -176,17 +156,8 @@ function mapConversationToUiConversation(
 	};
 }
 
-function isValidConversation(
-	conversation: Partial<LesserConversationLike> | null | undefined
-): conversation is LesserConversationLike {
-	return Boolean(
-		conversation &&
-			typeof conversation.id === 'string' &&
-			conversation.id.length > 0 &&
-			typeof conversation.updatedAt === 'string' &&
-			conversation.updatedAt.length > 0 &&
-			conversation.viewerMetadata
-	);
+function folderForConversation(conversation: LesserConversationLike): ConversationFolder {
+	return conversation.viewerMetadata.requestState === 'PENDING' ? 'REQUESTS' : 'INBOX';
 }
 
 export function createLesserMessagesHandlers(
@@ -201,23 +172,15 @@ export function createLesserMessagesHandlers(
 				first: pageSize,
 			})) as unknown as LesserConversationLike[];
 
-			return conversations
-				.filter(isValidConversation)
-				.map((conversation) => mapConversationToUiConversation(conversation, folder));
+			return conversations.map((conversation) =>
+				mapConversationToUiConversation(conversation, folder)
+			);
 		},
 		onFetchConversation: async (conversationId) => {
-			const conversation = (await adapter.getConversation(
-				conversationId
-			)) as unknown as LesserConversationLike | null;
-			if (!isValidConversation(conversation)) {
-				return null;
-			}
-
-			const folder: ConversationFolder =
-				(conversation.viewerMetadata.requestState ?? 'ACCEPTED') === 'PENDING'
-					? 'REQUESTS'
-					: 'INBOX';
-			return mapConversationToUiConversation(conversation, folder);
+			const conversation = (await adapter.getConversation(conversationId)) as LesserConversationLike | null;
+			return conversation
+				? mapConversationToUiConversation(conversation, folderForConversation(conversation))
+				: null;
 		},
 		onFetchMessages: async (conversationId, options) => {
 			const data = await adapter.query(ConversationMessagesDocument, {
