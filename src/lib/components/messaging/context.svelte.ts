@@ -107,6 +107,11 @@ export interface MessagesHandlers {
 	onFetchConversations?: (folder?: ConversationFolder) => Promise<Conversation[]>;
 
 	/**
+	 * Fetch a single conversation by id.
+	 */
+	onFetchConversation?: (conversationId: string) => Promise<Conversation | null>;
+
+	/**
 	 * Fetch messages for a conversation
 	 */
 	onFetchMessages?: (
