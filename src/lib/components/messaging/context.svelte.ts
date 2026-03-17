@@ -107,17 +107,17 @@ export interface MessagesHandlers {
 	onFetchConversations?: (folder?: ConversationFolder) => Promise<Conversation[]>;
 
 	/**
-	 * Fetch a single conversation for deep-linked views
-	 */
-	onFetchConversation?: (conversationId: string) => Promise<Conversation | null>;
-
-	/**
 	 * Fetch messages for a conversation
 	 */
 	onFetchMessages?: (
 		conversationId: string,
 		options?: { limit?: number; cursor?: string }
 	) => Promise<DirectMessage[]>;
+
+	/**
+	 * Fetch one conversation by id
+	 */
+	onFetchConversation?: (conversationId: string) => Promise<Conversation | null>;
 
 	/**
 	 * Send a message

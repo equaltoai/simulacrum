@@ -332,7 +332,7 @@
 			souls = nextSouls;
 			syncSelectedTargets(nextSouls, agentBodies);
 			actionMessage = updated.binding
-				? `Soul ${updated.agent.localId} is now bound to agent body @${updated.binding.agentUsername}. Open that agent body next to issue an MCP token and connect your client.`
+				? `Soul ${updated.agent.localId} is now bound to agent body @${updated.binding.agentUsername}. Open that agent body next to issue runtime credentials and connect your client.`
 				: `Soul ${updated.agent.localId} was incorporated.`;
 		} catch (err) {
 			actionError = err instanceof Error ? err.message : String(err);

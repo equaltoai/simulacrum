@@ -359,8 +359,9 @@
 			<section class="page__notice">
 				<h2>Create agent</h2>
 				<p class="page__meta">
-					This bootstrap flow registers the agent and returns initial access and refresh tokens. Day-to-day MCP access
-					should be controlled by the wallet-signed access lease on the agent detail page.
+					This flow registers the agent and returns the first runtime access + refresh tokens for a local runtime.
+					These standard bearer credentials are the normal MCP path; the agent detail page also lets you review and
+					revoke runtime sessions, with lease auth kept as an advanced option.
 				</p>
 
 			<form
@@ -417,8 +418,8 @@
 							bind:value={createExpiresIn}
 						/>
 						<p class="page__meta">
-							Leave this blank unless you need a one-off bootstrap token override. The durable access window should be
-							set by the agent lease after creation.
+							Leave this blank unless you need a one-off bootstrap token override. The durable runtime session stays
+							alive via the refresh token and rotation safety rails.
 						</p>
 					</div>
 
@@ -457,8 +458,8 @@
 					<strong>Agent created:</strong>{' '}
 					<a href={agentHref(tokenPayload.agent.username)}>@{tokenPayload.agent.username}</a>
 					<p class="page__meta">
-						These are bootstrap tokens. Open the agent page next to create and manage wallet-backed access leases
-						for MCP and other ongoing agent access.
+						These are standard runtime credentials. Open the agent page next to issue additional runtime sessions,
+						revoke old ones, or use lease auth only if you specifically need the advanced wallet-backed flow.
 					</p>
 					<div class="settings-token">
 						<div class="settings-token__row">

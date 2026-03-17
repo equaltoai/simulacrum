@@ -156,10 +156,6 @@ function mapConversationToUiConversation(
 	};
 }
 
-function folderForConversation(conversation: LesserConversationLike): ConversationFolder {
-	return conversation.viewerMetadata.requestState === 'PENDING' ? 'REQUESTS' : 'INBOX';
-}
-
 export function createLesserMessagesHandlers(
 	config: LesserMessagesHandlersConfig
 ): MessagesHandlers {
@@ -177,10 +173,15 @@ export function createLesserMessagesHandlers(
 			);
 		},
 		onFetchConversation: async (conversationId) => {
-			const conversation = (await adapter.getConversation(conversationId)) as LesserConversationLike | null;
-			return conversation
-				? mapConversationToUiConversation(conversation, folderForConversation(conversation))
-				: null;
+			const conversation = (await adapter.getConversation(conversationId)) as
+				| LesserConversationLike
+				| null
+				| undefined;
+			if (!conversation) return null;
+
+			const folder: ConversationFolder =
+				conversation.viewerMetadata.requestState === 'PENDING' ? 'REQUESTS' : 'INBOX';
+			return mapConversationToUiConversation(conversation, folder);
 		},
 		onFetchMessages: async (conversationId, options) => {
 			const data = await adapter.query(ConversationMessagesDocument, {

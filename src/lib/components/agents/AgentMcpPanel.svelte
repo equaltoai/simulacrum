@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import type { AgentAccessLease, AgentLeaseToken } from '$lib/api';
+	import type { AgentAccessLease, AgentDelegation, AgentLeaseToken, AgentRuntimeSession } from '$lib/api';
 	import {
 		KNOWN_MCP_TOOLS,
 		KNOWN_MCP_PROMPTS,
@@ -22,17 +22,35 @@
 	interface Props {
 		agentUsername: string;
 		canManage: boolean;
+		canIssueRuntimeCredentials: boolean;
+		runtimeCredentials: AgentDelegation | null;
+		selectedRuntimeSession: AgentRuntimeSession | null;
 		selectedLease: AgentAccessLease | null;
 		leaseToken: AgentLeaseToken | null;
 	}
 
 	type PanelStatus = 'idle' | 'loading' | 'ready' | 'error';
+	type ActiveCredential = {
+		kind: 'runtime' | 'lease';
+		accessToken: string;
+		scope: string;
+		expiresIn: number | null;
+		metaLabel: string;
+	};
 	type DisplayTool = KnownMcpTool & {
 		source: 'live' | 'discovery' | 'fallback';
 		description: string;
 	};
 
-	let { agentUsername, canManage, selectedLease, leaseToken }: Props = $props();
+	let {
+		agentUsername,
+		canManage,
+		canIssueRuntimeCredentials,
+		runtimeCredentials,
+		selectedRuntimeSession,
+		selectedLease,
+		leaseToken,
+	}: Props = $props();
 
 	let discoveryStatus = $state<PanelStatus>('idle');
 	let discoveryDoc = $state<McpWellKnownDocument | null>(null);
@@ -50,7 +68,7 @@
 	}
 
 	function tokenValue(): string {
-		return leaseToken?.accessToken?.trim() || '<lease-access-token>';
+		return activeCredential?.accessToken?.trim() || '<runtime-access-token>';
 	}
 
 	function statusLabel(status: PanelStatus): string {
@@ -147,7 +165,7 @@
 	});
 
 	$effect(() => {
-		const token = leaseToken?.accessToken?.trim() ?? '';
+		const token = activeCredential?.accessToken?.trim() ?? '';
 		const endpoint = discoveryDoc?.endpoint?.trim() || transport?.endpoint || '';
 
 		inspection = null;
@@ -168,9 +186,34 @@
 	const serverName = $derived.by(() => `simulacrum-${sanitizeServerName(agentUsername)}`);
 	const mcpEndpoint = $derived.by(() => discoveryDoc?.endpoint?.trim() || transport?.endpoint || '');
 	const mcpDiscoveryUrl = $derived.by(() => transport?.discoveryUrl ?? '');
+	const activeCredential = $derived.by<ActiveCredential | null>(() => {
+		const runtimeToken = runtimeCredentials?.accessToken?.trim();
+		if (runtimeToken) {
+			return {
+				kind: 'runtime',
+				accessToken: runtimeToken,
+				scope: runtimeCredentials?.scope?.trim() || selectedRuntimeSession?.scope?.trim() || 'read write',
+				expiresIn: runtimeCredentials?.expiresIn ?? null,
+				metaLabel: selectedRuntimeSession?.deviceLabel?.trim() || 'Runtime session',
+			};
+		}
+
+		const leaseAccessToken = leaseToken?.accessToken?.trim();
+		if (leaseAccessToken) {
+			return {
+				kind: 'lease',
+				accessToken: leaseAccessToken,
+				scope: leaseToken?.scope?.trim() || selectedLease?.scopes.join(' ') || 'read write',
+				expiresIn: leaseToken?.expiresIn ?? null,
+				metaLabel: selectedLease?.deviceLabel?.trim() || 'Advanced lease',
+			};
+		}
+
+		return null;
+	});
 	const authHeader = $derived.by(() => `Authorization: Bearer ${tokenValue()}`);
-	const currentScope = $derived.by(() => leaseToken?.scope?.trim() || selectedLease?.scopes.join(' ') || 'read write');
-	const currentExpiry = $derived.by(() => leaseToken?.expiresIn ?? null);
+	const currentScope = $derived.by(() => activeCredential?.scope || 'read write');
+	const currentExpiry = $derived.by(() => activeCredential?.expiresIn ?? null);
 	const discoveryCapabilities = $derived.by(
 		() => discoveryDoc?.capabilities ?? { tools: true, resources: true, prompts: true }
 	);
@@ -282,7 +325,8 @@
 		<div>
 			<h2>MCP connection</h2>
 			<p class="mcp-panel__intro">
-				Connect this agent body to Claude Code, Cursor, or any Streamable HTTP MCP client.
+				Connect this agent body to Claude Code, Cursor, or any Streamable HTTP MCP client with the standard
+				runtime bearer token.
 			</p>
 		</div>
 		<div class="mcp-panel__actions">
@@ -296,11 +340,11 @@
 			<button
 				type="button"
 				class="gr-button gr-button--outline"
-				disabled={!leaseToken?.accessToken?.trim()}
+				disabled={!activeCredential?.accessToken?.trim()}
 				onclick={() =>
-					leaseToken?.accessToken &&
+					activeCredential?.accessToken &&
 					mcpEndpoint &&
-					void refreshInspection(mcpEndpoint, leaseToken.accessToken.trim())
+					void refreshInspection(mcpEndpoint, activeCredential.accessToken.trim())
 				}
 			>
 				Refresh live check
@@ -345,9 +389,11 @@
 	</div>
 
 	<div class="settings-form__notice">
-		The current lease bearer token above is the MCP credential. For MCP, <code>read</code> unlocks read-only tools and
-		<code>write</code> unlocks posting, follow/unfollow, profile updates, memory writes, and outbound comms. The
-		legacy <code>follow</code> scope alone is not enough for MCP write tools.
+		Use the standard runtime access token as the MCP bearer, and keep the refresh token only in your local runtime.
+		Refresh sessions rotate on use, so if a refresh token leaks, revoke that runtime session and mint a new one.
+		For MCP, <code>read</code> unlocks read-only tools and <code>write</code> unlocks posting, follow/unfollow,
+		profile updates, memory writes, and outbound comms. The legacy <code>follow</code> scope alone is not enough for
+		MCP write tools.
 	</div>
 
 	<div class="mcp-panel__status-grid">
@@ -380,15 +426,21 @@
 
 		<article class="mcp-panel__status">
 			<div class="mcp-panel__status-header">
-				<h3>Current lease token</h3>
+				<h3>{activeCredential?.kind === 'lease' ? 'Advanced lease token' : 'Current runtime token'}</h3>
 				<span class={statusBadgeClass(inspectionStatus)}>{statusLabel(inspectionStatus)}</span>
 			</div>
-			{#if selectedLease}
+			{#if activeCredential}
 				<p class="page__meta">
-					Lease <code>{selectedLease.id}</code> · status <code>{selectedLease.status}</code> · scope <code>{currentScope}</code>
-					{#if selectedLease.deviceLabel}
-						· device <code>{selectedLease.deviceLabel}</code>
+					{#if activeCredential.kind === 'runtime'}
+						Runtime session
+						{#if selectedRuntimeSession}
+							<code>{selectedRuntimeSession.sessionID}</code> · client <code>{selectedRuntimeSession.clientID}</code>
+						{/if}
+					{:else if selectedLease}
+						Lease <code>{selectedLease.id}</code> · status <code>{selectedLease.status}</code>
 					{/if}
+					· scope <code>{currentScope}</code>
+					· label <code>{activeCredential.metaLabel}</code>
 					{#if currentExpiry}
 						· expires in {currentExpiry}s
 					{/if}
@@ -407,17 +459,24 @@
 					<p class="mcp-panel__status-copy">{inspectionError}</p>
 				{:else}
 					<p class="mcp-panel__status-copy">
-						Mint a bearer token from the selected lease above and this panel will verify authenticated MCP access.
+						{#if activeCredential.kind === 'runtime'}
+							The current runtime bearer token is ready. Run a live check to verify authenticated MCP access.
+						{:else}
+							This advanced lease bearer token is ready. Run a live check to verify authenticated MCP access.
+						{/if}
 					</p>
 				{/if}
 			{:else}
-				<p class="page__meta">No access lease is selected yet.</p>
+				<p class="page__meta">No runtime bearer token is loaded yet.</p>
 				<p class="mcp-panel__status-copy">
-					{#if canManage}
-						Select a lease above, mint a short-lived bearer token, then use it as
+					{#if canIssueRuntimeCredentials}
+						Issue runtime credentials above, then use the access token as
 						<code>Authorization: Bearer &lt;token&gt;</code> for your MCP client.
+					{:else if canManage}
+						An owner can issue runtime credentials above. Lease auth remains available below only as an advanced,
+						wallet-backed fallback.
 					{:else}
-						Only the agent owner or an admin with lease access can mint the bearer token this MCP endpoint needs.
+						Only the agent owner or an admin can inspect credentials for this MCP endpoint.
 					{/if}
 				</p>
 			{/if}
@@ -468,7 +527,7 @@
 				<h3>MCP tool catalog</h3>
 				<p class="page__meta">
 					{#if inspection?.tools.length}
-						Live from the current lease token.
+						Live from the current bearer token.
 					{:else if discoveryDoc?.tools?.length}
 						Live from the public discovery document.
 					{:else}

@@ -7,7 +7,9 @@
 		type AgentAccessLease,
 		type AgentAccessLeaseChallenge,
 		type AgentActivityConnection,
+		type AgentDelegation,
 		type AgentLeaseToken,
+		type AgentRuntimeSession,
 		type LinkedWallet,
 		type SoulInventoryItem,
 	} from '$lib/api';
@@ -109,6 +111,17 @@
 			if (leftRank !== rightRank) return leftRank - rightRank;
 
 			return parseDateMs(right.updatedAt) - parseDateMs(left.updatedAt);
+		});
+	}
+
+	function sortRuntimeSessions(items: readonly AgentRuntimeSession[]): AgentRuntimeSession[] {
+		return [...items].sort((left, right) => {
+			if (left.revoked !== right.revoked) return left.revoked ? 1 : -1;
+
+			const lastUsedDelta = parseDateMs(right.lastUsedAt) - parseDateMs(left.lastUsedAt);
+			if (lastUsedDelta !== 0) return lastUsedDelta;
+
+			return parseDateMs(right.createdAt) - parseDateMs(left.createdAt);
 		});
 	}
 
@@ -288,6 +301,178 @@
 		return () => provider.removeListener?.('accountsChanged', handleAccountsChanged);
 	});
 
+	// Standard runtime bearer + refresh sessions
+	let runtimeSessions = $state<AgentRuntimeSession[]>([]);
+	let selectedRuntimeSessionId = $state('');
+	let runtimeCredentials = $state<AgentDelegation | null>(null);
+	let runtimeScopes = $state({ read: true, write: true, follow: true });
+	let runtimeExpiresIn = $state('');
+	let runtimeLoading = $state(false);
+	let runtimeIssueLoading = $state(false);
+	let runtimeRevokeAllLoading = $state(false);
+	let runtimeRevokeSessionId = $state<string | null>(null);
+	let runtimeLoadError = $state<string | null>(null);
+	let runtimeActionError = $state<string | null>(null);
+	let runtimeActionMessage = $state<string | null>(null);
+
+	const selectedRuntimeSession = $derived.by(
+		() => runtimeSessions.find((session) => session.sessionID === selectedRuntimeSessionId) ?? null
+	);
+	const runtimeTokenValue = $derived.by(
+		() =>
+			runtimeCredentials?.accessToken?.trim() ||
+			(runtimeIssueLoading ? 'Issuing runtime credentials…' : 'Issue runtime credentials to reveal an access token.')
+	);
+	const runtimeRefreshValue = $derived.by(
+		() =>
+			runtimeCredentials?.refreshToken?.trim() ||
+			(runtimeIssueLoading ? 'Issuing runtime credentials…' : 'Refresh tokens are shown only after issuing a runtime session.')
+	);
+
+	function selectedRuntimeScopes(): string[] {
+		const scopes: string[] = [];
+		if (runtimeScopes.read) scopes.push('read');
+		if (runtimeScopes.write) scopes.push('write');
+		if (runtimeScopes.follow) scopes.push('follow');
+		return scopes;
+	}
+
+	function refreshSelectedRuntimeSessionId(nextSessions: readonly AgentRuntimeSession[] = runtimeSessions) {
+		selectedRuntimeSessionId =
+			selectedRuntimeSessionId && nextSessions.some((session) => session.sessionID === selectedRuntimeSessionId)
+				? selectedRuntimeSessionId
+				: nextSessions[0]?.sessionID ?? '';
+	}
+
+	function upsertRuntimeSession(nextSession: AgentRuntimeSession) {
+		const nextSessions = sortRuntimeSessions([
+			nextSession,
+			...runtimeSessions.filter((existingSession) => existingSession.sessionID !== nextSession.sessionID),
+		]);
+		runtimeSessions = nextSessions;
+		selectedRuntimeSessionId = nextSession.sessionID;
+	}
+
+	async function loadRuntimeSessions({ signal }: { signal?: AbortSignal } = {}) {
+		if (!agent || !canManage) return;
+
+		runtimeLoading = true;
+		runtimeLoadError = null;
+
+		try {
+			const nextSessions = sortRuntimeSessions(
+				await api.fetchAgentRuntimeSessions({ username: agent.username, signal })
+			);
+			runtimeSessions = nextSessions;
+			refreshSelectedRuntimeSessionId(nextSessions);
+		} catch (err) {
+			if (err instanceof DOMException && err.name === 'AbortError') return;
+			runtimeLoadError = err instanceof Error ? err.message : String(err);
+			runtimeSessions = [];
+			selectedRuntimeSessionId = '';
+		} finally {
+			runtimeLoading = false;
+		}
+	}
+
+	async function handleIssueRuntimeCredentials() {
+		if (!agent) return;
+		if (!isOwner) return;
+		if (runtimeIssueLoading) return;
+
+		const scopes = selectedRuntimeScopes();
+		if (scopes.length === 0) {
+			runtimeActionError = 'Select at least one runtime scope.';
+			return;
+		}
+
+		const expiresInRaw = runtimeExpiresIn.trim();
+		const parsedExpiresIn = expiresInRaw ? Number.parseInt(expiresInRaw, 10) : null;
+		if (expiresInRaw && (parsedExpiresIn === null || !Number.isFinite(parsedExpiresIn) || parsedExpiresIn <= 0)) {
+			runtimeActionError = 'Runtime access token TTL must be a positive whole number of seconds.';
+			return;
+		}
+
+		runtimeIssueLoading = true;
+		runtimeActionError = null;
+		runtimeActionMessage = null;
+
+		try {
+			runtimeCredentials = await api.delegateToAgent({
+				input: {
+					agentUsername: agent.username,
+					displayName: agent.displayName,
+					bio: agent.bio ?? undefined,
+					scopes,
+					expiresIn: parsedExpiresIn !== null && Number.isFinite(parsedExpiresIn) ? parsedExpiresIn : undefined,
+					agentType: agent.agentType,
+					agentVersion: agent.agentVersion,
+					version: agent.agentVersion,
+				},
+			});
+
+			await loadRuntimeSessions();
+			runtimeActionMessage =
+				'Runtime credentials issued. Copy the refresh token into your local runtime; it is not stored outside this page.';
+		} catch (err) {
+			runtimeActionError = err instanceof Error ? err.message : String(err);
+		} finally {
+			runtimeIssueLoading = false;
+		}
+	}
+
+	async function handleRevokeRuntimeSession(session: AgentRuntimeSession) {
+		if (!agent) return;
+		if (!canManage) return;
+		if (runtimeRevokeSessionId) return;
+		if (typeof window !== 'undefined') {
+			const ok = window.confirm(`Revoke runtime session ${session.sessionID} for @${agent.username}?`);
+			if (!ok) return;
+		}
+
+		runtimeRevokeSessionId = session.sessionID;
+		runtimeActionError = null;
+		runtimeActionMessage = null;
+
+		try {
+			const updatedSession = await api.revokeAgentRuntimeSession({
+				username: agent.username,
+				sessionID: session.sessionID,
+				reason: 'operator_revoked_runtime_session',
+			});
+			upsertRuntimeSession(updatedSession);
+			runtimeActionMessage = `Runtime session ${session.sessionID} revoked.`;
+		} catch (err) {
+			runtimeActionError = err instanceof Error ? err.message : String(err);
+		} finally {
+			runtimeRevokeSessionId = null;
+		}
+	}
+
+	async function handleRevokeAllRuntimeSessions() {
+		if (!agent) return;
+		if (!canManage) return;
+		if (runtimeRevokeAllLoading) return;
+		if (typeof window !== 'undefined') {
+			const ok = window.confirm(`Revoke all runtime sessions for @${agent.username}?`);
+			if (!ok) return;
+		}
+
+		runtimeRevokeAllLoading = true;
+		runtimeActionError = null;
+		runtimeActionMessage = null;
+
+		try {
+			await api.revokeAgentToken({ username: agent.username });
+			await loadRuntimeSessions();
+			runtimeActionMessage = 'All runtime sessions were revoked.';
+		} catch (err) {
+			runtimeActionError = err instanceof Error ? err.message : String(err);
+		} finally {
+			runtimeRevokeAllLoading = false;
+		}
+	}
+
 	// Agent access leases
 	let linkedWallets = $state<LinkedWallet[]>([]);
 	let mySouls = $state<SoulInventoryItem[]>([]);
@@ -330,7 +515,7 @@
 	const leaseTokenValue = $derived.by(
 		() =>
 			currentLeaseToken?.accessToken?.trim() ||
-			(leaseTokenLoading ? 'Minting bearer token…' : 'Mint a bearer token from the selected lease.')
+			(leaseTokenLoading ? 'Minting advanced bearer token…' : 'Mint a bearer token from the selected advanced lease.')
 	);
 	const pendingLeaseSigner = $derived.by(() => {
 		if (!pendingLeaseEnrollment) return null;
@@ -353,8 +538,8 @@
 		}
 		if (pendingLeaseSigner === 'principal') return 'Continue with principal wallet';
 		if (pendingLeaseSigner === 'agent') return 'Continue with agent wallet';
-		if (pendingLeaseSigner === 'finalize') return 'Finalize access lease';
-		return 'Create access lease';
+		if (pendingLeaseSigner === 'finalize') return 'Finalize advanced lease';
+		return 'Create advanced lease';
 	});
 
 	function selectedScopes(): string[] {
@@ -611,6 +796,31 @@
 		const token = $authSession?.accessToken ?? null;
 		const username = agent?.username ?? '';
 
+		runtimeSessions = [];
+		selectedRuntimeSessionId = '';
+		runtimeCredentials = null;
+		runtimeScopes = { read: true, write: true, follow: true };
+		runtimeExpiresIn = '';
+		runtimeLoading = false;
+		runtimeIssueLoading = false;
+		runtimeRevokeAllLoading = false;
+		runtimeRevokeSessionId = null;
+		runtimeLoadError = null;
+		runtimeActionError = null;
+		runtimeActionMessage = null;
+
+		if (!token || !username || !canManage) return;
+
+		const controller = new AbortController();
+		void loadRuntimeSessions({ signal: controller.signal });
+
+		return () => controller.abort();
+	});
+
+	$effect(() => {
+		const token = $authSession?.accessToken ?? null;
+		const username = agent?.username ?? '';
+
 		linkedWallets = [];
 		mySouls = [];
 		leases = [];
@@ -643,6 +853,18 @@
 		}
 
 		currentLeaseToken = readStoredLeaseToken(agent.username, selectedLeaseId);
+	});
+
+	$effect(() => {
+		if (!agent) return;
+		const allowedScopes = new Set(agent.delegatedScopes.map((scope) => scope.trim().toLowerCase()));
+		if (allowedScopes.size === 0) return;
+
+		runtimeScopes = {
+			read: allowedScopes.has('read'),
+			write: allowedScopes.has('write'),
+			follow: allowedScopes.has('follow'),
+		};
 	});
 
 	$effect(() => {
@@ -703,7 +925,7 @@
 			selectedLeaseId = lease.id;
 
 			if (announce) {
-				leaseActionMessage = 'Short-lived bearer token minted from the selected lease.';
+				leaseActionMessage = 'Short-lived bearer token minted from the selected advanced lease.';
 			}
 
 			return nextToken;
@@ -1192,11 +1414,229 @@
 		<section class="page__notice">
 			<div class="settings-token__row">
 				<div>
-						<h2>Access leases</h2>
+					<h2>Runtime sessions</h2>
+					<p class="page__meta">
+						Standard bearer + refresh credentials are the normal MCP path for local runtimes. Issue them here,
+						copy the refresh token into your runtime, and use this list to inspect or revoke active sessions.
+					</p>
+				</div>
+				{#if canManage}
+					<button
+						type="button"
+						class="gr-button gr-button--outline"
+						disabled={runtimeLoading || runtimeIssueLoading || runtimeRevokeAllLoading || runtimeRevokeSessionId !== null}
+						onclick={() => void loadRuntimeSessions()}
+					>
+						Refresh
+					</button>
+				{/if}
+			</div>
+
+			{#if !canManage}
+				<p class="page__meta">
+					You can view this agent, but only the owner or an admin can inspect its runtime sessions.
+				</p>
+			{:else}
+				<div class="settings-form__notice">
+					The access token is the MCP bearer. Keep the refresh token only in your local runtime; it rotates on
+					use and is the durable session secret you should revoke if a machine is retired or compromised.
+				</div>
+
+				{#if isOwner}
+					<form
+						class="settings-form"
+						onsubmit={(event) => {
+							event.preventDefault();
+							void handleIssueRuntimeCredentials();
+						}}
+					>
+						<div class="settings-field">
+							<label class="settings-field__label" for="agent-runtime-expires">
+								Access token TTL override (seconds)
+							</label>
+							<input
+								class="settings-field__input"
+								id="agent-runtime-expires"
+								type="number"
+								min="60"
+								step="60"
+								placeholder="optional"
+								bind:value={runtimeExpiresIn}
+							/>
+							<p class="page__meta">
+								Leave blank unless you need a shorter-lived bearer token for a specific runtime bootstrap.
+							</p>
+						</div>
+
+						<div class="settings-field">
+							<span class="settings-field__label">Scopes</span>
+							<div class="settings-scopes">
+								<label class="settings-field__checkbox-label">
+									<input class="settings-field__checkbox" type="checkbox" bind:checked={runtimeScopes.read} />
+									read
+								</label>
+								<label class="settings-field__checkbox-label">
+									<input class="settings-field__checkbox" type="checkbox" bind:checked={runtimeScopes.write} />
+									write
+								</label>
+								<label class="settings-field__checkbox-label">
+									<input class="settings-field__checkbox" type="checkbox" bind:checked={runtimeScopes.follow} />
+									follow
+								</label>
+							</div>
+							<p class="page__meta">
+								MCP write tools require <code>write</code>. <code>follow</code> alone is not enough.
+							</p>
+						</div>
+
+						<div class="settings-form__actions">
+							<button type="submit" class="gr-button gr-button--solid" disabled={runtimeIssueLoading}>
+								{runtimeIssueLoading ? 'Issuing runtime credentials…' : 'Issue runtime credentials'}
+							</button>
+							{#if runtimeCredentials}
+								<button
+									type="button"
+									class="gr-button gr-button--outline"
+									onclick={() => {
+										runtimeCredentials = null;
+										runtimeActionError = null;
+										runtimeActionMessage = 'Runtime secrets cleared from the page.';
+									}}
+								>
+									Clear current secrets
+								</button>
+							{/if}
+							<button
+								type="button"
+								class="gr-button gr-button--outline"
+								disabled={runtimeRevokeAllLoading || runtimeSessions.length === 0}
+								onclick={() => void handleRevokeAllRuntimeSessions()}
+							>
+								{runtimeRevokeAllLoading ? 'Revoking all…' : 'Revoke all runtime sessions'}
+							</button>
+						</div>
+					</form>
+				{:else}
+					<p class="page__meta">
+						Admins can inspect and revoke runtime sessions here, but only the agent owner can issue new runtime
+						credentials.
+					</p>
+				{/if}
+
+				{#if runtimeLoadError}
+					<div class="settings-form__notice settings-form__notice--error" role="alert">{runtimeLoadError}</div>
+				{/if}
+				{#if runtimeActionError}
+					<div class="settings-form__notice settings-form__notice--error" role="alert">{runtimeActionError}</div>
+				{/if}
+				{#if runtimeActionMessage}
+					<div class="settings-form__notice" role="status">{runtimeActionMessage}</div>
+				{/if}
+
+				<div class="settings-token" aria-live="polite">
+					<div class="settings-token__row">
+						<strong>Current runtime access token</strong>
+						<button
+							type="button"
+							class="gr-button gr-button--outline"
+							disabled={!runtimeCredentials?.accessToken?.trim()}
+							onclick={() => runtimeCredentials?.accessToken && copy(runtimeCredentials.accessToken)}
+						>
+							Copy
+						</button>
+					</div>
+					<pre class="settings-token__value">{runtimeTokenValue}</pre>
+
+					<div class="settings-token__row">
+						<strong>Current runtime refresh token</strong>
+						<button
+							type="button"
+							class="gr-button gr-button--outline"
+							disabled={!runtimeCredentials?.refreshToken?.trim()}
+							onclick={() => runtimeCredentials?.refreshToken && copy(runtimeCredentials.refreshToken)}
+						>
+							Copy
+						</button>
+					</div>
+					<pre class="settings-token__value">{runtimeRefreshValue}</pre>
+
+					{#if runtimeCredentials}
+						<div class="settings-token__meta">
+							Scope: {runtimeCredentials.scope} • Access token expires in {runtimeCredentials.expiresIn}s
+							{#if selectedRuntimeSession}
+								<span> • session <code>{selectedRuntimeSession.sessionID}</code></span>
+							{/if}
+						</div>
+					{/if}
+				</div>
+
+				{#if runtimeLoading}
+					<div class="page__notice">Loading runtime sessions…</div>
+				{:else if runtimeSessions.length === 0}
+					<div class="page__notice">No runtime sessions exist for this agent yet.</div>
+				{:else}
+					<ul class="settings-list">
+						{#each runtimeSessions as session (session.sessionID)}
+							<li class="settings-list__item">
+								<div class="settings-list__body">
+									<div class="settings-list__title">{session.deviceLabel || session.clientID}</div>
+									<div class="settings-list__meta">
+										Session <code>{session.sessionID}</code> • {session.revoked ? 'revoked' : 'active'}
+										<span> • scope {session.scope}</span>
+										<span> • last used {formatDateTime(session.lastUsedAt)}</span>
+										<span> • idle {formatDateTime(session.idleExpiresAt)}</span>
+										<span> • absolute {formatDateTime(session.absoluteExpiresAt)}</span>
+										{#if session.revokedAt}
+											<span> • revoked {formatDateTime(session.revokedAt)}</span>
+										{/if}
+									</div>
+								</div>
+								<div class="settings-form__actions">
+									<button
+										type="button"
+										class="gr-button gr-button--outline"
+										onclick={() => {
+											selectedRuntimeSessionId = session.sessionID;
+											runtimeActionError = null;
+											runtimeActionMessage = null;
+										}}
+									>
+										{selectedRuntimeSessionId === session.sessionID ? 'Selected' : 'Select'}
+									</button>
+									<button
+										type="button"
+										class="gr-button gr-button--outline"
+										disabled={runtimeRevokeSessionId === session.sessionID || session.revoked}
+										onclick={() => void handleRevokeRuntimeSession(session)}
+									>
+										{runtimeRevokeSessionId === session.sessionID ? 'Revoking…' : 'Revoke'}
+									</button>
+								</div>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			{/if}
+		</section>
+
+		<AgentMcpPanel
+			agentUsername={agent.username}
+			{canManage}
+			canIssueRuntimeCredentials={isOwner}
+			{runtimeCredentials}
+			{selectedRuntimeSession}
+			selectedLease={selectedLease}
+			leaseToken={currentLeaseToken}
+		/>
+
+		<section class="page__notice">
+			<div class="settings-token__row">
+				<div>
+						<h2>Lease-based auth (advanced)</h2>
 						<p class="page__meta">
-							Lesser now uses wallet-backed access leases. The lease defines the durable access window with idle and
-							absolute expiry, while each renewal mints a short-lived bearer token for MCP. Refresh tokens are no
-							longer part of the agent flow.
+							Runtime sessions above are the standard MCP path. Use wallet-backed leases only when you specifically
+							need a browser-assisted, wallet-mediated bearer flow; each renewal here mints a short-lived bearer
+							token from the selected lease.
 						</p>
 					</div>
 				{#if canManage}
@@ -1374,7 +1814,7 @@
 									Principal signature recorded. Switch to agent wallet
 									<code>{pendingLeaseWallet}</code> and continue signing.
 								{:else}
-									Both signatures are captured. Finalize the lease to mint the browser token.
+									Both signatures are captured. Finalize the advanced lease to mint its first bearer token.
 								{/if}
 							</div>
 						{/if}
@@ -1468,7 +1908,7 @@
 				{#if selectedLease}
 					<div class="settings-token" aria-live="polite">
 						<div class="settings-token__row">
-							<strong>Current bearer token</strong>
+							<strong>Current advanced bearer token</strong>
 							<button
 								type="button"
 								class="gr-button gr-button--outline"
@@ -1550,13 +1990,6 @@
 				{/if}
 			{/if}
 		</section>
-
-		<AgentMcpPanel
-			agentUsername={agent.username}
-			{canManage}
-			selectedLease={selectedLease}
-			leaseToken={currentLeaseToken}
-		/>
 
 		<section class="page__notice">
 			<h2>Manage agent</h2>
