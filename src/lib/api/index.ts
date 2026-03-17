@@ -82,6 +82,7 @@ import {
 	type AgentActivityQueryVariables,
 	type AgentByUsernameQuery,
 	type AgentByUsernameQueryVariables,
+	type AgentRuntimeSession as GraphQLAgentRuntimeSession,
 	type AgentsQuery,
 	type AgentsQueryVariables,
 	type AuthorizeAgentAccessLeaseSessionKeyMutation,
@@ -269,6 +270,54 @@ query Viewer {
 			value
 			verifiedAt
 		}
+	}
+}
+`;
+
+type AgentRuntimeSessionsQueryData = {
+	agentRuntimeSessions: GraphQLAgentRuntimeSession[];
+};
+
+type AgentRuntimeSessionsQueryVariables = {
+	username: string;
+};
+
+type RevokeAgentRuntimeSessionMutationData = {
+	revokeAgentRuntimeSession: GraphQLAgentRuntimeSession;
+};
+
+type RevokeAgentRuntimeSessionMutationVariables = {
+	username: string;
+	sessionID: string;
+	reason?: string | null;
+};
+
+const AGENT_RUNTIME_SESSION_FIELDS = `
+	sessionID
+	clientID
+	deviceLabel
+	scope
+	createdAt
+	lastUsedAt
+	idleExpiresAt
+	absoluteExpiresAt
+	revoked
+	revokedAt
+	revokedReason
+`;
+
+const AGENT_RUNTIME_SESSIONS_QUERY = `
+query AgentRuntimeSessions($username: String!) {
+	agentRuntimeSessions(username: $username) {
+${AGENT_RUNTIME_SESSION_FIELDS}
+	}
+}
+`;
+
+const REVOKE_AGENT_RUNTIME_SESSION_MUTATION = `
+mutation RevokeAgentRuntimeSession($username: String!, $sessionID: ID!, $reason: String) {
+	revokeAgentRuntimeSession(username: $username, sessionID: $sessionID, reason: $reason) {
+${AGENT_RUNTIME_SESSION_FIELDS}
 	}
 }
 `;
@@ -3475,6 +3524,7 @@ export type AgentAccessLeaseChallenge =
 export type AgentLeaseToken = ExchangeAgentAccessLeaseTokenMutation['exchangeAgentAccessLeaseToken'];
 export type AgentActivityConnection = AgentActivityQuery['agentActivity'];
 export type AgentDelegation = DelegateToAgentMutation['delegateToAgent'];
+export type AgentRuntimeSession = GraphQLAgentRuntimeSession;
 export type AdminAgentPolicy = AdminAgentPolicyQuery['adminAgentPolicy'];
 export type SoulInventoryItem = MySoulsQuery['mySouls'][number];
 
@@ -3579,6 +3629,25 @@ export async function fetchAgentAccessLeases({
 	});
 
 	return [...data.agentAccessLeases];
+}
+
+export async function fetchAgentRuntimeSessions({
+	username,
+	signal,
+}: {
+	username: string;
+	signal?: AbortSignal;
+}): Promise<AgentRuntimeSession[]> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<AgentRuntimeSessionsQueryData, AgentRuntimeSessionsQueryVariables>({
+		document: AGENT_RUNTIME_SESSIONS_QUERY,
+		variables: { username },
+		token,
+		signal,
+	});
+
+	return [...data.agentRuntimeSessions];
 }
 
 export async function delegateToAgent({
@@ -3707,6 +3776,32 @@ export async function revokeAgentToken({
 	});
 
 	return data.revokeAgentToken;
+}
+
+export async function revokeAgentRuntimeSession({
+	username,
+	sessionID,
+	reason,
+	signal,
+}: {
+	username: string;
+	sessionID: string;
+	reason?: string | null;
+	signal?: AbortSignal;
+}): Promise<AgentRuntimeSession> {
+	const token = requireAccessToken();
+
+	const data = await graphqlRequest<
+		RevokeAgentRuntimeSessionMutationData,
+		RevokeAgentRuntimeSessionMutationVariables
+	>({
+		document: REVOKE_AGENT_RUNTIME_SESSION_MUTATION,
+		variables: { username, sessionID, reason },
+		token,
+		signal,
+	});
+
+	return data.revokeAgentRuntimeSession;
 }
 
 export async function revokeAgentAccessLease({
@@ -4196,12 +4291,14 @@ export const api = {
 	fetchMySouls,
 	fetchAgentActivity,
 	fetchAgentAccessLeases,
+	fetchAgentRuntimeSessions,
 	delegateToAgent,
 	createAgentAccessLeasePrincipalChallenge,
 	createAgentAccessLeaseAgentChallenge,
 	createAgentAccessLease,
 	incorporateSoul,
 	revokeAgentToken,
+	revokeAgentRuntimeSession,
 	revokeAgentAccessLease,
 	createAgentAccessLeaseSessionKeyChallenge,
 	authorizeAgentAccessLeaseSessionKey,
