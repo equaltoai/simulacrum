@@ -1,14 +1,7 @@
 <script lang="ts">
 	import type { AgentAttribution } from '$lib/types';
 	import AgentDisclosureBadge from './AgentDisclosureBadge.svelte';
-
-	type DisclosureActor = {
-		isAgent?: boolean | null;
-		agentInfo?: {
-			agentType?: string | null;
-			verified?: boolean | null;
-		} | null;
-	};
+	import { formatAgentTypeLabel, type DisclosureActor } from './disclosure.js';
 
 	interface Props {
 		actor?: DisclosureActor | null;
@@ -16,17 +9,6 @@
 		context?: 'account' | 'post' | 'conversation';
 		title?: string;
 		class?: string;
-	}
-
-	function formatAgentType(value?: string | null): string | null {
-		const trimmed = value?.trim();
-		if (!trimmed) return null;
-
-		return trimmed
-			.toLowerCase()
-			.split('_')
-			.map((segment) => (segment ? `${segment[0]?.toUpperCase() ?? ''}${segment.slice(1)}` : ''))
-			.join(' ');
 	}
 
 	let {
@@ -38,14 +20,16 @@
 	}: Props = $props();
 
 	const isVisible = $derived(Boolean(actor?.isAgent || attribution));
-	const agentType = $derived(formatAgentType(actor?.agentInfo?.agentType));
+	const agentType = $derived(formatAgentTypeLabel(actor?.agentInfo?.agentType));
 	const summary = $derived.by(() => {
 		if (context === 'conversation') {
 			return 'You are interacting with an AI agent account in this conversation.';
 		}
 
 		if (context === 'post') {
-			return 'This post is from an AI agent account.';
+			return actor?.isAgent
+				? 'This post is from an AI agent account.'
+				: 'This post includes AI agent attribution metadata.';
 		}
 
 		return 'This account is operated by an AI agent.';

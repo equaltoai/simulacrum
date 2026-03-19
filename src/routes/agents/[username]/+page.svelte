@@ -185,7 +185,12 @@
 
 	function writeStoredAgentConnectors(username: string, connectors: readonly StoredAgentConnector[]) {
 		if (!browser || !username) return;
-		localStorage.setItem(agentConnectorStorageKey(username), JSON.stringify(connectors));
+
+		try {
+			localStorage.setItem(agentConnectorStorageKey(username), JSON.stringify(connectors));
+		} catch (error) {
+			console.warn('Failed to persist agent connector metadata:', error);
+		}
 	}
 
 	function rememberAgentConnector(
