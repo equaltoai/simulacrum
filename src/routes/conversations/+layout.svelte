@@ -6,13 +6,85 @@
 	import { authSession } from '$lib/auth/session';
 	import { getStreamingAdapter } from '$lib/realtime/adapter';
 	import { createLesserMessagesHandlers } from '$lib/greater/adapters';
+	import type { LesserGraphQLAdapter } from '$lib/greater/adapters/graphql';
 	import * as Messages from '$lib/components/messaging';
-	import type { MessagesHandlers } from '$lib/components/messaging';
+	import type {
+		Conversation as MessagesConversation,
+		ConversationFolder,
+		DirectMessage as MessagesDirectMessage,
+		MessageParticipant as MessagesParticipant,
+		MessagesHandlers,
+	} from '$lib/components/messaging';
 	import MessagesFallbackPolling from '$lib/patterns/MessagesFallbackPolling.svelte';
+
+	type RouteMessagesHandlers = MessagesHandlers & {
+		onFetchConversation?: (conversationId: string) => Promise<MessagesConversation | null>;
+	};
+
+	type LesserConversation = NonNullable<Awaited<ReturnType<LesserGraphQLAdapter['getConversation']>>>;
+	type LesserConversationParticipant = LesserConversation['accounts'][number];
+	type LesserConversationMessage = NonNullable<LesserConversation['lastStatus']>;
+
+	function mapConversationParticipant(account: LesserConversationParticipant): MessagesParticipant {
+		return {
+			id: account.id,
+			username: account.username,
+			displayName: account.displayName ?? account.username,
+			avatar: account.avatar ?? undefined,
+		};
+	}
+
+	function mapConversationMessage(
+		message: LesserConversationMessage,
+		conversationId: string
+	): MessagesDirectMessage {
+		return {
+			id: message.id,
+			conversationId,
+			sender: mapConversationParticipant(message.actor),
+			content: message.content,
+			createdAt: message.createdAt,
+			read: true,
+			mediaAttachments: message.attachments.map((attachment) => ({
+				url: attachment.url,
+				type: attachment.type,
+				previewUrl: attachment.preview ?? undefined,
+				description: attachment.description ?? undefined,
+			})),
+		};
+	}
+
+	function mapConversation(conversation: LesserConversation): MessagesConversation {
+		const requestState = conversation.viewerMetadata.requestState;
+		const folder: ConversationFolder = requestState === 'PENDING' ? 'REQUESTS' : 'INBOX';
+
+		return {
+			id: conversation.id,
+			folder,
+			requestState,
+			requestedAt: conversation.viewerMetadata.requestedAt ?? null,
+			acceptedAt: conversation.viewerMetadata.acceptedAt ?? null,
+			declinedAt: conversation.viewerMetadata.declinedAt ?? null,
+			participants: conversation.accounts.map(mapConversationParticipant),
+			lastMessage: conversation.lastStatus
+				? mapConversationMessage(conversation.lastStatus, conversation.id)
+				: undefined,
+			unreadCount: conversation.unread ? 1 : 0,
+			updatedAt: conversation.updatedAt,
+		};
+	}
+
+	async function fetchConversation(
+		adapter: LesserGraphQLAdapter,
+		conversationId: string
+	): Promise<MessagesConversation | null> {
+		const conversation = await adapter.getConversation(conversationId);
+		return conversation ? mapConversation(conversation as LesserConversation) : null;
+	}
 
 	let { children } = $props<{ children?: Snippet }>();
 
-	let handlers = $state<MessagesHandlers>({});
+	let handlers = $state<RouteMessagesHandlers>({});
 	let viewerId = $state<string | null>(null);
 	let error = $state<string | null>(null);
 
@@ -38,8 +110,9 @@
 		const baseHandlers = createLesserMessagesHandlers({ adapter }) as unknown as MessagesHandlers;
 		const baseOnDeleteConversation = baseHandlers.onDeleteConversation;
 
-		const nextHandlers: MessagesHandlers = {
+		const nextHandlers: RouteMessagesHandlers = {
 			...baseHandlers,
+			onFetchConversation: async (conversationId) => fetchConversation(adapter, conversationId),
 			onConversationClick: (conversation) => {
 				void goto(`${base}/conversations/${encodeURIComponent(conversation.id)}`);
 			},

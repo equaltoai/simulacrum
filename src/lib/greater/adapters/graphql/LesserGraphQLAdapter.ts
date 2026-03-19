@@ -6,7 +6,7 @@
  * and object accessors rather than the legacy Mastodon-style wrappers.
  */
 
-import type { Observable, FetchResult, OperationVariables } from '@apollo/client';
+import { Observable, type FetchResult, type OperationVariables } from '@apollo/client';
 import type { ApolloClient as ApolloClientNamespace } from '@apollo/client';
 
 type QueryOptionsFor<
@@ -56,7 +56,6 @@ import type {
 	RevokeAgentAccessLeaseMutationVariables,
 	CreateAgentAccessLeaseSessionKeyChallengeMutationVariables,
 	AuthorizeAgentAccessLeaseSessionKeyMutationVariables,
-	CreateAgentAccessLeaseRenewChallengeMutationVariables,
 	ExchangeAgentAccessLeaseTokenMutationVariables,
 	UpdateAdminAgentPolicyMutationVariables,
 	AdminVerifyAgentMutationVariables,
@@ -283,8 +282,9 @@ const ViewerDocument = {
 								{ kind: 'Field', name: { kind: 'Name', value: 'displayName' } },
 								{ kind: 'Field', name: { kind: 'Name', value: 'avatar' } },
 								{ kind: 'Field', name: { kind: 'Name', value: 'header' } },
-								{ kind: 'Field', name: { kind: 'Name', value: 'followers' } },
-								{ kind: 'Field', name: { kind: 'Name', value: 'following' } },
+								{ kind: 'Field', name: { kind: 'Name', value: 'url' } },
+								{ kind: 'Field', name: { kind: 'Name', value: 'followersCount' } },
+								{ kind: 'Field', name: { kind: 'Name', value: 'followingCount' } },
 								{ kind: 'Field', name: { kind: 'Name', value: 'statusesCount' } },
 							],
 						},

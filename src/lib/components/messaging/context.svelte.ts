@@ -115,11 +115,6 @@ export interface MessagesHandlers {
 	) => Promise<DirectMessage[]>;
 
 	/**
-	 * Fetch one conversation by id
-	 */
-	onFetchConversation?: (conversationId: string) => Promise<Conversation | null>;
-
-	/**
 	 * Send a message
 	 */
 	onSendMessage?: (
