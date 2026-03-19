@@ -31,6 +31,16 @@
 			username: account.username,
 			displayName: account.displayName ?? account.username,
 			avatar: account.avatar ?? undefined,
+			bot: account.bot,
+			isAgent: account.isAgent,
+			agentInfo: account.agentInfo
+				? {
+						id: account.agentInfo.id,
+						agentType: account.agentInfo.agentType,
+						verified: account.agentInfo.verified,
+						verifiedAt: account.agentInfo.verifiedAt ?? null,
+					}
+				: null,
 		};
 	}
 

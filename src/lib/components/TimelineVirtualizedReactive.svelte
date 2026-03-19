@@ -2,6 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import { base } from '$app/paths';
 	import { api } from '$lib/api';
+	import AgentDisclosureBadge from '$lib/components/agents/AgentDisclosureBadge.svelte';
 	import { authSession } from '$lib/auth/session';
 	import type { Status } from '$lib/types';
 	import ContentRenderer from './ContentRenderer.svelte';
@@ -342,7 +343,7 @@
 							</time>
 						{/if}
 						{#if status.account.isAgent}
-							<span class="gr-badge gr-badge--sm gr-badge--outlined gr-badge--primary">Agent</span>
+							<AgentDisclosureBadge actor={status.account} />
 						{/if}
 					</div>
 					<div class="timeline-virtualized__meta-actions">

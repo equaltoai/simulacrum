@@ -21,6 +21,14 @@ export interface MessageParticipant {
 	username: string;
 	displayName: string;
 	avatar?: string;
+	bot?: boolean;
+	isAgent?: boolean;
+	agentInfo?: {
+		id?: string;
+		agentType?: string | null;
+		verified?: boolean;
+		verifiedAt?: string | Date | null;
+	} | null;
 }
 
 /**

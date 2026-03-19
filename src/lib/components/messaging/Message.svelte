@@ -2,6 +2,7 @@
   Messages.Message - Individual Message Display
 -->
 <script lang="ts">
+	import AgentDisclosureBadge from '$lib/components/agents/AgentDisclosureBadge.svelte';
 	import { Menu } from '$lib/greater/primitives';
 	import { MoreVerticalIcon, TrashIcon } from '$lib/greater/icons';
 	import { formatMessageTime } from './utils.js';
@@ -58,7 +59,10 @@
 	<div class="message__bubble">
 		<div class="message__header">
 			{#if !isOwnMessage}
-				<div class="message__sender">{message.sender.displayName}</div>
+				<div class="message__sender">
+					{message.sender.displayName}
+					<AgentDisclosureBadge actor={message.sender} />
+				</div>
 			{/if}
 
 			{#if context?.handlers.onDeleteMessage}

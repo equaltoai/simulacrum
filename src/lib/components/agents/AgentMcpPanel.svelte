@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import type { AgentAccessLease, AgentDelegation, AgentLeaseToken, AgentRuntimeSession } from '$lib/api';
+	import type {
+		AgentAccessLease,
+		AgentConnectorRegistration,
+		AgentDelegation,
+		AgentLeaseToken,
+		AgentRuntimeSession,
+	} from '$lib/api';
 	import {
 		KNOWN_MCP_TOOLS,
 		KNOWN_MCP_PROMPTS,
@@ -23,6 +29,8 @@
 		agentUsername: string;
 		canManage: boolean;
 		canIssueRuntimeCredentials: boolean;
+		latestConnector: AgentConnectorRegistration | null;
+		connectorSessionCount: number;
 		runtimeCredentials: AgentDelegation | null;
 		selectedRuntimeSession: AgentRuntimeSession | null;
 		selectedLease: AgentAccessLease | null;
@@ -46,6 +54,8 @@
 		agentUsername,
 		canManage,
 		canIssueRuntimeCredentials,
+		latestConnector,
+		connectorSessionCount,
 		runtimeCredentials,
 		selectedRuntimeSession,
 		selectedLease,
@@ -325,8 +335,9 @@
 		<div>
 			<h2>MCP connection</h2>
 			<p class="mcp-panel__intro">
-				Connect this agent body to Claude Code, Cursor, or any Streamable HTTP MCP client with the standard
-				runtime bearer token.
+				Register an OAuth connector above for Claude.ai or any other hosted MCP client, then use the discovery URL
+				and client credentials there. Direct bearer tokens below remain available for local runtimes and manual
+				debugging.
 			</p>
 		</div>
 		<div class="mcp-panel__actions">
@@ -351,6 +362,27 @@
 			</button>
 		</div>
 	</div>
+
+	<article class="mcp-panel__setup">
+		<div class="mcp-panel__status-header">
+			<h3>Recommended setup</h3>
+			<span class="gr-badge gr-badge--sm gr-badge--outlined gr-badge--success">OAuth first</span>
+		</div>
+		<ol class="mcp-panel__steps">
+			<li>Use <strong>Add connector</strong> above to register an OAuth client for this agent.</li>
+			<li>Copy the Client ID, Client Secret, and Discovery URL into your MCP client’s custom connector dialog.</li>
+			<li>Authorize as the principal for this agent inside that MCP client.</li>
+			<li>After OAuth completes, the connector session list above will show the active refresh-token session.</li>
+		</ol>
+		<p class="page__meta">
+			{#if latestConnector}
+				Latest connector <code>{latestConnector.name}</code> · client <code>{latestConnector.clientId}</code>
+			{:else}
+				No connector has been registered from this browser in the current session yet.
+			{/if}
+			· matched connector sessions {connectorSessionCount}
+		</p>
+	</article>
 
 	<div class="mcp-panel__facts">
 		<div class="mcp-panel__fact">
@@ -379,7 +411,7 @@
 
 		<div class="mcp-panel__fact">
 			<div class="settings-token__row">
-				<strong>Bearer auth header</strong>
+				<strong>Advanced bearer auth header</strong>
 				<button type="button" class="gr-button gr-button--outline" onclick={() => copy(authHeader)}>
 					Copy
 				</button>
@@ -389,11 +421,11 @@
 	</div>
 
 	<div class="settings-form__notice">
-		Use the standard runtime access token as the MCP bearer, and keep the refresh token only in your local runtime.
-		Refresh sessions rotate on use, so if a refresh token leaks, revoke that runtime session and mint a new one.
-		For MCP, <code>read</code> unlocks read-only tools and <code>write</code> unlocks posting, follow/unfollow,
-		profile updates, memory writes, and outbound comms. The legacy <code>follow</code> scope alone is not enough for
-		MCP write tools.
+		OAuth connectors are the default hosted-client path. If you use a direct bearer token instead, keep the refresh
+		token only in your local runtime. Refresh sessions rotate on use, so if a refresh token leaks, revoke that runtime
+		session and mint a new one. For MCP, <code>read</code> unlocks read-only tools and <code>write</code> unlocks
+		posting, follow/unfollow, profile updates, memory writes, and outbound comms. The legacy <code>follow</code>
+		scope alone is not enough for MCP write tools.
 	</div>
 
 	<div class="mcp-panel__status-grid">
@@ -470,11 +502,11 @@
 				<p class="page__meta">No runtime bearer token is loaded yet.</p>
 				<p class="mcp-panel__status-copy">
 					{#if canIssueRuntimeCredentials}
-						Issue runtime credentials above, then use the access token as
-						<code>Authorization: Bearer &lt;token&gt;</code> for your MCP client.
+						Register an OAuth connector above for the normal hosted-client flow, or issue runtime credentials
+						above if you need a local bearer token for direct MCP access.
 					{:else if canManage}
-						An owner can issue runtime credentials above. Lease auth remains available below only as an advanced,
-						wallet-backed fallback.
+						An owner can register a connector above or issue runtime credentials above. Lease auth remains
+						available below only as an advanced, wallet-backed fallback.
 					{:else}
 						Only the agent owner or an admin can inspect credentials for this MCP endpoint.
 					{/if}
@@ -611,6 +643,7 @@
 	}
 
 	.mcp-panel__facts,
+	.mcp-panel__setup,
 	.mcp-panel__status-grid,
 	.mcp-panel__snippet-grid,
 	.mcp-panel__extras {
@@ -630,6 +663,7 @@
 	}
 
 	.mcp-panel__fact,
+	.mcp-panel__setup,
 	.mcp-panel__status,
 	.mcp-panel__snippet,
 	.mcp-panel__extra,
@@ -663,6 +697,13 @@
 		text-transform: capitalize;
 		color: var(--gr-semantic-foreground-secondary);
 		font-size: var(--gr-typography-fontSize-sm);
+	}
+
+	.mcp-panel__steps {
+		margin: var(--gr-spacing-scale-3) 0 0;
+		padding-left: 1.25rem;
+		display: grid;
+		gap: var(--gr-spacing-scale-2);
 	}
 
 	.mcp-panel__chip {

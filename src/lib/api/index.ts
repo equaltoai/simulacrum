@@ -204,7 +204,7 @@ import type { Account, Notification, Status } from '$lib/types';
 import { getAccessToken } from './auth';
 import { toAccount, toNotification, toStatus } from './adapters';
 import { graphqlRequest } from './graphql';
-import { restRequest } from './rest';
+import { RestRequestError, restRequest } from './rest';
 import type { MastodonStatusContext } from './mastodon';
 import { toMastodonStatus } from './mastodon';
 
@@ -486,6 +486,34 @@ function requireAccessToken(): string {
 	const token = getAccessToken();
 	if (!token) throw new Error('Not authenticated');
 	return token;
+}
+
+function restErrorMessage(error: unknown, fallback: string): string {
+	if (error instanceof RestRequestError && error.body && typeof error.body === 'object') {
+		const body = error.body as {
+			error?: unknown;
+			error_description?: unknown;
+			message?: unknown;
+		};
+
+		if (typeof body.error_description === 'string' && body.error_description.trim()) {
+			return body.error_description.trim();
+		}
+
+		if (typeof body.message === 'string' && body.message.trim()) {
+			return body.message.trim();
+		}
+
+		if (typeof body.error === 'string' && body.error.trim()) {
+			return body.error.trim();
+		}
+	}
+
+	if (error instanceof Error && error.message.trim()) {
+		return error.message;
+	}
+
+	return fallback;
 }
 
 async function fetchTimeline({
@@ -3527,6 +3555,15 @@ export type AgentDelegation = DelegateToAgentMutation['delegateToAgent'];
 export type AgentRuntimeSession = GraphQLAgentRuntimeSession;
 export type AdminAgentPolicy = AdminAgentPolicyQuery['adminAgentPolicy'];
 export type SoulInventoryItem = MySoulsQuery['mySouls'][number];
+export type AgentConnectorRegistration = {
+	id: string;
+	name: string;
+	clientId: string;
+	clientSecret: string | null;
+	redirectUri: string;
+	website: string | null;
+	vapidKey: string | null;
+};
 
 export async function fetchAgentByUsername({
 	username,
@@ -3648,6 +3685,70 @@ export async function fetchAgentRuntimeSessions({
 	});
 
 	return [...data.agentRuntimeSessions];
+}
+
+export async function registerAgentConnector({
+	username,
+	clientName,
+	redirectUri,
+	scopes,
+	website,
+	signal,
+}: {
+	username: string;
+	clientName: string;
+	redirectUri: string;
+	scopes: string;
+	website?: string;
+	signal?: AbortSignal;
+}): Promise<AgentConnectorRegistration> {
+	const token = requireAccessToken();
+
+	const body = new URLSearchParams({
+		client_name: clientName,
+		redirect_uris: redirectUri,
+		scopes,
+		client_class: 'agent',
+		agent_username: username,
+	});
+
+	const trimmedWebsite = website?.trim();
+	if (trimmedWebsite) {
+		body.set('website', trimmedWebsite);
+	}
+
+	try {
+		const data = await restRequest<{
+			id: string;
+			name: string;
+			client_id: string;
+			client_secret?: string;
+			redirect_uri: string;
+			website?: string;
+			vapid_key?: string;
+		}>({
+			path: '/api/v1/apps',
+			method: 'POST',
+			headers: {
+				'content-type': 'application/x-www-form-urlencoded',
+			},
+			body,
+			token,
+			signal,
+		});
+
+		return {
+			id: data.id,
+			name: data.name,
+			clientId: data.client_id,
+			clientSecret: data.client_secret ?? null,
+			redirectUri: data.redirect_uri,
+			website: data.website ?? null,
+			vapidKey: data.vapid_key ?? null,
+		};
+	} catch (error) {
+		throw new Error(restErrorMessage(error, 'Agent connector registration failed.'));
+	}
 }
 
 export async function delegateToAgent({
@@ -4292,6 +4393,7 @@ export const api = {
 	fetchAgentActivity,
 	fetchAgentAccessLeases,
 	fetchAgentRuntimeSessions,
+	registerAgentConnector,
 	delegateToAgent,
 	createAgentAccessLeasePrincipalChallenge,
 	createAgentAccessLeaseAgentChallenge,

@@ -4,6 +4,8 @@
 	import { api } from '$lib/api';
 	import { authSession } from '$lib/auth/session';
 	import ActionBar from '$lib/components/ActionBar.svelte';
+	import AgentDisclosureBadge from '$lib/components/agents/AgentDisclosureBadge.svelte';
+	import AgentDisclosureNotice from '$lib/components/agents/AgentDisclosureNotice.svelte';
 	import CommunityNotesPanel from '$lib/components/CommunityNotesPanel.svelte';
 	import Composer from '$lib/components/Composer.svelte';
 	import ContentRenderer from '$lib/components/ContentRenderer.svelte';
@@ -344,7 +346,7 @@
 								</a>
 								<span class="status-card__handle">@{item.account.acct}</span>
 								{#if item.account.isAgent}
-									<span class="gr-badge gr-badge--sm gr-badge--outlined gr-badge--primary">Agent</span>
+									<AgentDisclosureBadge actor={item.account} />
 								{/if}
 							</header>
 							<ContentRenderer content={item.content} spoilerText={item.spoilerText} />
@@ -370,9 +372,12 @@
 					</a>
 					<span class="status-card__handle">@{status.account.acct}</span>
 					{#if status.account.isAgent}
-						<span class="gr-badge gr-badge--sm gr-badge--outlined gr-badge--primary">Agent</span>
+						<AgentDisclosureBadge actor={status.account} />
 					{/if}
 				</header>
+				{#if status.account.isAgent || status.agentAttribution}
+					<AgentDisclosureNotice actor={status.account} attribution={status.agentAttribution} context="post" />
+				{/if}
 				<ContentRenderer
 					content={status.content}
 					spoilerText={status.spoilerText}
@@ -380,14 +385,6 @@
 					tags={status.tags ?? []}
 				/>
 				<QuotePreview quoteUrl={status.quoteUrl} quoteContext={status.quoteContext} />
-				{#if status.agentAttribution}
-					<details class="page__notice">
-						<summary>
-							<strong>Agent attribution</strong>
-						</summary>
-						<pre class="settings-token__value">{JSON.stringify(status.agentAttribution, null, 2)}</pre>
-					</details>
-				{/if}
 				{#if status.mediaAttachments && status.mediaAttachments.length > 0}
 					<MediaAttachments attachments={status.mediaAttachments} sensitive={status.sensitive ?? false} />
 				{/if}
@@ -563,7 +560,7 @@
 								</a>
 								<span class="status-card__handle">@{item.account.acct}</span>
 								{#if item.account.isAgent}
-									<span class="gr-badge gr-badge--sm gr-badge--outlined gr-badge--primary">Agent</span>
+									<AgentDisclosureBadge actor={item.account} />
 								{/if}
 							</header>
 							<ContentRenderer content={item.content} spoilerText={item.spoilerText} />
@@ -600,7 +597,7 @@
 								</a>
 								<span class="status-card__handle">@{item.account.acct}</span>
 								{#if item.account.isAgent}
-									<span class="gr-badge gr-badge--sm gr-badge--outlined gr-badge--primary">Agent</span>
+									<AgentDisclosureBadge actor={item.account} />
 								{/if}
 							</header>
 							<ContentRenderer content={item.content} spoilerText={item.spoilerText} />

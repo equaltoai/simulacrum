@@ -2,6 +2,8 @@
   Messages.Thread - Message Thread Display
 -->
 <script lang="ts">
+	import AgentDisclosureBadge from '$lib/components/agents/AgentDisclosureBadge.svelte';
+	import AgentDisclosureNotice from '$lib/components/agents/AgentDisclosureNotice.svelte';
 	import { Menu } from '$lib/greater/primitives';
 	import { MoreVerticalIcon, TrashIcon } from '$lib/greater/icons';
 	import { getMessagesContext } from './context.svelte.js';
@@ -24,11 +26,19 @@
 	} = getMessagesContext();
 
 	const isPendingRequest = $derived(messagesState.selectedConversation?.requestState === 'PENDING');
+	const conversationParticipants = $derived.by(() => {
+		const conversation = messagesState.selectedConversation;
+		if (!conversation) return [];
+		return conversation.participants.filter((participant) => participant.id !== currentUserId);
+	});
 	const conversationName = $derived.by(() => {
 		const conversation = messagesState.selectedConversation;
 		if (!conversation) return '';
 		return getConversationName(conversation, currentUserId);
 	});
+	const agentParticipant = $derived.by(
+		() => conversationParticipants.find((participant) => participant.isAgent) ?? null
+	);
 
 	async function handleAccept() {
 		const conversationId = messagesState.selectedConversation?.id;
@@ -75,7 +85,14 @@
 {#if messagesState.selectedConversation}
 	<div class={`messages-thread ${className}`}>
 		<div class="messages-thread__header">
-			<h3 class="messages-thread__title">{conversationName}</h3>
+			<div>
+				<h3 class="messages-thread__title">{conversationName}</h3>
+				{#if agentParticipant}
+					<div class="messages-thread__disclosure-row">
+						<AgentDisclosureBadge actor={agentParticipant} />
+					</div>
+				{/if}
+			</div>
 
 			{#if handlers.onDeleteConversation}
 				<Menu.Root class="messages-thread__menu">
@@ -93,6 +110,10 @@
 				</Menu.Root>
 			{/if}
 		</div>
+
+		{#if agentParticipant}
+			<AgentDisclosureNotice actor={agentParticipant} context="conversation" />
+		{/if}
 
 		{#if isPendingRequest}
 			<div class="messages-thread__request-banner" role="status" aria-live="polite">
