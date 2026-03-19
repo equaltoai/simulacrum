@@ -24,6 +24,14 @@ export interface MessageParticipant {
 	username: string;
 	displayName: string;
 	avatar?: string;
+	bot?: boolean;
+	isAgent?: boolean;
+	agentInfo?: {
+		id?: string;
+		agentType?: string | null;
+		verified?: boolean;
+		verifiedAt?: string | null;
+	} | null;
 }
 
 export interface DirectMessage {
@@ -112,6 +120,16 @@ function mapActorToParticipant(actor: ActorSummaryFragment): MessageParticipant 
 		username: actor.username,
 		displayName: actor.displayName ?? actor.username,
 		avatar: actor.avatar ?? undefined,
+		bot: actor.bot,
+		isAgent: actor.isAgent,
+		agentInfo: actor.agentInfo
+			? {
+					id: actor.agentInfo.id,
+					agentType: actor.agentInfo.agentType,
+					verified: actor.agentInfo.verified,
+					verifiedAt: actor.agentInfo.verifiedAt ?? null,
+				}
+			: null,
 	};
 }
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { base } from '$app/paths';
 	import { page } from '$app/stores';
 	import {
@@ -7,6 +8,7 @@
 		type AgentAccessLease,
 		type AgentAccessLeaseChallenge,
 		type AgentActivityConnection,
+		type AgentConnectorRegistration,
 		type AgentDelegation,
 		type AgentLeaseToken,
 		type AgentRuntimeSession,
@@ -29,6 +31,7 @@
 	import { authSession } from '$lib/auth/session';
 	import { hasAdminScope } from '$lib/auth/scopes';
 	import AgentMcpPanel from '$lib/components/agents/AgentMcpPanel.svelte';
+	import { resolveMcpTransport } from '$lib/mcp';
 	import { getAccounts, getInjectedProvider } from '$lib/tips';
 	import type { Account } from '$lib/types';
 	import { getStreamingAdapter } from '$lib/realtime/adapter';
@@ -142,6 +145,73 @@
 		agentSignature: `0x${string}` | null;
 	};
 
+	type StoredAgentConnector = {
+		id: string;
+		name: string;
+		clientId: string;
+		redirectUri: string;
+		website?: string | null;
+		createdAt: number;
+	};
+
+	const AGENT_CONNECTOR_STORAGE_PREFIX = 'simulacrum:agent-connectors:';
+
+	function agentConnectorStorageKey(username: string): string {
+		return `${AGENT_CONNECTOR_STORAGE_PREFIX}${normalizeUsername(username)}`;
+	}
+
+	function readStoredAgentConnectors(username: string): StoredAgentConnector[] {
+		if (!browser || !username) return [];
+
+		try {
+			const raw = localStorage.getItem(agentConnectorStorageKey(username));
+			if (!raw) return [];
+
+			const parsed = JSON.parse(raw) as StoredAgentConnector[];
+			if (!Array.isArray(parsed)) return [];
+
+			return parsed
+				.filter((connector) => connector && typeof connector === 'object')
+				.filter(
+					(connector) =>
+						typeof connector.clientId === 'string' &&
+						typeof connector.name === 'string' &&
+						typeof connector.redirectUri === 'string'
+				);
+		} catch {
+			return [];
+		}
+	}
+
+	function writeStoredAgentConnectors(username: string, connectors: readonly StoredAgentConnector[]) {
+		if (!browser || !username) return;
+		localStorage.setItem(agentConnectorStorageKey(username), JSON.stringify(connectors));
+	}
+
+	function rememberAgentConnector(
+		username: string,
+		registration: AgentConnectorRegistration
+	): StoredAgentConnector[] {
+		const nextConnector: StoredAgentConnector = {
+			id: registration.id,
+			name: registration.name,
+			clientId: registration.clientId,
+			redirectUri: registration.redirectUri,
+			website: registration.website,
+			createdAt: Date.now(),
+		};
+
+		const nextConnectors = [
+			nextConnector,
+			...readStoredAgentConnectors(username).filter(
+				(connector) => connector.clientId !== registration.clientId
+			),
+		];
+
+		writeStoredAgentConnectors(username, nextConnectors);
+		return nextConnectors;
+	}
+
 	let viewer = $state<Account | null>(null);
 	let agent = $state<Agent | null>(null);
 	let isLoading = $state(false);
@@ -240,6 +310,16 @@
 		activityError = null;
 		activityLoading = false;
 
+		connectorRegistrations = [];
+		latestConnector = null;
+		connectorClientName = '';
+		connectorRedirectUri = '';
+		connectorWebsite = browser ? window.location.origin : '';
+		connectorScopes = { read: true, write: true, follow: true };
+		connectorLoading = false;
+		connectorError = null;
+		connectorMessage = null;
+
 		updateError = null;
 		updateMessage = null;
 
@@ -250,6 +330,18 @@
 		void refreshActivity({ signal: controller.signal });
 
 		return () => controller.abort();
+	});
+
+	$effect(() => {
+		if (!agent) return;
+
+		connectorRegistrations = readStoredAgentConnectors(agent.username);
+		if (!connectorClientName) {
+			connectorClientName = `${agent.displayName || agent.username} connector`;
+		}
+		if (!connectorWebsite && browser) {
+			connectorWebsite = window.location.origin;
+		}
 	});
 
 	$effect(() => {
@@ -301,6 +393,21 @@
 		return () => provider.removeListener?.('accountsChanged', handleAccountsChanged);
 	});
 
+	// OAuth connector registration
+	let connectorRegistrations = $state<StoredAgentConnector[]>([]);
+	let latestConnector = $state<AgentConnectorRegistration | null>(null);
+	let connectorClientName = $state('');
+	let connectorRedirectUri = $state('');
+	let connectorWebsite = $state('');
+	let connectorScopes = $state({ read: true, write: true, follow: true });
+	let connectorLoading = $state(false);
+	let connectorError = $state<string | null>(null);
+	let connectorMessage = $state<string | null>(null);
+
+	const connectorTransport = $derived.by(() =>
+		browser ? resolveMcpTransport(window.location.origin) : null
+	);
+
 	// Standard runtime bearer + refresh sessions
 	let runtimeSessions = $state<AgentRuntimeSession[]>([]);
 	let selectedRuntimeSessionId = $state('');
@@ -328,6 +435,21 @@
 			runtimeCredentials?.refreshToken?.trim() ||
 			(runtimeIssueLoading ? 'Issuing runtime credentials…' : 'Refresh tokens are shown only after issuing a runtime session.')
 	);
+	const knownConnectorClientIds = $derived.by(
+		() => new Set(connectorRegistrations.map((connector) => connector.clientId))
+	);
+	const connectorSessionGroups = $derived.by(() =>
+		connectorRegistrations.map((connector) => ({
+			connector,
+			sessions: runtimeSessions.filter((session) => session.clientID === connector.clientId),
+		}))
+	);
+	const connectorSessionCount = $derived.by(() =>
+		connectorSessionGroups.reduce((count, group) => count + group.sessions.length, 0)
+	);
+	const otherRuntimeSessions = $derived.by(() =>
+		runtimeSessions.filter((session) => !knownConnectorClientIds.has(session.clientID))
+	);
 
 	function selectedRuntimeScopes(): string[] {
 		const scopes: string[] = [];
@@ -335,6 +457,84 @@
 		if (runtimeScopes.write) scopes.push('write');
 		if (runtimeScopes.follow) scopes.push('follow');
 		return scopes;
+	}
+
+	function selectedConnectorScopes(): string[] {
+		const scopes: string[] = [];
+		if (connectorScopes.read) scopes.push('read');
+		if (connectorScopes.write) scopes.push('write');
+		if (connectorScopes.follow) scopes.push('follow');
+		return scopes;
+	}
+
+	function ensureAbsoluteUrl(value: string, fieldLabel: string): string {
+		const trimmed = value.trim();
+		if (!trimmed) {
+			throw new Error(`${fieldLabel} is required.`);
+		}
+
+		try {
+			return new URL(trimmed).toString();
+		} catch {
+			throw new Error(`${fieldLabel} must be an absolute URL.`);
+		}
+	}
+
+	async function handleRegisterConnector() {
+		if (!agent) return;
+		if (!isOwner) return;
+		if (connectorLoading) return;
+
+		const clientName = connectorClientName.trim();
+		if (!clientName) {
+			connectorError = 'Connector name is required.';
+			return;
+		}
+
+		const scopes = selectedConnectorScopes();
+		if (scopes.length === 0) {
+			connectorError = 'Select at least one connector scope.';
+			return;
+		}
+
+		let redirectUri = '';
+		let website: string | undefined;
+
+		try {
+			redirectUri = ensureAbsoluteUrl(connectorRedirectUri, 'Redirect URI');
+			const trimmedWebsite = connectorWebsite.trim();
+			website = trimmedWebsite ? ensureAbsoluteUrl(trimmedWebsite, 'Website URL') : undefined;
+		} catch (error) {
+			connectorError = error instanceof Error ? error.message : String(error);
+			return;
+		}
+
+		connectorLoading = true;
+		connectorError = null;
+		connectorMessage = null;
+
+		try {
+			const registration = await api.registerAgentConnector({
+				username: agent.username,
+				clientName,
+				redirectUri,
+				scopes: scopes.join(' '),
+				website,
+			});
+
+			latestConnector = registration;
+			connectorRegistrations = rememberAgentConnector(agent.username, registration);
+			connectorMessage =
+				'Connector registered. Paste the client credentials into your MCP client and finish OAuth authorization there.';
+		} catch (error) {
+			connectorError = error instanceof Error ? error.message : String(error);
+		} finally {
+			connectorLoading = false;
+		}
+	}
+
+	function connectorTitle(connector: StoredAgentConnector, fallbackSession?: AgentRuntimeSession | null): string {
+		return connector.name.trim() || fallbackSession?.deviceLabel?.trim() || connector.clientId;
 	}
 
 	function refreshSelectedRuntimeSessionId(nextSessions: readonly AgentRuntimeSession[] = runtimeSessions) {
@@ -465,7 +665,7 @@
 		try {
 			await api.revokeAgentToken({ username: agent.username });
 			await loadRuntimeSessions();
-			runtimeActionMessage = 'All runtime sessions were revoked.';
+			runtimeActionMessage = 'All agent runtime sessions were revoked.';
 		} catch (err) {
 			runtimeActionError = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -1414,10 +1614,320 @@
 		<section class="page__notice">
 			<div class="settings-token__row">
 				<div>
+					<h2>OAuth connectors</h2>
+					<p class="page__meta">
+						Register an external MCP connector for this agent, then copy the client credentials into Claude.ai
+						or another OAuth-aware MCP client.
+					</p>
+				</div>
+				{#if canManage}
+					<button
+						type="button"
+						class="gr-button gr-button--outline"
+						disabled={runtimeLoading || connectorLoading || runtimeRevokeAllLoading || runtimeRevokeSessionId !== null}
+						onclick={() => void loadRuntimeSessions()}
+					>
+						Refresh sessions
+					</button>
+				{/if}
+			</div>
+
+			{#if !canManage}
+				<p class="page__meta">
+					You can view this agent, but only the owner or an admin can inspect connector sessions.
+				</p>
+			{:else}
+				<div class="settings-form__notice">
+					Connector client secrets are shown only when you register them here. Simulacrum keeps the non-secret
+					client metadata in this browser so matching refresh-token sessions can be surfaced after OAuth
+					authorization completes.
+				</div>
+
+				{#if isOwner}
+					<form
+						class="settings-form"
+						onsubmit={(event) => {
+							event.preventDefault();
+							void handleRegisterConnector();
+						}}
+					>
+						<div class="settings-field">
+							<label class="settings-field__label" for="agent-connector-name">Connector name</label>
+							<input
+								class="settings-field__input"
+								id="agent-connector-name"
+								type="text"
+								placeholder="Claude connector"
+								bind:value={connectorClientName}
+							/>
+						</div>
+
+						<div class="settings-field">
+							<label class="settings-field__label" for="agent-connector-redirect">
+								Redirect URI from your MCP client
+							</label>
+							<input
+								class="settings-field__input"
+								id="agent-connector-redirect"
+								type="url"
+								placeholder="https://claude.ai/api/mcp/auth_callback"
+								bind:value={connectorRedirectUri}
+							/>
+							<p class="page__meta">
+								Claude.ai currently uses <code>https://claude.ai/api/mcp/auth_callback</code>.
+							</p>
+						</div>
+
+						<div class="settings-field">
+							<label class="settings-field__label" for="agent-connector-website">
+								Website URL
+							</label>
+							<input
+								class="settings-field__input"
+								id="agent-connector-website"
+								type="url"
+								placeholder="https://simulacrum.equalto.ai"
+								bind:value={connectorWebsite}
+							/>
+							<p class="page__meta">Optional, but using this instance origin is a good default.</p>
+						</div>
+
+						<div class="settings-field">
+							<span class="settings-field__label">Scopes</span>
+							<div class="settings-scopes">
+								<label class="settings-field__checkbox-label">
+									<input class="settings-field__checkbox" type="checkbox" bind:checked={connectorScopes.read} />
+									read
+								</label>
+								<label class="settings-field__checkbox-label">
+									<input class="settings-field__checkbox" type="checkbox" bind:checked={connectorScopes.write} />
+									write
+								</label>
+								<label class="settings-field__checkbox-label">
+									<input class="settings-field__checkbox" type="checkbox" bind:checked={connectorScopes.follow} />
+									follow
+								</label>
+							</div>
+							<p class="page__meta">
+								Most MCP clients should request at least <code>read write</code>.
+							</p>
+						</div>
+
+						<div class="settings-form__actions">
+							<button type="submit" class="gr-button gr-button--solid" disabled={connectorLoading}>
+								{connectorLoading ? 'Registering connector…' : 'Add connector'}
+							</button>
+							{#if latestConnector}
+								<button
+									type="button"
+									class="gr-button gr-button--outline"
+									onclick={() => {
+										latestConnector = null;
+										connectorError = null;
+										connectorMessage = 'Connector secrets cleared from the page.';
+									}}
+								>
+									Clear current secrets
+								</button>
+							{/if}
+						</div>
+					</form>
+				{:else}
+					<p class="page__meta">
+						Admins can inspect and revoke connector sessions here, but only the agent owner can register new
+						connectors.
+					</p>
+				{/if}
+
+				{#if connectorError}
+					<div class="settings-form__notice settings-form__notice--error" role="alert">{connectorError}</div>
+				{/if}
+				{#if connectorMessage}
+					<div class="settings-form__notice" role="status">{connectorMessage}</div>
+				{/if}
+				{#if runtimeLoadError}
+					<div class="settings-form__notice settings-form__notice--error" role="alert">{runtimeLoadError}</div>
+				{/if}
+
+				<div class="settings-token" aria-live="polite">
+					<div class="settings-token__row">
+						<strong>Current connector client ID</strong>
+						<button
+							type="button"
+							class="gr-button gr-button--outline"
+							disabled={!latestConnector?.clientId}
+							onclick={() => latestConnector?.clientId && copy(latestConnector.clientId)}
+						>
+							Copy
+						</button>
+					</div>
+					<pre class="settings-token__value">
+						{latestConnector?.clientId || 'Register a connector above to reveal OAuth client credentials.'}
+					</pre>
+
+					<div class="settings-token__row">
+						<strong>Current connector client secret</strong>
+						<button
+							type="button"
+							class="gr-button gr-button--outline"
+							disabled={!latestConnector?.clientSecret?.trim()}
+							onclick={() => latestConnector?.clientSecret && copy(latestConnector.clientSecret)}
+						>
+							Copy
+						</button>
+					</div>
+					<pre class="settings-token__value">
+						{latestConnector?.clientSecret ||
+							(latestConnector
+								? 'No client secret was returned by the server.'
+								: 'Client secrets are shown only once, immediately after registration.')}
+					</pre>
+
+					<div class="settings-token__row">
+						<strong>Discovery URL</strong>
+						<button
+							type="button"
+							class="gr-button gr-button--outline"
+							disabled={!connectorTransport?.discoveryUrl}
+							onclick={() => connectorTransport?.discoveryUrl && copy(connectorTransport.discoveryUrl)}
+						>
+							Copy
+						</button>
+					</div>
+					<pre class="settings-token__value">{connectorTransport?.discoveryUrl ?? 'Loading…'}</pre>
+
+					<div class="settings-token__row">
+						<strong>Endpoint URL</strong>
+						<button
+							type="button"
+							class="gr-button gr-button--outline"
+							disabled={!connectorTransport?.endpoint}
+							onclick={() => connectorTransport?.endpoint && copy(connectorTransport.endpoint)}
+						>
+							Copy
+						</button>
+					</div>
+					<pre class="settings-token__value">{connectorTransport?.endpoint ?? 'Loading…'}</pre>
+
+					{#if latestConnector}
+						<div class="settings-token__meta">
+							Redirect URI: {latestConnector.redirectUri}
+							{#if latestConnector.website}
+								<span> • website {latestConnector.website}</span>
+							{/if}
+						</div>
+					{/if}
+				</div>
+
+				{#if connectorRegistrations.length > 0}
+					<h3>Registered connectors</h3>
+					<ul class="settings-list">
+						{#each connectorRegistrations as connector (connector.clientId)}
+							<li class="settings-list__item">
+								<div class="settings-list__body">
+									<div class="settings-list__title">{connectorTitle(connector)}</div>
+									<div class="settings-list__meta">
+										Client <code>{connector.clientId}</code>
+										<span> • redirect <code>{connector.redirectUri}</code></span>
+										<span> • added {new Date(connector.createdAt).toLocaleString()}</span>
+										<span>
+											• {connectorSessionGroups.find((group) => group.connector.clientId === connector.clientId)?.sessions.length ?? 0}
+											session(s)
+										</span>
+									</div>
+								</div>
+								<div class="settings-form__actions">
+									<button
+										type="button"
+										class="gr-button gr-button--outline"
+										onclick={() => copy(connector.clientId)}
+									>
+										Copy client ID
+									</button>
+									{#if latestConnector?.clientId === connector.clientId && latestConnector.clientSecret}
+										<button
+											type="button"
+											class="gr-button gr-button--outline"
+											onclick={() => {
+												const secret = latestConnector?.clientSecret;
+												if (secret) void copy(secret);
+											}}
+										>
+											Copy current secret
+										</button>
+									{/if}
+								</div>
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<div class="page__notice">No connectors have been registered from this browser yet.</div>
+				{/if}
+
+				<h3>Connector sessions</h3>
+				<p class="page__meta">
+					Authorized refresh-token sessions are matched to the connectors registered from this browser by client
+					ID.
+				</p>
+
+				{#if runtimeLoading}
+					<div class="page__notice">Loading connector sessions…</div>
+				{:else if connectorSessionCount === 0}
+					<div class="page__notice">No connector sessions have been authorized yet.</div>
+				{:else}
+					<ul class="settings-list">
+						{#each connectorSessionGroups as group (group.connector.clientId)}
+							{#each group.sessions as session (session.sessionID)}
+								<li class="settings-list__item">
+									<div class="settings-list__body">
+										<div class="settings-list__title">{connectorTitle(group.connector, session)}</div>
+										<div class="settings-list__meta">
+											Client <code>{session.clientID}</code> • session <code>{session.sessionID}</code>
+											<span> • {session.revoked ? 'revoked' : 'active'}</span>
+											<span> • scope {session.scope}</span>
+											<span> • created {formatDateTime(session.createdAt)}</span>
+											<span> • last used {formatDateTime(session.lastUsedAt)}</span>
+											{#if session.revokedAt}
+												<span> • revoked {formatDateTime(session.revokedAt)}</span>
+											{/if}
+										</div>
+									</div>
+									<div class="settings-form__actions">
+										<button
+											type="button"
+											class="gr-button gr-button--outline"
+											onclick={() => {
+												selectedRuntimeSessionId = session.sessionID;
+												runtimeActionError = null;
+												runtimeActionMessage = null;
+											}}
+										>
+											{selectedRuntimeSessionId === session.sessionID ? 'Selected' : 'Select'}
+										</button>
+										<button
+											type="button"
+											class="gr-button gr-button--outline"
+											disabled={runtimeRevokeSessionId === session.sessionID || session.revoked}
+											onclick={() => void handleRevokeRuntimeSession(session)}
+										>
+											{runtimeRevokeSessionId === session.sessionID ? 'Revoking…' : 'Revoke'}
+										</button>
+									</div>
+								</li>
+							{/each}
+						{/each}
+					</ul>
+				{/if}
+			{/if}
+		</section>
+
+		<section class="page__notice">
+			<div class="settings-token__row">
+				<div>
 					<h2>Runtime sessions</h2>
 					<p class="page__meta">
-						Standard bearer + refresh credentials are the normal MCP path for local runtimes. Issue them here,
-						copy the refresh token into your runtime, and use this list to inspect or revoke active sessions.
+						Issue direct bearer + refresh credentials for local runtimes, CLI tools, or advanced debugging.
+						OAuth connectors above remain the recommended path for hosted MCP clients.
 					</p>
 				</div>
 				{#if canManage}
@@ -1438,8 +1948,8 @@
 				</p>
 			{:else}
 				<div class="settings-form__notice">
-					The access token is the MCP bearer. Keep the refresh token only in your local runtime; it rotates on
-					use and is the durable session secret you should revoke if a machine is retired or compromised.
+					Use these direct bearer credentials only when you need a local runtime bootstrap or a manual MCP/debug
+					session. Keep the refresh token only in the runtime that will rotate it.
 				</div>
 
 				{#if isOwner}
@@ -1464,7 +1974,7 @@
 								bind:value={runtimeExpiresIn}
 							/>
 							<p class="page__meta">
-								Leave blank unless you need a shorter-lived bearer token for a specific runtime bootstrap.
+								Leave blank unless you want a shorter-lived bearer token for a one-off local bootstrap.
 							</p>
 						</div>
 
@@ -1512,7 +2022,7 @@
 								disabled={runtimeRevokeAllLoading || runtimeSessions.length === 0}
 								onclick={() => void handleRevokeAllRuntimeSessions()}
 							>
-								{runtimeRevokeAllLoading ? 'Revoking all…' : 'Revoke all runtime sessions'}
+								{runtimeRevokeAllLoading ? 'Revoking all…' : 'Revoke all agent sessions'}
 							</button>
 						</div>
 					</form>
@@ -1572,17 +2082,18 @@
 
 				{#if runtimeLoading}
 					<div class="page__notice">Loading runtime sessions…</div>
-				{:else if runtimeSessions.length === 0}
-					<div class="page__notice">No runtime sessions exist for this agent yet.</div>
+				{:else if otherRuntimeSessions.length === 0}
+					<div class="page__notice">No local runtime sessions exist outside the connector sessions above.</div>
 				{:else}
 					<ul class="settings-list">
-						{#each runtimeSessions as session (session.sessionID)}
+						{#each otherRuntimeSessions as session (session.sessionID)}
 							<li class="settings-list__item">
 								<div class="settings-list__body">
 									<div class="settings-list__title">{session.deviceLabel || session.clientID}</div>
 									<div class="settings-list__meta">
 										Session <code>{session.sessionID}</code> • {session.revoked ? 'revoked' : 'active'}
 										<span> • scope {session.scope}</span>
+										<span> • created {formatDateTime(session.createdAt)}</span>
 										<span> • last used {formatDateTime(session.lastUsedAt)}</span>
 										<span> • idle {formatDateTime(session.idleExpiresAt)}</span>
 										<span> • absolute {formatDateTime(session.absoluteExpiresAt)}</span>
@@ -1623,6 +2134,8 @@
 			agentUsername={agent.username}
 			{canManage}
 			canIssueRuntimeCredentials={isOwner}
+			{latestConnector}
+			{connectorSessionCount}
 			{runtimeCredentials}
 			{selectedRuntimeSession}
 			selectedLease={selectedLease}
@@ -1634,9 +2147,10 @@
 				<div>
 						<h2>Lease-based auth (advanced)</h2>
 						<p class="page__meta">
-							Runtime sessions above are the standard MCP path. Use wallet-backed leases only when you specifically
-							need a browser-assisted, wallet-mediated bearer flow; each renewal here mints a short-lived bearer
-							token from the selected lease.
+							OAuth connectors above are the standard hosted-client path, and direct runtime sessions above are the
+							normal local bearer path. Use wallet-backed leases only when you specifically need a browser-assisted,
+							wallet-mediated bearer flow; each renewal here mints a short-lived bearer token from the selected
+							lease.
 						</p>
 					</div>
 				{#if canManage}

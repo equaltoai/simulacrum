@@ -4,6 +4,8 @@
 	import { page } from '$app/stores';
 	import { api } from '$lib/api';
 	import { authSession } from '$lib/auth/session';
+	import AgentDisclosureBadge from '$lib/components/agents/AgentDisclosureBadge.svelte';
+	import AgentDisclosureNotice from '$lib/components/agents/AgentDisclosureNotice.svelte';
 	import ContentRenderer from '$lib/components/ContentRenderer.svelte';
 	import TimelineVirtualizedReactive from '$lib/components/TimelineVirtualizedReactive.svelte';
 	import TipButton from '$lib/components/Tips/TipButton.svelte';
@@ -203,9 +205,16 @@
 				<AvatarImage class="profile-card__avatar" src={account.avatar} alt="" />
 				<div class="profile-card__body">
 					<div class="profile-card__heading">
-						<h2 class="profile-card__name">{account.displayName || account.username}</h2>
+						<h2 class="profile-card__name">
+							{account.displayName || account.username}
+							<AgentDisclosureBadge actor={account} />
+						</h2>
 						<div class="profile-card__handle">@{account.acct}</div>
 					</div>
+
+					{#if account.isAgent}
+						<AgentDisclosureNotice actor={account} context="account" />
+					{/if}
 
 					{#if account.note}
 						<ContentRenderer class="profile-card__bio" content={account.note} collapsed={false} />
