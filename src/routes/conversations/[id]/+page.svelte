@@ -1,7 +1,16 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 
-	import { getMessagesContext, type ConversationFolder } from '$lib/components/messaging';
+	import {
+		getMessagesContext,
+		type Conversation,
+		type ConversationFolder,
+		type MessagesHandlers,
+	} from '$lib/components/messaging';
+
+	type RouteMessagesHandlers = MessagesHandlers & {
+		onFetchConversation?: (conversationId: string) => Promise<Conversation | null>;
+	};
 
 	const { state, handlers, fetchConversations, selectConversation } = getMessagesContext();
 
@@ -28,7 +37,9 @@
 		}
 
 		if (!found) {
-			found = (await handlers.onFetchConversation?.(conversationId)) ?? null;
+			found =
+				(await (handlers as RouteMessagesHandlers).onFetchConversation?.(conversationId)) ??
+				null;
 		}
 
 		if (found) {

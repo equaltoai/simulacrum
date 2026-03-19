@@ -66,7 +66,6 @@ export interface MessagesRealtimeCallbacks {
 
 export interface MessagesHandlers {
 	onFetchConversations?: (folder?: ConversationFolder) => Promise<Conversation[]>;
-	onFetchConversation?: (conversationId: string) => Promise<Conversation | null>;
 	onFetchMessages?: (
 		conversationId: string,
 		options?: { limit?: number; cursor?: string }
@@ -172,17 +171,6 @@ export function createLesserMessagesHandlers(
 				mapConversationToUiConversation(conversation, folder)
 			);
 		},
-		onFetchConversation: async (conversationId) => {
-			const conversation = (await adapter.getConversation(conversationId)) as
-				| LesserConversationLike
-				| null
-				| undefined;
-			if (!conversation) return null;
-
-			const folder: ConversationFolder =
-				conversation.viewerMetadata.requestState === 'PENDING' ? 'REQUESTS' : 'INBOX';
-			return mapConversationToUiConversation(conversation, folder);
-		},
 		onFetchMessages: async (conversationId, options) => {
 			const data = await adapter.query(ConversationMessagesDocument, {
 				conversationId,
@@ -208,8 +196,13 @@ export function createLesserMessagesHandlers(
 				throw new Error('DM v1 only supports 1:1 conversations');
 			}
 
+			const participantId = participantIds[0];
+			if (participantId === undefined) {
+				throw new Error('participantId is required for DM conversation creation');
+			}
+
 			const data = await adapter.mutate(CreateConversationDocument, {
-				participantId: participantIds[0]!,
+				participantId,
 			});
 
 			return mapConversationToUiConversation(
