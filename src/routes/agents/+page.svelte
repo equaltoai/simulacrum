@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths';
-	import { api, type Agent, type AgentConnection, type AgentDelegation } from '$lib/api';
+	import { api, type Agent, type AgentConnection } from '$lib/api';
 	import { authSession } from '$lib/auth/session';
 	import type { AgentType } from '$lib/greater/adapters/graphql';
 
@@ -107,7 +107,7 @@
 		myAgentsLoading = false;
 		myAgentsError = null;
 
-		delegation = null;
+		createdAgent = null;
 		createError = null;
 
 		if (!token) return;
@@ -131,18 +131,17 @@
 		return () => controller.abort();
 	});
 
-	// Delegation / creation
+	// Agent creation
 	let createUsername = $state('');
 	let createDisplayName = $state('');
 	let createBio = $state('');
 	let createType = $state<AgentType>('ASSISTANT');
 	let createVersion = $state('1.0.0');
-	let createExpiresIn = $state<string>('');
 	let createScopes = $state({ read: true, write: true, follow: true });
 
 	let createLoading = $state(false);
 	let createError = $state<string | null>(null);
-	let delegation = $state<AgentDelegation | null>(null);
+	let createdAgent = $state<Agent | null>(null);
 
 	function selectedScopes(): string[] {
 		const scopes: string[] = [];
@@ -150,11 +149,6 @@
 		if (createScopes.write) scopes.push('write');
 		if (createScopes.follow) scopes.push('follow');
 		return scopes;
-	}
-
-	async function copy(value: string) {
-		if (typeof navigator === 'undefined' || !navigator.clipboard) return;
-		await navigator.clipboard.writeText(value);
 	}
 
 	async function handleCreateAgent() {
@@ -183,27 +177,23 @@
 			return;
 		}
 
-		const expiresInRaw = createExpiresIn.trim();
-		const expiresIn =
-			expiresInRaw.length > 0 ? Number.parseInt(expiresInRaw, 10) : undefined;
-
 		createLoading = true;
 		createError = null;
-		delegation = null;
+		createdAgent = null;
 
 		try {
-			delegation = await api.delegateToAgent({
+			const delegation = await api.delegateToAgent({
 				input: {
 					agentUsername: agentUsernameDraft,
 					displayName: displayNameDraft,
 					bio: createBio.trim() || undefined,
 					scopes,
-					expiresIn: Number.isFinite(expiresIn) ? expiresIn : undefined,
 					agentType: createType,
 					agentVersion: versionDraft,
 					version: versionDraft,
 				},
 			});
+			createdAgent = delegation.agent;
 
 			void refreshDirectory();
 			myAgents = [...(await api.fetchMyAgents())];
@@ -359,9 +349,8 @@
 			<section class="page__notice">
 				<h2>Create agent</h2>
 				<p class="page__meta">
-					This flow registers the agent and returns the first runtime access + refresh tokens for a local runtime.
-					These standard bearer credentials are the normal MCP path; the agent detail page also lets you review and
-					revoke runtime sessions, with lease auth kept as an advanced option.
+					This flow registers the agent so you can open its detail page and add OAuth connectors for Claude.ai,
+					Claude Code, or another MCP client.
 				</p>
 
 			<form
@@ -406,23 +395,6 @@
 					<input class="settings-field__input" id="new-agent-version" type="text" bind:value={createVersion} />
 				</div>
 
-					<div class="settings-field">
-						<label class="settings-field__label" for="new-agent-expires">Bootstrap token TTL override (seconds)</label>
-						<input
-							class="settings-field__input"
-							id="new-agent-expires"
-							type="number"
-							min="60"
-							step="60"
-							placeholder="optional"
-							bind:value={createExpiresIn}
-						/>
-						<p class="page__meta">
-							Leave this blank unless you need a one-off bootstrap token override. The durable runtime session stays
-							alive via the refresh token and rotation safety rails.
-						</p>
-					</div>
-
 				<div class="settings-field">
 					<span class="settings-field__label">Scopes</span>
 					<div class="settings-scopes">
@@ -452,44 +424,15 @@
 				</div>
 			</form>
 
-			{#if delegation}
-				{@const tokenPayload = delegation}
+			{#if createdAgent}
 				<div class="page__notice">
 					<strong>Agent created:</strong>{' '}
-					<a href={agentHref(tokenPayload.agent.username)}>@{tokenPayload.agent.username}</a>
+					<a href={agentHref(createdAgent.username)}>@{createdAgent.username}</a>
 					<p class="page__meta">
-						These are standard runtime credentials. Open the agent page next to issue additional runtime sessions,
-						revoke old ones, or use lease auth only if you specifically need the advanced wallet-backed flow.
+						Next step: open the agent page and register a dedicated OAuth connector for each MCP client you want
+						to use. Simulacrum now keeps connector setup on the agent page instead of surfacing legacy bootstrap
+						secrets here.
 					</p>
-					<div class="settings-token">
-						<div class="settings-token__row">
-							<strong>Access token</strong>
-							<button
-								type="button"
-								class="gr-button gr-button--outline"
-								onclick={() => copy(tokenPayload.accessToken)}
-							>
-								Copy
-							</button>
-						</div>
-						<pre class="settings-token__value">{tokenPayload.accessToken}</pre>
-
-						<div class="settings-token__row">
-							<strong>Refresh token</strong>
-							<button
-								type="button"
-								class="gr-button gr-button--outline"
-								onclick={() => copy(tokenPayload.refreshToken)}
-							>
-								Copy
-							</button>
-						</div>
-						<pre class="settings-token__value">{tokenPayload.refreshToken}</pre>
-
-						<div class="settings-token__meta">
-							Scope: {tokenPayload.scope} • Expires in: {tokenPayload.expiresIn}s
-						</div>
-					</div>
 				</div>
 			{/if}
 		</section>

@@ -1,12 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import type {
-		AgentAccessLease,
-		AgentConnectorRegistration,
-		AgentDelegation,
-		AgentLeaseToken,
-		AgentRuntimeSession,
-	} from '$lib/api';
+	import type { AgentAccessLease, AgentConnectorRegistration, AgentLeaseToken } from '$lib/api';
 	import {
 		KNOWN_MCP_TOOLS,
 		KNOWN_MCP_PROMPTS,
@@ -28,20 +22,15 @@
 	} from '$lib/mcp';
 
 	interface Props {
-		agentUsername: string;
 		canManage: boolean;
-		canIssueRuntimeCredentials: boolean;
 		latestConnector: AgentConnectorRegistration | null;
 		connectorSessionCount: number;
-		runtimeCredentials: AgentDelegation | null;
-		selectedRuntimeSession: AgentRuntimeSession | null;
 		selectedLease: AgentAccessLease | null;
 		leaseToken: AgentLeaseToken | null;
 	}
 
 	type PanelStatus = 'idle' | 'loading' | 'ready' | 'error';
 	type ActiveCredential = {
-		kind: 'runtime' | 'lease';
 		accessToken: string;
 		scope: string;
 		expiresIn: number | null;
@@ -53,13 +42,9 @@
 	};
 
 	let {
-		agentUsername,
 		canManage,
-		canIssueRuntimeCredentials,
 		latestConnector,
 		connectorSessionCount,
-		runtimeCredentials,
-		selectedRuntimeSession,
 		selectedLease,
 		leaseToken,
 	}: Props = $props();
@@ -78,13 +63,8 @@
 	let inspectionError = $state<string | null>(null);
 	let inspectionCheckedAt = $state<number | null>(null);
 
-	function sanitizeServerName(value: string): string {
-		const normalized = value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-');
-		return normalized.replace(/^-+|-+$/g, '') || 'agent';
-	}
-
 	function tokenValue(): string {
-		return activeCredential?.accessToken?.trim() || '<runtime-access-token>';
+		return activeCredential?.accessToken?.trim() || '<advanced-access-token>';
 	}
 
 	function statusLabel(status: PanelStatus): string {
@@ -231,26 +211,13 @@
 		return () => controller.abort();
 	});
 
-	const serverName = $derived.by(() => `simulacrum-${sanitizeServerName(agentUsername)}`);
 	const mcpEndpoint = $derived.by(() => discoveryDoc?.endpoint?.trim() || transport?.endpoint || '');
 	const mcpDiscoveryUrl = $derived.by(() => transport?.discoveryUrl ?? '');
 	const oauthDiscoveryUrl = $derived.by(() => transport?.oauthDiscoveryUrl ?? '');
 	const activeCredential = $derived.by<ActiveCredential | null>(() => {
-		const runtimeToken = runtimeCredentials?.accessToken?.trim();
-		if (runtimeToken) {
-			return {
-				kind: 'runtime',
-				accessToken: runtimeToken,
-				scope: runtimeCredentials?.scope?.trim() || selectedRuntimeSession?.scope?.trim() || 'read write',
-				expiresIn: runtimeCredentials?.expiresIn ?? null,
-				metaLabel: selectedRuntimeSession?.deviceLabel?.trim() || 'Runtime session',
-			};
-		}
-
 		const leaseAccessToken = leaseToken?.accessToken?.trim();
 		if (leaseAccessToken) {
 			return {
-				kind: 'lease',
 				accessToken: leaseAccessToken,
 				scope: leaseToken?.scope?.trim() || selectedLease?.scopes.join(' ') || 'read write',
 				expiresIn: leaseToken?.expiresIn ?? null,
@@ -276,6 +243,36 @@
 			methods,
 		};
 	});
+	const claudeAiClientId = $derived.by(() =>
+		latestConnector?.clientPreset === 'claude_ai'
+			? latestConnector.clientId
+			: '<client-id from Claude.ai connector>'
+	);
+	const claudeAiClientSecret = $derived.by(() =>
+		latestConnector?.clientPreset === 'claude_ai'
+			? latestConnector.clientSecret
+			: '<client-secret from Claude.ai connector>'
+	);
+	const claudeCodeClientId = $derived.by(() =>
+		latestConnector?.clientPreset === 'claude_code'
+			? latestConnector.clientId
+			: '<client-id from Claude Code connector>'
+	);
+	const claudeCodeClientSecret = $derived.by(() =>
+		latestConnector?.clientPreset === 'claude_code'
+			? latestConnector.clientSecret
+			: '<client-secret from Claude Code connector>'
+	);
+	const headlessClientId = $derived.by(() =>
+		latestConnector?.clientPreset === 'headless'
+			? latestConnector.clientId
+			: '<client-id from headless connector>'
+	);
+	const headlessClientSecret = $derived.by(() =>
+		latestConnector?.clientPreset === 'headless'
+			? latestConnector.clientSecret
+			: '<client-secret from headless connector>'
+	);
 	const discoveryOverviewStatus = $derived.by<PanelStatus>(() => {
 		if (oauthDiscoveryStatus === 'error' || discoveryStatus === 'error') return 'error';
 		if (oauthDiscoveryStatus === 'loading' || discoveryStatus === 'loading') return 'loading';
@@ -341,46 +338,36 @@
 		return live.map((name) => known.get(name) ?? { name, description: 'Prompt exposed by the MCP server.' });
 	});
 
-	const claudeSnippet = $derived.by(() => {
-		const endpoint = mcpEndpoint || 'https://api.example.com/mcp';
-		const token = tokenValue();
+	const claudeAiSnippet = $derived.by(() => {
+		const discovery = oauthDiscoveryUrl || 'https://api.example.com/.well-known/oauth-protected-resource';
 		return [
-			`claude mcp add-json ${serverName} '{`,
-			'  "type": "http",',
-			`  "url": "${endpoint}",`,
-			'  "headers": {',
-			`    "Authorization": "Bearer ${token}"`,
-			'  }',
-			"}'",
+			'Preset: Claude.ai',
+			`OAuth Discovery URL: ${discovery}`,
+			'Redirect URI: https://claude.ai/api/mcp/auth_callback',
+			`Client ID: ${claudeAiClientId}`,
+			`Client Secret: ${claudeAiClientSecret}`,
 		].join('\n');
 	});
 
-	const cursorSnippet = $derived.by(() =>
-		JSON.stringify(
-			{
-				mcpServers: {
-					[serverName]: {
-						url: mcpEndpoint || 'https://api.example.com/mcp',
-						headers: {
-							Authorization: `Bearer ${tokenValue()}`,
-						},
-					},
-				},
-			},
-			null,
-			2
-		)
-	);
-
-	const curlSnippet = $derived.by(() => {
-		const endpoint = mcpEndpoint || 'https://api.example.com/mcp';
-		const token = tokenValue();
+	const claudeCodeSnippet = $derived.by(() => {
+		const discovery = oauthDiscoveryUrl || 'https://api.example.com/.well-known/oauth-protected-resource';
 		return [
-			'curl -sS \\',
-			`  -X POST "${endpoint}" \\`,
-			"  -H 'content-type: application/json' \\",
-			`  -H 'Authorization: Bearer ${token}' \\`,
-			`  -d '{"jsonrpc":"2.0","id":1,"method":"initialize"}'`,
+			'Preset: Claude Code',
+			`OAuth Discovery URL: ${discovery}`,
+			'Redirect URI: http://localhost:8787/callback',
+			`Client ID: ${claudeCodeClientId}`,
+			`Client Secret: ${claudeCodeClientSecret}`,
+		].join('\n');
+	});
+
+	const headlessSnippet = $derived.by(() => {
+		const discovery = oauthDiscoveryUrl || 'https://api.example.com/.well-known/oauth-protected-resource';
+		return [
+			'Grant type: client_credentials',
+			`OAuth Discovery URL: ${discovery}`,
+			'Client redirect URI in MCP client: none',
+			`Client ID: ${headlessClientId}`,
+			`Client Secret: ${headlessClientSecret}`,
 		].join('\n');
 	});
 </script>
@@ -391,8 +378,8 @@
 			<h2>MCP connection</h2>
 			<p class="mcp-panel__intro">
 				Register an OAuth connector above for Claude.ai or any other hosted MCP client, then use the OAuth
-				discovery URL and client credentials there. The MCP transport discovery document remains available below for
-				debugging and manual checks.
+				discovery URL and client credentials there. The MCP transport discovery document and direct endpoint stay
+				available below for debugging only.
 			</p>
 		</div>
 		<div class="mcp-panel__actions">
@@ -429,7 +416,7 @@
 		</div>
 		<ol class="mcp-panel__steps">
 			<li>Use <strong>Add connector</strong> above to register an OAuth client for this agent.</li>
-			<li>Copy the Client ID, Client Secret, and OAuth Discovery URL into your MCP client’s custom connector dialog.</li>
+			<li>Copy the matching connector’s Client ID, Client Secret, and OAuth Discovery URL into your MCP client’s connector dialog.</li>
 			<li>Authorize as the principal for this agent inside that MCP client.</li>
 			<li>After OAuth completes, the connector session list above will show the active refresh-token session.</li>
 		</ol>
@@ -484,7 +471,7 @@
 
 		<div class="mcp-panel__fact">
 			<div class="settings-token__row">
-				<strong>Advanced bearer auth header</strong>
+				<strong>Advanced auth header</strong>
 				<button type="button" class="gr-button gr-button--outline" onclick={() => copy(authHeader)}>
 					Copy
 				</button>
@@ -494,11 +481,9 @@
 	</div>
 
 	<div class="settings-form__notice">
-		OAuth connectors are the default hosted-client path. If you use a direct bearer token instead, keep the refresh
-		token only in your local runtime. Refresh sessions rotate on use, so if a refresh token leaks, revoke that runtime
-		session and mint a new one. For MCP, <code>read</code> unlocks read-only tools and <code>write</code> unlocks
-		posting, follow/unfollow, profile updates, memory writes, and outbound comms. The legacy <code>follow</code>
-		scope alone is not enough for MCP write tools.
+		OAuth connectors are the first-class setup path here. Use the OAuth discovery URL above for hosted MCP clients,
+		then rely on the connector session health list on the agent page for day-to-day diagnostics. The advanced auth
+		header and live inspection below are optional manual probes that use a lease token, not the normal setup flow.
 	</div>
 
 	<div class="mcp-panel__status-grid">
@@ -561,17 +546,12 @@
 
 		<article class="mcp-panel__status">
 			<div class="mcp-panel__status-header">
-				<h3>{activeCredential?.kind === 'lease' ? 'Advanced lease token' : 'Current runtime token'}</h3>
+				<h3>Authenticated inspection</h3>
 				<span class={statusBadgeClass(inspectionStatus)}>{statusLabel(inspectionStatus)}</span>
 			</div>
 			{#if activeCredential}
 				<p class="page__meta">
-					{#if activeCredential.kind === 'runtime'}
-						Runtime session
-						{#if selectedRuntimeSession}
-							<code>{selectedRuntimeSession.sessionID}</code> · client <code>{selectedRuntimeSession.clientID}</code>
-						{/if}
-					{:else if selectedLease}
+					{#if selectedLease}
 						Lease <code>{selectedLease.id}</code> · status <code>{selectedLease.status}</code>
 					{/if}
 					· scope <code>{currentScope}</code>
@@ -594,24 +574,17 @@
 					<p class="mcp-panel__status-copy">{inspectionError}</p>
 				{:else}
 					<p class="mcp-panel__status-copy">
-						{#if activeCredential.kind === 'runtime'}
-							The current runtime bearer token is ready. Run a live check to verify authenticated MCP access.
-						{:else}
-							This advanced lease bearer token is ready. Run a live check to verify authenticated MCP access.
-						{/if}
+						This advanced lease token is ready. Run a live check to verify authenticated MCP access.
 					</p>
 				{/if}
 			{:else}
-				<p class="page__meta">No runtime bearer token is loaded yet.</p>
+				<p class="page__meta">No advanced inspection token is loaded yet.</p>
 				<p class="mcp-panel__status-copy">
-					{#if canIssueRuntimeCredentials}
-						Register an OAuth connector above for the normal hosted-client flow, or issue runtime credentials
-						above if you need a local bearer token for direct MCP access.
-					{:else if canManage}
-						An owner can register a connector above or issue runtime credentials above. Lease auth remains
-						available below only as an advanced, wallet-backed fallback.
+					{#if canManage}
+						OAuth connectors above handle the normal hosted-client flow. Mint an advanced lease token below only
+						if you want this page to run a direct authenticated MCP probe.
 					{:else}
-						Only the agent owner or an admin can inspect credentials for this MCP endpoint.
+						Only the agent owner or an admin can run an authenticated MCP inspection from this page.
 					{/if}
 				</p>
 			{/if}
@@ -621,37 +594,41 @@
 	<div class="mcp-panel__snippet-grid">
 		<article class="mcp-panel__snippet">
 			<div class="settings-token__row">
-				<strong>Claude Code</strong>
-				<button type="button" class="gr-button gr-button--outline" onclick={() => copy(claudeSnippet)}>
+				<strong>Claude.ai preset</strong>
+				<button type="button" class="gr-button gr-button--outline" onclick={() => copy(claudeAiSnippet)}>
 					Copy
 				</button>
 			</div>
-			<pre class="settings-token__value">{claudeSnippet}</pre>
-			<p class="page__meta">Uses the official <code>claude mcp add-json</code> flow with HTTP transport + headers.</p>
-		</article>
-
-		<article class="mcp-panel__snippet">
-			<div class="settings-token__row">
-				<strong>Cursor</strong>
-				<button type="button" class="gr-button gr-button--outline" onclick={() => copy(cursorSnippet)}>
-					Copy
-				</button>
-			</div>
-			<pre class="settings-token__value">{cursorSnippet}</pre>
-			<p class="page__meta">Paste into your Cursor MCP config under <code>mcpServers</code>.</p>
-		</article>
-
-		<article class="mcp-panel__snippet">
-			<div class="settings-token__row">
-				<strong>Other clients / curl</strong>
-				<button type="button" class="gr-button gr-button--outline" onclick={() => copy(curlSnippet)}>
-					Copy
-				</button>
-			</div>
-			<pre class="settings-token__value">{curlSnippet}</pre>
+			<pre class="settings-token__value">{claudeAiSnippet}</pre>
 			<p class="page__meta">
-				Call <code>initialize</code> first, then keep the returned <code>mcp-session-id</code> for
-				<code>tools/list</code>, <code>tools/call</code>, <code>resources/read</code>, and <code>prompts/get</code>.
+				Register a dedicated Claude.ai connector above, then paste these values into Claude.ai’s MCP connector dialog.
+			</p>
+		</article>
+
+		<article class="mcp-panel__snippet">
+			<div class="settings-token__row">
+				<strong>Claude Code preset</strong>
+				<button type="button" class="gr-button gr-button--outline" onclick={() => copy(claudeCodeSnippet)}>
+					Copy
+				</button>
+			</div>
+			<pre class="settings-token__value">{claudeCodeSnippet}</pre>
+			<p class="page__meta">
+				Register a dedicated Claude Code connector above, then use these values in the local MCP connector setup.
+			</p>
+		</article>
+
+		<article class="mcp-panel__snippet">
+			<div class="settings-token__row">
+				<strong>Headless connector</strong>
+				<button type="button" class="gr-button gr-button--outline" onclick={() => copy(headlessSnippet)}>
+					Copy
+				</button>
+			</div>
+			<pre class="settings-token__value">{headlessSnippet}</pre>
+			<p class="page__meta">
+				Use this when the connector above is registered with the <code>client_credentials</code> grant for a
+				service-style MCP client.
 			</p>
 		</article>
 	</div>
@@ -662,7 +639,7 @@
 				<h3>MCP tool catalog</h3>
 				<p class="page__meta">
 					{#if inspection?.tools.length}
-						Live from the current bearer token.
+						Live from the current lease token.
 					{:else if discoveryDoc?.tools?.length}
 						Live from the public discovery document.
 					{:else}
