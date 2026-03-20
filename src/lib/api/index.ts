@@ -83,6 +83,7 @@ import {
 	type AgentByUsernameQuery,
 	type AgentByUsernameQueryVariables,
 	type AgentRuntimeSession as GraphQLAgentRuntimeSession,
+	type AgentRuntimeSessionAuthDiagnostic as GraphQLAgentRuntimeSessionAuthDiagnostic,
 	type AgentsQuery,
 	type AgentsQueryVariables,
 	type AuthorizeAgentAccessLeaseSessionKeyMutation,
@@ -203,7 +204,7 @@ import {
 import type { Account, Notification, Status } from '$lib/types';
 import { getAccessToken } from './auth';
 import { toAccount, toNotification, toStatus } from './adapters';
-import { graphqlRequest } from './graphql';
+import { GraphQLRequestError, graphqlRequest } from './graphql';
 import { RestRequestError, restRequest } from './rest';
 import type { MastodonStatusContext } from './mastodon';
 import { toMastodonStatus } from './mastodon';
@@ -236,6 +237,10 @@ type ViewerQueryData = {
 		trustScore: number;
 		fields: Array<{ name: string; value: string; verifiedAt?: string | null }>;
 	};
+};
+
+type AgentRuntimeSessionRecord = Omit<GraphQLAgentRuntimeSession, 'authDiagnostic'> & {
+	authDiagnostic?: GraphQLAgentRuntimeSessionAuthDiagnostic | null;
 };
 
 const VIEWER_QUERY = `
@@ -275,7 +280,7 @@ query Viewer {
 `;
 
 type AgentRuntimeSessionsQueryData = {
-	agentRuntimeSessions: GraphQLAgentRuntimeSession[];
+	agentRuntimeSessions: AgentRuntimeSessionRecord[];
 };
 
 type AgentRuntimeSessionsQueryVariables = {
@@ -283,7 +288,7 @@ type AgentRuntimeSessionsQueryVariables = {
 };
 
 type RevokeAgentRuntimeSessionMutationData = {
-	revokeAgentRuntimeSession: GraphQLAgentRuntimeSession;
+	revokeAgentRuntimeSession: AgentRuntimeSessionRecord;
 };
 
 type RevokeAgentRuntimeSessionMutationVariables = {
@@ -292,7 +297,7 @@ type RevokeAgentRuntimeSessionMutationVariables = {
 	reason?: string | null;
 };
 
-const AGENT_RUNTIME_SESSION_FIELDS = `
+const AGENT_RUNTIME_SESSION_FIELDS_BASE = `
 	sessionID
 	clientID
 	deviceLabel
@@ -306,10 +311,33 @@ const AGENT_RUNTIME_SESSION_FIELDS = `
 	revokedReason
 `;
 
+const AGENT_RUNTIME_SESSION_AUTH_DIAGNOSTIC_FIELDS = `
+	authDiagnostic {
+		status
+		failureCode
+		failureMessage
+		failureAt
+		lastSuccessAt
+	}
+`;
+
+const AGENT_RUNTIME_SESSION_FIELDS = `
+${AGENT_RUNTIME_SESSION_FIELDS_BASE}
+${AGENT_RUNTIME_SESSION_AUTH_DIAGNOSTIC_FIELDS}
+`;
+
 const AGENT_RUNTIME_SESSIONS_QUERY = `
 query AgentRuntimeSessions($username: String!) {
 	agentRuntimeSessions(username: $username) {
 ${AGENT_RUNTIME_SESSION_FIELDS}
+	}
+}
+`;
+
+const AGENT_RUNTIME_SESSIONS_QUERY_LEGACY = `
+query AgentRuntimeSessions($username: String!) {
+	agentRuntimeSessions(username: $username) {
+${AGENT_RUNTIME_SESSION_FIELDS_BASE}
 	}
 }
 `;
@@ -321,6 +349,39 @@ ${AGENT_RUNTIME_SESSION_FIELDS}
 	}
 }
 `;
+
+const REVOKE_AGENT_RUNTIME_SESSION_MUTATION_LEGACY = `
+mutation RevokeAgentRuntimeSession($username: String!, $sessionID: ID!, $reason: String) {
+	revokeAgentRuntimeSession(username: $username, sessionID: $sessionID, reason: $reason) {
+${AGENT_RUNTIME_SESSION_FIELDS_BASE}
+	}
+}
+`;
+
+function normalizeAgentRuntimeSession(session: AgentRuntimeSessionRecord): AgentRuntimeSessionRecord {
+	return {
+		...session,
+		authDiagnostic: session.authDiagnostic ?? null,
+	};
+}
+
+function normalizeAgentRuntimeSessions(
+	sessions: readonly AgentRuntimeSessionRecord[]
+): AgentRuntimeSessionRecord[] {
+	return sessions.map((session) => normalizeAgentRuntimeSession(session));
+}
+
+function shouldRetryWithoutRuntimeSessionDiagnostics(error: unknown): boolean {
+	if (!(error instanceof GraphQLRequestError)) return false;
+
+	const messages = [error.message, ...(error.errors ?? []).map((entry) => entry.message)];
+	return messages.some(
+		(message) =>
+			message.includes('authDiagnostic') &&
+			message.includes('AgentRuntimeSession') &&
+			(message.includes('Cannot query field') || message.includes('Unknown field'))
+	);
+}
 
 type ViewerObjectState = {
 	viewerFavourited?: boolean;
@@ -3552,7 +3613,8 @@ export type AgentAccessLeaseChallenge =
 export type AgentLeaseToken = ExchangeAgentAccessLeaseTokenMutation['exchangeAgentAccessLeaseToken'];
 export type AgentActivityConnection = AgentActivityQuery['agentActivity'];
 export type AgentDelegation = DelegateToAgentMutation['delegateToAgent'];
-export type AgentRuntimeSession = GraphQLAgentRuntimeSession;
+export type AgentRuntimeSession = AgentRuntimeSessionRecord;
+export type AgentRuntimeSessionAuthDiagnostic = GraphQLAgentRuntimeSessionAuthDiagnostic;
 export type AdminAgentPolicy = AdminAgentPolicyQuery['adminAgentPolicy'];
 export type SoulInventoryItem = MySoulsQuery['mySouls'][number];
 export type AgentConnectorGrantProfile = 'authorization_code' | 'client_credentials';
@@ -3698,14 +3760,27 @@ export async function fetchAgentRuntimeSessions({
 }): Promise<AgentRuntimeSession[]> {
 	const token = requireAccessToken();
 
-	const data = await graphqlRequest<AgentRuntimeSessionsQueryData, AgentRuntimeSessionsQueryVariables>({
-		document: AGENT_RUNTIME_SESSIONS_QUERY,
-		variables: { username },
-		token,
-		signal,
-	});
+	try {
+		const data = await graphqlRequest<AgentRuntimeSessionsQueryData, AgentRuntimeSessionsQueryVariables>({
+			document: AGENT_RUNTIME_SESSIONS_QUERY,
+			variables: { username },
+			token,
+			signal,
+		});
 
-	return [...data.agentRuntimeSessions];
+		return normalizeAgentRuntimeSessions(data.agentRuntimeSessions);
+	} catch (error) {
+		if (!shouldRetryWithoutRuntimeSessionDiagnostics(error)) throw error;
+
+		const data = await graphqlRequest<AgentRuntimeSessionsQueryData, AgentRuntimeSessionsQueryVariables>({
+			document: AGENT_RUNTIME_SESSIONS_QUERY_LEGACY,
+			variables: { username },
+			token,
+			signal,
+		});
+
+		return normalizeAgentRuntimeSessions(data.agentRuntimeSessions);
+	}
 }
 
 export async function registerAgentConnector({
@@ -4000,17 +4075,33 @@ export async function revokeAgentRuntimeSession({
 }): Promise<AgentRuntimeSession> {
 	const token = requireAccessToken();
 
-	const data = await graphqlRequest<
-		RevokeAgentRuntimeSessionMutationData,
-		RevokeAgentRuntimeSessionMutationVariables
-	>({
-		document: REVOKE_AGENT_RUNTIME_SESSION_MUTATION,
-		variables: { username, sessionID, reason },
-		token,
-		signal,
-	});
+	try {
+		const data = await graphqlRequest<
+			RevokeAgentRuntimeSessionMutationData,
+			RevokeAgentRuntimeSessionMutationVariables
+		>({
+			document: REVOKE_AGENT_RUNTIME_SESSION_MUTATION,
+			variables: { username, sessionID, reason },
+			token,
+			signal,
+		});
 
-	return data.revokeAgentRuntimeSession;
+		return normalizeAgentRuntimeSession(data.revokeAgentRuntimeSession);
+	} catch (error) {
+		if (!shouldRetryWithoutRuntimeSessionDiagnostics(error)) throw error;
+
+		const data = await graphqlRequest<
+			RevokeAgentRuntimeSessionMutationData,
+			RevokeAgentRuntimeSessionMutationVariables
+		>({
+			document: REVOKE_AGENT_RUNTIME_SESSION_MUTATION_LEGACY,
+			variables: { username, sessionID, reason },
+			token,
+			signal,
+		});
+
+		return normalizeAgentRuntimeSession(data.revokeAgentRuntimeSession);
+	}
 }
 
 export async function revokeAgentAccessLease({
