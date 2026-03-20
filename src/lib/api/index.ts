@@ -3555,6 +3555,8 @@ export type AgentDelegation = DelegateToAgentMutation['delegateToAgent'];
 export type AgentRuntimeSession = GraphQLAgentRuntimeSession;
 export type AdminAgentPolicy = AdminAgentPolicyQuery['adminAgentPolicy'];
 export type SoulInventoryItem = MySoulsQuery['mySouls'][number];
+export type AgentConnectorGrantProfile = 'authorization_code' | 'client_credentials';
+export type AgentConnectorClientPreset = 'claude_ai' | 'claude_code' | 'custom' | 'headless';
 export type AgentConnectorRegistration = {
 	id: string;
 	name: string;
@@ -3563,6 +3565,10 @@ export type AgentConnectorRegistration = {
 	redirectUri: string;
 	website: string | null;
 	vapidKey: string | null;
+	grantTypes: string[];
+	tokenEndpointAuthMethod: string | null;
+	grantProfile: AgentConnectorGrantProfile;
+	clientPreset: AgentConnectorClientPreset;
 };
 
 export async function fetchAgentByUsername({
@@ -3692,6 +3698,10 @@ export async function registerAgentConnector({
 	clientName,
 	redirectUri,
 	scopes,
+	grantTypes,
+	tokenEndpointAuthMethod,
+	grantProfile,
+	clientPreset,
 	website,
 	signal,
 }: {
@@ -3699,6 +3709,10 @@ export async function registerAgentConnector({
 	clientName: string;
 	redirectUri: string;
 	scopes: string;
+	grantTypes: string[];
+	tokenEndpointAuthMethod?: string;
+	grantProfile: AgentConnectorGrantProfile;
+	clientPreset: AgentConnectorClientPreset;
 	website?: string;
 	signal?: AbortSignal;
 }): Promise<AgentConnectorRegistration> {
@@ -3710,7 +3724,13 @@ export async function registerAgentConnector({
 		scopes,
 		client_class: 'agent',
 		agent_username: username,
+		grant_types: grantTypes.join(' '),
 	});
+
+	const trimmedAuthMethod = tokenEndpointAuthMethod?.trim();
+	if (trimmedAuthMethod) {
+		body.set('token_endpoint_auth_method', trimmedAuthMethod);
+	}
 
 	const trimmedWebsite = website?.trim();
 	if (trimmedWebsite) {
@@ -3726,6 +3746,8 @@ export async function registerAgentConnector({
 			redirect_uri: string;
 			website?: string;
 			vapid_key?: string;
+			grant_types?: string[];
+			token_endpoint_auth_method?: string;
 		}>({
 			path: '/api/v1/apps',
 			method: 'POST',
@@ -3745,6 +3767,10 @@ export async function registerAgentConnector({
 			redirectUri: data.redirect_uri,
 			website: data.website ?? null,
 			vapidKey: data.vapid_key ?? null,
+			grantTypes: [...(data.grant_types ?? grantTypes)],
+			tokenEndpointAuthMethod: data.token_endpoint_auth_method ?? trimmedAuthMethod ?? null,
+			grantProfile,
+			clientPreset,
 		};
 	} catch (error) {
 		throw new Error(restErrorMessage(error, 'Agent connector registration failed.'));

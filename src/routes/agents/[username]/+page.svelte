@@ -7,6 +7,8 @@
 		type Agent,
 		type AgentAccessLease,
 		type AgentAccessLeaseChallenge,
+		type AgentConnectorClientPreset,
+		type AgentConnectorGrantProfile,
 		type AgentActivityConnection,
 		type AgentConnectorRegistration,
 		type AgentDelegation,
@@ -46,8 +48,91 @@
 		{ value: 'CUSTOM', label: 'Custom' },
 	];
 
+	const CLAUDE_AI_REDIRECT_URI = 'https://claude.ai/api/mcp/auth_callback';
+	const CLAUDE_CODE_REDIRECT_URI = 'http://localhost:8787/callback';
+	const HEADLESS_REDIRECT_URI = 'urn:ietf:wg:oauth:2.0:oob';
+	const CONNECTOR_CLIENT_PRESETS: Array<{
+		value: Exclude<AgentConnectorClientPreset, 'headless'>;
+		label: string;
+	}> = [
+		{ value: 'claude_ai', label: 'Claude.ai' },
+		{ value: 'claude_code', label: 'Claude Code' },
+		{ value: 'custom', label: 'Custom' },
+	];
+
 	function formatAgentType(value: AgentType) {
 		return AGENT_TYPES.find((entry) => entry.value === value)?.label ?? value;
+	}
+
+	function isConnectorGrantProfile(value: unknown): value is AgentConnectorGrantProfile {
+		return value === 'authorization_code' || value === 'client_credentials';
+	}
+
+	function isConnectorClientPreset(value: unknown): value is AgentConnectorClientPreset {
+		return value === 'claude_ai' || value === 'claude_code' || value === 'custom' || value === 'headless';
+	}
+
+	function connectorGrantTypes(profile: AgentConnectorGrantProfile): string[] {
+		return profile === 'client_credentials'
+			? ['client_credentials']
+			: ['authorization_code', 'refresh_token'];
+	}
+
+	function connectorGrantProfileLabel(profile: AgentConnectorGrantProfile): string {
+		return profile === 'client_credentials' ? 'Client credentials' : 'Authorization code';
+	}
+
+	function connectorClientPresetLabel(preset: AgentConnectorClientPreset): string {
+		switch (preset) {
+			case 'claude_ai':
+				return 'Claude.ai';
+			case 'claude_code':
+				return 'Claude Code';
+			case 'headless':
+				return 'Headless connector';
+			default:
+				return 'Custom client';
+		}
+	}
+
+	function formatGrantTypes(grantTypes: readonly string[]): string {
+		return grantTypes.join(', ') || 'authorization_code, refresh_token';
+	}
+
+	function defaultConnectorRedirectUriForPreset(
+		preset: Exclude<AgentConnectorClientPreset, 'headless'>
+	): string {
+		if (preset === 'claude_ai') return CLAUDE_AI_REDIRECT_URI;
+		if (preset === 'claude_code') return CLAUDE_CODE_REDIRECT_URI;
+		return '';
+	}
+
+	function inferConnectorGrantProfile(grantTypes: readonly string[] = []): AgentConnectorGrantProfile {
+		return grantTypes.includes('client_credentials') ? 'client_credentials' : 'authorization_code';
+	}
+
+	function inferConnectorClientPreset({
+		redirectUri,
+		grantProfile,
+	}: {
+		redirectUri: string;
+		grantProfile: AgentConnectorGrantProfile;
+	}): AgentConnectorClientPreset {
+		if (grantProfile === 'client_credentials' || redirectUri === HEADLESS_REDIRECT_URI) {
+			return 'headless';
+		}
+
+		const normalized = redirectUri.trim().toLowerCase();
+		if (normalized === CLAUDE_AI_REDIRECT_URI) return 'claude_ai';
+		if (
+			normalized.startsWith('http://localhost:') ||
+			normalized.startsWith('http://127.0.0.1:') ||
+			normalized.startsWith('https://localhost:') ||
+			normalized.startsWith('https://127.0.0.1:')
+		) {
+			return 'claude_code';
+		}
+		return 'custom';
 	}
 
 	function profileHref(username: string, domain?: string | null) {
@@ -152,12 +237,71 @@
 		redirectUri: string;
 		website?: string | null;
 		createdAt: number;
+		grantTypes: string[];
+		tokenEndpointAuthMethod: string | null;
+		grantProfile: AgentConnectorGrantProfile;
+		clientPreset: AgentConnectorClientPreset;
 	};
 
 	const AGENT_CONNECTOR_STORAGE_PREFIX = 'simulacrum:agent-connectors:';
 
 	function agentConnectorStorageKey(username: string): string {
 		return `${AGENT_CONNECTOR_STORAGE_PREFIX}${normalizeUsername(username)}`;
+	}
+
+	function normalizeStoredAgentConnector(value: unknown): StoredAgentConnector | null {
+		if (!value || typeof value !== 'object') return null;
+
+		const connector = value as {
+			id?: unknown;
+			name?: unknown;
+			clientId?: unknown;
+			redirectUri?: unknown;
+			website?: unknown;
+			createdAt?: unknown;
+			grantTypes?: unknown;
+			tokenEndpointAuthMethod?: unknown;
+			grantProfile?: unknown;
+			clientPreset?: unknown;
+		};
+
+		if (
+			typeof connector.id !== 'string' ||
+			typeof connector.name !== 'string' ||
+			typeof connector.clientId !== 'string' ||
+			typeof connector.redirectUri !== 'string'
+		) {
+			return null;
+		}
+
+		const parsedGrantTypes = Array.isArray(connector.grantTypes)
+			? connector.grantTypes.filter((entry): entry is string => typeof entry === 'string' && !!entry.trim())
+			: [];
+		const grantProfile = isConnectorGrantProfile(connector.grantProfile)
+			? connector.grantProfile
+			: inferConnectorGrantProfile(parsedGrantTypes);
+		const clientPreset = isConnectorClientPreset(connector.clientPreset)
+			? connector.clientPreset
+			: inferConnectorClientPreset({
+					redirectUri: connector.redirectUri,
+					grantProfile,
+				});
+
+		return {
+			id: connector.id,
+			name: connector.name,
+			clientId: connector.clientId,
+			redirectUri: connector.redirectUri,
+			website: typeof connector.website === 'string' ? connector.website : null,
+			createdAt: typeof connector.createdAt === 'number' ? connector.createdAt : Date.now(),
+			grantTypes: parsedGrantTypes.length > 0 ? parsedGrantTypes : connectorGrantTypes(grantProfile),
+			tokenEndpointAuthMethod:
+				typeof connector.tokenEndpointAuthMethod === 'string'
+					? connector.tokenEndpointAuthMethod
+					: 'client_secret_post',
+			grantProfile,
+			clientPreset,
+		};
 	}
 
 	function readStoredAgentConnectors(username: string): StoredAgentConnector[] {
@@ -167,17 +311,12 @@
 			const raw = localStorage.getItem(agentConnectorStorageKey(username));
 			if (!raw) return [];
 
-			const parsed = JSON.parse(raw) as StoredAgentConnector[];
+			const parsed = JSON.parse(raw) as unknown[];
 			if (!Array.isArray(parsed)) return [];
 
 			return parsed
-				.filter((connector) => connector && typeof connector === 'object')
-				.filter(
-					(connector) =>
-						typeof connector.clientId === 'string' &&
-						typeof connector.name === 'string' &&
-						typeof connector.redirectUri === 'string'
-				);
+				.map((connector) => normalizeStoredAgentConnector(connector))
+				.filter((connector): connector is StoredAgentConnector => connector !== null);
 		} catch {
 			return [];
 		}
@@ -204,6 +343,10 @@
 			redirectUri: registration.redirectUri,
 			website: registration.website,
 			createdAt: Date.now(),
+			grantTypes: registration.grantTypes,
+			tokenEndpointAuthMethod: registration.tokenEndpointAuthMethod,
+			grantProfile: registration.grantProfile,
+			clientPreset: registration.clientPreset,
 		};
 
 		const nextConnectors = [
@@ -318,7 +461,9 @@
 		connectorRegistrations = [];
 		latestConnector = null;
 		connectorClientName = '';
-		connectorRedirectUri = '';
+		connectorGrantProfile = 'authorization_code';
+		connectorClientPreset = 'claude_ai';
+		connectorRedirectUri = CLAUDE_AI_REDIRECT_URI;
 		connectorWebsite = browser ? window.location.origin : '';
 		connectorScopes = { read: true, write: true, follow: true };
 		connectorLoading = false;
@@ -343,6 +488,11 @@
 		connectorRegistrations = readStoredAgentConnectors(agent.username);
 		if (!connectorClientName) {
 			connectorClientName = `${agent.displayName || agent.username} connector`;
+		}
+		if (connectorGrantProfile === 'authorization_code' && !connectorRedirectUri) {
+			connectorRedirectUri = defaultConnectorRedirectUriForPreset(
+				connectorClientPreset === 'headless' ? 'claude_ai' : connectorClientPreset
+			);
 		}
 		if (!connectorWebsite && browser) {
 			connectorWebsite = window.location.origin;
@@ -402,6 +552,8 @@
 	let connectorRegistrations = $state<StoredAgentConnector[]>([]);
 	let latestConnector = $state<AgentConnectorRegistration | null>(null);
 	let connectorClientName = $state('');
+	let connectorGrantProfile = $state<AgentConnectorGrantProfile>('authorization_code');
+	let connectorClientPreset = $state<AgentConnectorClientPreset>('claude_ai');
 	let connectorRedirectUri = $state('');
 	let connectorWebsite = $state('');
 	let connectorScopes = $state({ read: true, write: true, follow: true });
@@ -472,6 +624,24 @@
 		return scopes;
 	}
 
+	function setConnectorGrantProfile(profile: AgentConnectorGrantProfile) {
+		connectorGrantProfile = profile;
+		if (profile === 'client_credentials') {
+			connectorClientPreset = 'headless';
+			return;
+		}
+
+		if (connectorClientPreset === 'headless') {
+			connectorClientPreset = 'claude_ai';
+			connectorRedirectUri = CLAUDE_AI_REDIRECT_URI;
+		}
+	}
+
+	function setConnectorClientPreset(preset: Exclude<AgentConnectorClientPreset, 'headless'>) {
+		connectorClientPreset = preset;
+		connectorRedirectUri = defaultConnectorRedirectUriForPreset(preset);
+	}
+
 	function ensureAbsoluteUrl(value: string, fieldLabel: string): string {
 		const trimmed = value.trim();
 		if (!trimmed) {
@@ -504,9 +674,15 @@
 
 		let redirectUri = '';
 		let website: string | undefined;
+		const grantTypes = connectorGrantTypes(connectorGrantProfile);
+		const clientPreset =
+			connectorGrantProfile === 'client_credentials' ? 'headless' : connectorClientPreset;
 
 		try {
-			redirectUri = ensureAbsoluteUrl(connectorRedirectUri, 'Redirect URI');
+			redirectUri =
+				connectorGrantProfile === 'client_credentials'
+					? HEADLESS_REDIRECT_URI
+					: ensureAbsoluteUrl(connectorRedirectUri, 'Redirect URI');
 			const trimmedWebsite = connectorWebsite.trim();
 			website = trimmedWebsite ? ensureAbsoluteUrl(trimmedWebsite, 'Website URL') : undefined;
 		} catch (error) {
@@ -524,13 +700,16 @@
 				clientName,
 				redirectUri,
 				scopes: scopes.join(' '),
+				grantTypes,
+				tokenEndpointAuthMethod: 'client_secret_post',
+				grantProfile: connectorGrantProfile,
+				clientPreset,
 				website,
 			});
 
 			latestConnector = registration;
 			connectorRegistrations = rememberAgentConnector(agent.username, registration);
-			connectorMessage =
-				'Connector registered. Paste the client credentials into your MCP client and finish OAuth authorization there.';
+			connectorMessage = `Connector registered for ${connectorClientPresetLabel(registration.clientPreset)} using ${connectorGrantProfileLabel(registration.grantProfile).toLowerCase()}.`;
 		} catch (error) {
 			connectorError = error instanceof Error ? error.message : String(error);
 		} finally {
@@ -1645,7 +1824,8 @@
 				<div class="settings-form__notice">
 					Connector client secrets are shown only when you register them here. Simulacrum keeps the non-secret
 					client metadata in this browser so matching refresh-token sessions can be surfaced after OAuth
-					authorization completes.
+					authorization completes. Each connector stores a single redirect URI, so register separate connectors for
+					Claude.ai, Claude Code, and any custom MCP clients you want to keep distinct.
 				</div>
 
 				{#if isOwner}
@@ -1668,20 +1848,88 @@
 						</div>
 
 						<div class="settings-field">
-							<label class="settings-field__label" for="agent-connector-redirect">
-								Redirect URI from your MCP client
-							</label>
-							<input
-								class="settings-field__input"
-								id="agent-connector-redirect"
-								type="url"
-								placeholder="https://claude.ai/api/mcp/auth_callback"
-								bind:value={connectorRedirectUri}
-							/>
+							<label class="settings-field__label" for="agent-connector-grant">Grant type</label>
+							<select
+								class="settings-field__select"
+								id="agent-connector-grant"
+								bind:value={connectorGrantProfile}
+								onchange={(event) =>
+									setConnectorGrantProfile(
+										(event.currentTarget as HTMLSelectElement).value as AgentConnectorGrantProfile
+									)}
+							>
+								<option value="authorization_code">Authorization code</option>
+								<option value="client_credentials">Client credentials</option>
+							</select>
 							<p class="page__meta">
-								Claude.ai currently uses <code>https://claude.ai/api/mcp/auth_callback</code>.
+								{#if connectorGrantProfile === 'client_credentials'}
+									Use this for autonomous or headless connectors that do not need an interactive browser
+									callback.
+								{:else}
+									Use this for OAuth-aware MCP clients that complete an interactive browser authorization
+									flow.
+								{/if}
 							</p>
 						</div>
+
+						{#if connectorGrantProfile === 'authorization_code'}
+							<div class="settings-field">
+								<label class="settings-field__label" for="agent-connector-client">MCP client</label>
+								<select
+									class="settings-field__select"
+									id="agent-connector-client"
+									bind:value={connectorClientPreset}
+									onchange={(event) =>
+										setConnectorClientPreset(
+											(event.currentTarget as HTMLSelectElement).value as Exclude<
+												AgentConnectorClientPreset,
+												'headless'
+											>
+										)}
+								>
+									{#each CONNECTOR_CLIENT_PRESETS as preset (preset.value)}
+										<option value={preset.value}>{preset.label}</option>
+									{/each}
+								</select>
+								<p class="page__meta">
+									Simulacrum stores one redirect URI per connector. Add a separate connector for each hosted
+									or local MCP client you use.
+								</p>
+							</div>
+
+							<div class="settings-field">
+								<label class="settings-field__label" for="agent-connector-redirect">
+									Redirect URI from your MCP client
+								</label>
+								<input
+									class="settings-field__input"
+									id="agent-connector-redirect"
+									type="url"
+									placeholder={
+										connectorClientPreset === 'claude_code'
+											? 'http://localhost:8787/callback'
+											: 'https://example.com/callback'
+									}
+									bind:value={connectorRedirectUri}
+								/>
+								<p class="page__meta">
+									{#if connectorClientPreset === 'claude_ai'}
+										Claude.ai currently uses <code>{CLAUDE_AI_REDIRECT_URI}</code>.
+									{:else if connectorClientPreset === 'claude_code'}
+										Claude Code typically uses a localhost callback such as <code>{CLAUDE_CODE_REDIRECT_URI}</code>.
+										Adjust the port if your local client shows a different callback.
+									{:else}
+										Enter the exact callback URI your custom MCP client expects.
+									{/if}
+								</p>
+							</div>
+						{:else}
+							<div class="settings-form__notice">
+								Simulacrum will register <code>{HEADLESS_REDIRECT_URI}</code> behind the scenes because Lesser
+								still requires a redirect URI at registration time, but the connector will only allow
+								<code>client_credentials</code> token exchange.
+							</div>
+						{/if}
 
 						<div class="settings-field">
 							<label class="settings-field__label" for="agent-connector-website">
@@ -1714,7 +1962,9 @@
 								</label>
 							</div>
 							<p class="page__meta">
-								Most MCP clients should request at least <code>read write</code>.
+								Most MCP clients should request at least <code>read write</code>. Stored grants:
+								<code>{formatGrantTypes(connectorGrantTypes(connectorGrantProfile))}</code> with
+								<code>client_secret_post</code>.
 							</p>
 						</div>
 
@@ -1816,7 +2066,13 @@
 
 					{#if latestConnector}
 						<div class="settings-token__meta">
-							Redirect URI: {latestConnector.redirectUri}
+							{connectorClientPresetLabel(latestConnector.clientPreset)} •
+							{connectorGrantProfileLabel(latestConnector.grantProfile)} • grants
+							{formatGrantTypes(latestConnector.grantTypes)} • auth
+							{latestConnector.tokenEndpointAuthMethod ?? 'client_secret_post'}
+							<span>
+								• redirect {latestConnector.redirectUri}
+							</span>
 							{#if latestConnector.website}
 								<span> • website {latestConnector.website}</span>
 							{/if}
@@ -1833,6 +2089,10 @@
 									<div class="settings-list__title">{connectorTitle(connector)}</div>
 									<div class="settings-list__meta">
 										Client <code>{connector.clientId}</code>
+										<span> • {connectorClientPresetLabel(connector.clientPreset)}</span>
+										<span> • {connectorGrantProfileLabel(connector.grantProfile)}</span>
+										<span> • grants {formatGrantTypes(connector.grantTypes)}</span>
+										<span> • auth {connector.tokenEndpointAuthMethod ?? 'client_secret_post'}</span>
 										<span> • redirect <code>{connector.redirectUri}</code></span>
 										<span> • added {new Date(connector.createdAt).toLocaleString()}</span>
 										<span>
