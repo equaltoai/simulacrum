@@ -52,6 +52,7 @@
 	const CLAUDE_AI_REDIRECT_URI = 'https://claude.ai/api/mcp/auth_callback';
 	const CLAUDE_CODE_REDIRECT_URI = 'http://localhost:8787/callback';
 	const HEADLESS_REDIRECT_URI = 'urn:ietf:wg:oauth:2.0:oob';
+	const CONNECTOR_SESSION_EXPIRING_SOON_MS = 6 * 60 * 60 * 1000;
 	const CONNECTOR_CLIENT_PRESETS: Array<{
 		value: Exclude<AgentConnectorClientPreset, 'headless'>;
 		label: string;
@@ -707,6 +708,80 @@
 			return `Rotated ${formatDateTime(rotation.rotatedAt)} with a ${rotation.gracePeriodSeconds}s grace window.`;
 		}
 		return `Rotated ${formatDateTime(rotation.rotatedAt)}.`;
+	}
+
+	type ConnectorSessionHealth = 'healthy' | 'expiring_soon' | 'refresh_needed' | 'revoked';
+
+	function formatDuration(ms: number): string {
+		if (!Number.isFinite(ms)) return '—';
+		if (ms <= 0) return 'expired';
+
+		const totalMinutes = Math.ceil(ms / 60000);
+		if (totalMinutes < 60) return `${totalMinutes}m`;
+
+		const totalHours = Math.ceil(totalMinutes / 60);
+		if (totalHours < 48) return `${totalHours}h`;
+
+		const days = Math.floor(totalHours / 24);
+		const hours = totalHours % 24;
+		return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+	}
+
+	function connectorSessionRemainingMs(session: AgentRuntimeSession): number {
+		const idleRemaining = parseDateMs(session.idleExpiresAt) - Date.now();
+		const absoluteRemaining = parseDateMs(session.absoluteExpiresAt) - Date.now();
+		return Math.min(idleRemaining, absoluteRemaining);
+	}
+
+	function connectorSessionHealth(session: AgentRuntimeSession): ConnectorSessionHealth {
+		if (session.revoked) return 'revoked';
+		const remainingMs = connectorSessionRemainingMs(session);
+		if (remainingMs <= 0) return 'refresh_needed';
+		if (remainingMs <= CONNECTOR_SESSION_EXPIRING_SOON_MS) return 'expiring_soon';
+		return 'healthy';
+	}
+
+	function connectorSessionHealthLabel(status: ConnectorSessionHealth): string {
+		switch (status) {
+			case 'revoked':
+				return 'Revoked';
+			case 'refresh_needed':
+				return 'Refresh needed';
+			case 'expiring_soon':
+				return 'Expiring soon';
+			default:
+				return 'Healthy';
+		}
+	}
+
+	function connectorSessionHealthClass(status: ConnectorSessionHealth): string {
+		switch (status) {
+			case 'healthy':
+				return 'gr-badge gr-badge--sm gr-badge--outlined gr-badge--success';
+			case 'expiring_soon':
+				return 'gr-badge gr-badge--sm gr-badge--outlined gr-badge--info';
+			case 'refresh_needed':
+				return 'gr-badge gr-badge--sm gr-badge--outlined gr-badge--error';
+			default:
+				return 'gr-badge gr-badge--sm gr-badge--outlined gr-badge--gray';
+		}
+	}
+
+	function connectorSessionHealthSummary(session: AgentRuntimeSession): string {
+		const status = connectorSessionHealth(session);
+		const remaining = formatDuration(connectorSessionRemainingMs(session));
+		if (status === 'revoked') {
+			return session.revokedReason?.trim()
+				? `Revoked ${formatDateTime(session.revokedAt)} (${session.revokedReason}). Reauthorize this connector in your MCP client.`
+				: `Revoked ${formatDateTime(session.revokedAt)}. Reauthorize this connector in your MCP client.`;
+		}
+		if (status === 'refresh_needed') {
+			return `This refresh-token session has expired or gone idle. Reauthorize the connector in your MCP client.`;
+		}
+		if (status === 'expiring_soon') {
+			return `Action soon: the current session window closes in ${remaining}. Let the client refresh or reauthorize if it stops reconnecting.`;
+		}
+		return `Healthy. Current session window closes in ${remaining}. No operator action is needed right now.`;
 	}
 
 	function ensureAbsoluteUrl(value: string, fieldLabel: string): string {
@@ -2285,7 +2360,7 @@
 				<h3>Connector sessions</h3>
 				<p class="page__meta">
 					Authorized refresh-token sessions are matched to the connectors registered from this browser by client
-					ID.
+					ID. Health below is inferred from idle expiry, absolute expiry, last use, and revocation state.
 				</p>
 
 				{#if runtimeLoading}
@@ -2296,19 +2371,31 @@
 					<ul class="settings-list">
 						{#each connectorSessionGroups as group (group.connector.clientId)}
 							{#each group.sessions as session (session.sessionID)}
+								{@const health = connectorSessionHealth(session)}
 								<li class="settings-list__item">
 									<div class="settings-list__body">
-										<div class="settings-list__title">{connectorTitle(group.connector, session)}</div>
+										<div class="settings-list__title">
+											{connectorTitle(group.connector, session)}
+											<span class={connectorSessionHealthClass(health)}>
+												{connectorSessionHealthLabel(health)}
+											</span>
+										</div>
 										<div class="settings-list__meta">
 											Client <code>{session.clientID}</code> • session <code>{session.sessionID}</code>
-											<span> • {session.revoked ? 'revoked' : 'active'}</span>
 											<span> • scope {session.scope}</span>
 											<span> • created {formatDateTime(session.createdAt)}</span>
 											<span> • last used {formatDateTime(session.lastUsedAt)}</span>
+											<span> • idle {formatDateTime(session.idleExpiresAt)}</span>
+											<span> • absolute {formatDateTime(session.absoluteExpiresAt)}</span>
+											<span> • window {formatDuration(connectorSessionRemainingMs(session))}</span>
 											{#if session.revokedAt}
 												<span> • revoked {formatDateTime(session.revokedAt)}</span>
 											{/if}
+											{#if session.revokedReason}
+												<span> • reason {session.revokedReason}</span>
+											{/if}
 										</div>
+										<div class="page__meta">{connectorSessionHealthSummary(session)}</div>
 									</div>
 									<div class="settings-form__actions">
 										<button
