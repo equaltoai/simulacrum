@@ -12,6 +12,7 @@
 		KNOWN_MCP_PROMPTS,
 		KNOWN_MCP_RESOURCES,
 		describeMcpError,
+		fetchOAuthProtectedResource,
 		fetchMcpWellKnown,
 		inspectMcpServer,
 		knownToolMap,
@@ -23,6 +24,7 @@
 		type McpToolDefinition,
 		type McpTransportConfig,
 		type McpWellKnownDocument,
+		type OAuthProtectedResourceDocument,
 	} from '$lib/mcp';
 
 	interface Props {
@@ -66,6 +68,10 @@
 	let discoveryDoc = $state<McpWellKnownDocument | null>(null);
 	let discoveryError = $state<string | null>(null);
 	let discoveryCheckedAt = $state<number | null>(null);
+	let oauthDiscoveryStatus = $state<PanelStatus>('idle');
+	let oauthDiscoveryDoc = $state<OAuthProtectedResourceDocument | null>(null);
+	let oauthDiscoveryError = $state<string | null>(null);
+	let oauthDiscoveryCheckedAt = $state<number | null>(null);
 
 	let inspectionStatus = $state<PanelStatus>('idle');
 	let inspection = $state<McpInspection | null>(null);
@@ -133,6 +139,28 @@
 		}
 	}
 
+	async function refreshOAuthDiscovery(
+		oauthDiscoveryUrl: string,
+		{ signal }: { signal?: AbortSignal } = {}
+	) {
+		if (!browser || !oauthDiscoveryUrl) return;
+
+		oauthDiscoveryStatus = 'loading';
+		oauthDiscoveryError = null;
+
+		try {
+			oauthDiscoveryDoc = await fetchOAuthProtectedResource(oauthDiscoveryUrl, signal);
+			oauthDiscoveryStatus = 'ready';
+		} catch (error) {
+			if (error instanceof DOMException && error.name === 'AbortError') return;
+			oauthDiscoveryDoc = null;
+			oauthDiscoveryStatus = 'error';
+			oauthDiscoveryError = describeMcpError(error);
+		} finally {
+			oauthDiscoveryCheckedAt = Date.now();
+		}
+	}
+
 	async function refreshInspection(
 		endpoint: string,
 		token: string,
@@ -175,6 +203,16 @@
 	});
 
 	$effect(() => {
+		const oauthDiscoveryUrl = transport?.oauthDiscoveryUrl ?? '';
+		if (!browser || !oauthDiscoveryUrl) return;
+
+		const controller = new AbortController();
+		void refreshOAuthDiscovery(oauthDiscoveryUrl, { signal: controller.signal });
+
+		return () => controller.abort();
+	});
+
+	$effect(() => {
 		const token = activeCredential?.accessToken?.trim() ?? '';
 		const endpoint = discoveryDoc?.endpoint?.trim() || transport?.endpoint || '';
 
@@ -196,6 +234,7 @@
 	const serverName = $derived.by(() => `simulacrum-${sanitizeServerName(agentUsername)}`);
 	const mcpEndpoint = $derived.by(() => discoveryDoc?.endpoint?.trim() || transport?.endpoint || '');
 	const mcpDiscoveryUrl = $derived.by(() => transport?.discoveryUrl ?? '');
+	const oauthDiscoveryUrl = $derived.by(() => transport?.oauthDiscoveryUrl ?? '');
 	const activeCredential = $derived.by<ActiveCredential | null>(() => {
 		const runtimeToken = runtimeCredentials?.accessToken?.trim();
 		if (runtimeToken) {
@@ -227,6 +266,22 @@
 	const discoveryCapabilities = $derived.by(
 		() => discoveryDoc?.capabilities ?? { tools: true, resources: true, prompts: true }
 	);
+	const oauthDiscoverySummary = $derived.by(() => {
+		const authorizationServers = oauthDiscoveryDoc?.authorization_servers?.filter(Boolean) ?? [];
+		const scopes = oauthDiscoveryDoc?.scopes_supported?.filter(Boolean) ?? [];
+		const methods = oauthDiscoveryDoc?.bearer_methods_supported?.filter(Boolean) ?? [];
+		return {
+			authorizationServers,
+			scopes,
+			methods,
+		};
+	});
+	const discoveryOverviewStatus = $derived.by<PanelStatus>(() => {
+		if (oauthDiscoveryStatus === 'error' || discoveryStatus === 'error') return 'error';
+		if (oauthDiscoveryStatus === 'loading' || discoveryStatus === 'loading') return 'loading';
+		if (oauthDiscoveryStatus === 'ready' && discoveryStatus === 'ready') return 'ready';
+		return 'idle';
+	});
 
 	const displayedTools = $derived.by<DisplayTool[]>(() => {
 		const toolsByName = knownToolMap();
@@ -335,18 +390,22 @@
 		<div>
 			<h2>MCP connection</h2>
 			<p class="mcp-panel__intro">
-				Register an OAuth connector above for Claude.ai or any other hosted MCP client, then use the discovery URL
-				and client credentials there. Direct bearer tokens below remain available for local runtimes and manual
-				debugging.
+				Register an OAuth connector above for Claude.ai or any other hosted MCP client, then use the OAuth
+				discovery URL and client credentials there. The MCP transport discovery document remains available below for
+				debugging and manual checks.
 			</p>
 		</div>
 		<div class="mcp-panel__actions">
 			<button
 				type="button"
 				class="gr-button gr-button--outline"
-				onclick={() => transport && void refreshDiscovery(transport.discoveryUrl)}
+				onclick={() => {
+					if (!transport) return;
+					void refreshOAuthDiscovery(transport.oauthDiscoveryUrl);
+					void refreshDiscovery(transport.discoveryUrl);
+				}}
 			>
-				Refresh discovery
+				Refresh discovery checks
 			</button>
 			<button
 				type="button"
@@ -370,7 +429,7 @@
 		</div>
 		<ol class="mcp-panel__steps">
 			<li>Use <strong>Add connector</strong> above to register an OAuth client for this agent.</li>
-			<li>Copy the Client ID, Client Secret, and Discovery URL into your MCP client’s custom connector dialog.</li>
+			<li>Copy the Client ID, Client Secret, and OAuth Discovery URL into your MCP client’s custom connector dialog.</li>
 			<li>Authorize as the principal for this agent inside that MCP client.</li>
 			<li>After OAuth completes, the connector session list above will show the active refresh-token session.</li>
 		</ol>
@@ -397,7 +456,21 @@
 
 		<div class="mcp-panel__fact">
 			<div class="settings-token__row">
-				<strong>Discovery doc</strong>
+				<strong>OAuth Discovery</strong>
+				<button
+					type="button"
+					class="gr-button gr-button--outline"
+					onclick={() => oauthDiscoveryUrl && copy(oauthDiscoveryUrl)}
+				>
+					Copy
+				</button>
+			</div>
+			<pre class="settings-token__value">{oauthDiscoveryUrl || 'Loading…'}</pre>
+		</div>
+
+		<div class="mcp-panel__fact">
+			<div class="settings-token__row">
+				<strong>MCP Transport Discovery</strong>
 				<button
 					type="button"
 					class="gr-button gr-button--outline"
@@ -432,14 +505,43 @@
 		<article class="mcp-panel__status">
 			<div class="mcp-panel__status-header">
 				<h3>Discovery status</h3>
-				<span class={statusBadgeClass(discoveryStatus)}>{statusLabel(discoveryStatus)}</span>
+				<span class={statusBadgeClass(discoveryOverviewStatus)}>{statusLabel(discoveryOverviewStatus)}</span>
 			</div>
 			<p class="page__meta">
-				Public check against <code>/.well-known/mcp.json</code>
-				{#if formatCheckedAt(discoveryCheckedAt)}
-					· last checked {formatCheckedAt(discoveryCheckedAt)}
-				{/if}
+				Public checks against <code>/.well-known/oauth-protected-resource</code> and
+				<code>/.well-known/mcp.json</code>.
 			</p>
+			<div class="mcp-panel__status-copy">
+				<strong>OAuth Discovery</strong>
+				<span class={statusBadgeClass(oauthDiscoveryStatus)}>{statusLabel(oauthDiscoveryStatus)}</span>
+				{#if formatCheckedAt(oauthDiscoveryCheckedAt)}
+					<span> · last checked {formatCheckedAt(oauthDiscoveryCheckedAt)}</span>
+				{/if}
+			</div>
+			{#if oauthDiscoveryStatus === 'ready'}
+				<p class="mcp-panel__status-copy">
+					{#if oauthDiscoverySummary.authorizationServers.length > 0}
+						Authorization servers <strong>{oauthDiscoverySummary.authorizationServers.length}</strong>
+					{:else}
+						OAuth discovery responded
+					{/if}
+					{#if oauthDiscoverySummary.scopes.length > 0}
+						· scopes <strong>{oauthDiscoverySummary.scopes.join(', ')}</strong>
+					{/if}
+				</p>
+			{:else if oauthDiscoveryError}
+				<p class="mcp-panel__status-copy">{oauthDiscoveryError}</p>
+			{:else}
+				<p class="mcp-panel__status-copy">Waiting for the OAuth protected-resource document.</p>
+			{/if}
+
+			<div class="mcp-panel__status-copy">
+				<strong>MCP Transport Discovery</strong>
+				<span class={statusBadgeClass(discoveryStatus)}>{statusLabel(discoveryStatus)}</span>
+				{#if formatCheckedAt(discoveryCheckedAt)}
+					<span> · last checked {formatCheckedAt(discoveryCheckedAt)}</span>
+				{/if}
+			</div>
 			{#if discoveryStatus === 'ready'}
 				<p class="mcp-panel__status-copy">
 					Server advertises
@@ -451,7 +553,8 @@
 				<p class="mcp-panel__status-copy">{discoveryError}</p>
 			{:else}
 				<p class="mcp-panel__status-copy">
-					The page will keep showing the documented catalog below even before the live discovery check finishes.
+					The page will keep showing the documented catalog below even before the MCP transport discovery check
+					finishes.
 				</p>
 			{/if}
 		</article>

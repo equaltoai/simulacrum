@@ -22,6 +22,7 @@ export type McpTransportConfig = {
 	apiOrigin: string;
 	endpoint: string;
 	discoveryUrl: string;
+	oauthDiscoveryUrl: string;
 };
 
 export type McpWellKnownToolHint = {
@@ -44,6 +45,13 @@ export type McpWellKnownDocument = {
 		notes?: string;
 	};
 	tools?: McpWellKnownToolHint[];
+};
+
+export type OAuthProtectedResourceDocument = {
+	resource?: string;
+	authorization_servers?: string[];
+	scopes_supported?: string[];
+	bearer_methods_supported?: string[];
 };
 
 export type McpToolDefinition = {
@@ -349,6 +357,7 @@ export function resolveMcpTransport(origin: string): McpTransportConfig {
 		apiOrigin,
 		endpoint: new URL('/mcp', `${apiOrigin}/`).toString(),
 		discoveryUrl: new URL('/.well-known/mcp.json', `${apiOrigin}/`).toString(),
+		oauthDiscoveryUrl: new URL('/.well-known/oauth-protected-resource', `${apiOrigin}/`).toString(),
 	};
 }
 
@@ -373,6 +382,28 @@ export async function fetchMcpWellKnown(discoveryUrl: string, signal?: AbortSign
 	}
 
 	return (payload ?? {}) as McpWellKnownDocument;
+}
+
+export async function fetchOAuthProtectedResource(
+	oauthDiscoveryUrl: string,
+	signal?: AbortSignal
+): Promise<OAuthProtectedResourceDocument> {
+	const response = await fetch(oauthDiscoveryUrl, {
+		headers: {
+			accept: 'application/json',
+		},
+		signal,
+	});
+	const payload = await parseResponseBody(response);
+
+	if (!response.ok) {
+		throw new McpClientError(errorMessage(payload, `OAuth discovery failed (${response.status})`), {
+			status: response.status,
+			details: payload,
+		});
+	}
+
+	return (payload ?? {}) as OAuthProtectedResourceDocument;
 }
 
 async function requestMcpRpc<T>({

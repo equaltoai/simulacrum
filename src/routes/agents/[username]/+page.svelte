@@ -2247,7 +2247,21 @@
 					</pre>
 
 					<div class="settings-token__row">
-						<strong>Discovery URL</strong>
+						<strong>OAuth discovery URL</strong>
+						<button
+							type="button"
+							class="gr-button gr-button--outline"
+							disabled={!connectorTransport?.oauthDiscoveryUrl}
+							onclick={() =>
+								connectorTransport?.oauthDiscoveryUrl && copy(connectorTransport.oauthDiscoveryUrl)}
+						>
+							Copy
+						</button>
+					</div>
+					<pre class="settings-token__value">{connectorTransport?.oauthDiscoveryUrl ?? 'Loading…'}</pre>
+
+					<div class="settings-token__row">
+						<strong>MCP transport discovery</strong>
 						<button
 							type="button"
 							class="gr-button gr-button--outline"
