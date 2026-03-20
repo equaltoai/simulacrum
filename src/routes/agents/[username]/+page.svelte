@@ -683,7 +683,12 @@
 		return `Rotated ${formatDateTime(rotation.rotatedAt)}.`;
 	}
 
-	type ConnectorSessionHealth = 'healthy' | 'expiring_soon' | 'refresh_needed' | 'revoked';
+	type ConnectorSessionHealth =
+		| 'healthy'
+		| 'expiring_soon'
+		| 'refresh_needed'
+		| 'auth_failure'
+		| 'revoked';
 
 	function formatDuration(ms: number): string {
 		if (!Number.isFinite(ms)) return '—';
@@ -706,8 +711,38 @@
 		return Math.min(idleRemaining, absoluteRemaining);
 	}
 
+	function connectorSessionDiagnosticStatusLabel(status: string): string {
+		switch (status) {
+			case 'FAILED':
+				return 'failed';
+			case 'EXPIRED':
+				return 'expired';
+			case 'REVOKED':
+				return 'revoked';
+			default:
+				return 'healthy';
+		}
+	}
+
+	function connectorSessionFailureDetail(session: AgentRuntimeSession): string | null {
+		const failureCode = session.authDiagnostic?.failureCode?.trim();
+		const failureMessage = session.authDiagnostic?.failureMessage?.trim();
+		if (failureCode && failureMessage) return `${failureCode}: ${failureMessage}`;
+		return failureMessage || failureCode || null;
+	}
+
 	function connectorSessionHealth(session: AgentRuntimeSession): ConnectorSessionHealth {
+		switch (session.authDiagnostic?.status) {
+			case 'REVOKED':
+				return 'revoked';
+			case 'FAILED':
+				return 'auth_failure';
+			case 'EXPIRED':
+				return 'refresh_needed';
+		}
+
 		if (session.revoked) return 'revoked';
+
 		const remainingMs = connectorSessionRemainingMs(session);
 		if (remainingMs <= 0) return 'refresh_needed';
 		if (remainingMs <= CONNECTOR_SESSION_EXPIRING_SOON_MS) return 'expiring_soon';
@@ -718,6 +753,8 @@
 		switch (status) {
 			case 'revoked':
 				return 'Revoked';
+			case 'auth_failure':
+				return 'Auth failed';
 			case 'refresh_needed':
 				return 'Refresh needed';
 			case 'expiring_soon':
@@ -733,6 +770,8 @@
 				return 'gr-badge gr-badge--sm gr-badge--outlined gr-badge--success';
 			case 'expiring_soon':
 				return 'gr-badge gr-badge--sm gr-badge--outlined gr-badge--info';
+			case 'auth_failure':
+				return 'gr-badge gr-badge--sm gr-badge--outlined gr-badge--error';
 			case 'refresh_needed':
 				return 'gr-badge gr-badge--sm gr-badge--outlined gr-badge--error';
 			default:
@@ -742,19 +781,33 @@
 
 	function connectorSessionHealthSummary(session: AgentRuntimeSession): string {
 		const status = connectorSessionHealth(session);
+		const failureDetail = connectorSessionFailureDetail(session);
+		const lastSuccessAt = session.authDiagnostic?.lastSuccessAt
+			? ` Last successful OAuth exchange was ${formatDateTime(session.authDiagnostic.lastSuccessAt)}.`
+			: '';
 		const remaining = formatDuration(connectorSessionRemainingMs(session));
+
 		if (status === 'revoked') {
 			return session.revokedReason?.trim()
-				? `Revoked ${formatDateTime(session.revokedAt)} (${session.revokedReason}). Reauthorize this connector in your MCP client.`
-				: `Revoked ${formatDateTime(session.revokedAt)}. Reauthorize this connector in your MCP client.`;
+				? `Revoked ${formatDateTime(session.revokedAt)} (${session.revokedReason}). Reconnect this connector in your MCP client.`
+				: `Revoked ${formatDateTime(session.revokedAt)}. Reconnect this connector in your MCP client.`;
+		}
+		if (status === 'auth_failure') {
+			if (failureDetail) {
+				return `OAuth token exchange failed${session.authDiagnostic?.failureAt ? ` at ${formatDateTime(session.authDiagnostic.failureAt)}` : ''}: ${failureDetail}. Update the connector credentials or reconnect it in your MCP client.${lastSuccessAt}`;
+			}
+			return `OAuth token exchange is failing${session.authDiagnostic?.failureAt ? ` as of ${formatDateTime(session.authDiagnostic.failureAt)}` : ''}. Update the connector credentials or reconnect it in your MCP client.${lastSuccessAt}`;
 		}
 		if (status === 'refresh_needed') {
-			return `This refresh-token session has expired or gone idle. Reauthorize the connector in your MCP client.`;
+			if (failureDetail) {
+				return `${failureDetail}${session.authDiagnostic?.failureAt ? ` (${formatDateTime(session.authDiagnostic.failureAt)})` : ''}. Reconnect the connector in your MCP client.${lastSuccessAt}`;
+			}
+			return `This connector session has expired or gone idle. Reconnect the connector in your MCP client.${lastSuccessAt}`;
 		}
 		if (status === 'expiring_soon') {
-			return `Action soon: the current session window closes in ${remaining}. Let the client refresh or reauthorize if it stops reconnecting.`;
+			return `Action soon: the current session window closes in ${remaining}. Let the client refresh or reconnect it if it stops reconnecting.${lastSuccessAt}`;
 		}
-		return `Healthy. Current session window closes in ${remaining}. No operator action is needed right now.`;
+		return `Healthy. Current session window closes in ${remaining}. No operator action is needed right now.${lastSuccessAt}`;
 	}
 
 	function ensureAbsoluteUrl(value: string, fieldLabel: string): string {
@@ -2273,7 +2326,8 @@
 				<h3>Connector sessions</h3>
 				<p class="page__meta">
 					Authorized refresh-token sessions are matched to the connectors registered from this browser by client
-					ID. Health below is inferred from idle expiry, absolute expiry, last use, and revocation state.
+					ID. Health below uses Lesser auth diagnostics when available and falls back to expiry and revocation
+					signals on older stages.
 				</p>
 
 				{#if runtimeLoading}
@@ -2285,6 +2339,7 @@
 						{#each connectorSessionGroups as group (group.connector.clientId)}
 							{#each group.sessions as session (session.sessionID)}
 								{@const health = connectorSessionHealth(session)}
+								{@const diagnostic = session.authDiagnostic}
 								<li class="settings-list__item">
 									<div class="settings-list__body">
 										<div class="settings-list__title">
@@ -2309,6 +2364,23 @@
 											{/if}
 										</div>
 										<div class="page__meta">{connectorSessionHealthSummary(session)}</div>
+										{#if diagnostic}
+											<div class="page__meta">
+												<span>Auth {connectorSessionDiagnosticStatusLabel(diagnostic.status)}</span>
+												{#if diagnostic.lastSuccessAt}
+													<span> • last success {formatDateTime(diagnostic.lastSuccessAt)}</span>
+												{/if}
+												{#if diagnostic.failureAt}
+													<span> • last failure {formatDateTime(diagnostic.failureAt)}</span>
+												{/if}
+												{#if diagnostic.failureCode}
+													<span> • code <code>{diagnostic.failureCode}</code></span>
+												{/if}
+												{#if diagnostic.failureMessage}
+													<span> • {diagnostic.failureMessage}</span>
+												{/if}
+											</div>
+										{/if}
 									</div>
 									<div class="settings-form__actions">
 										<button
