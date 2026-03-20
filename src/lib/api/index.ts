@@ -3557,6 +3557,14 @@ export type AdminAgentPolicy = AdminAgentPolicyQuery['adminAgentPolicy'];
 export type SoulInventoryItem = MySoulsQuery['mySouls'][number];
 export type AgentConnectorGrantProfile = 'authorization_code' | 'client_credentials';
 export type AgentConnectorClientPreset = 'claude_ai' | 'claude_code' | 'custom' | 'headless';
+export type AgentConnectorRotationStatus = {
+	rotatedAt: string | null;
+	forcedInvalidation: boolean;
+	gracePeriodSeconds: number | null;
+	previousSecretValidUntil: string | null;
+	lastError: string | null;
+	lastErrorAt: string | null;
+};
 export type AgentConnectorRegistration = {
 	id: string;
 	name: string;
@@ -3569,6 +3577,13 @@ export type AgentConnectorRegistration = {
 	tokenEndpointAuthMethod: string | null;
 	grantProfile: AgentConnectorGrantProfile;
 	clientPreset: AgentConnectorClientPreset;
+	rotation: AgentConnectorRotationStatus;
+};
+export type AgentConnectorSecretRotation = {
+	clientId: string;
+	clientSecret: string;
+	tokenEndpointAuthMethod: string | null;
+	rotation: AgentConnectorRotationStatus;
 };
 
 export async function fetchAgentByUsername({
@@ -3771,9 +3786,76 @@ export async function registerAgentConnector({
 			tokenEndpointAuthMethod: data.token_endpoint_auth_method ?? trimmedAuthMethod ?? null,
 			grantProfile,
 			clientPreset,
+			rotation: {
+				rotatedAt: null,
+				forcedInvalidation: false,
+				gracePeriodSeconds: null,
+				previousSecretValidUntil: null,
+				lastError: null,
+				lastErrorAt: null,
+			},
 		};
 	} catch (error) {
 		throw new Error(restErrorMessage(error, 'Agent connector registration failed.'));
+	}
+}
+
+export async function rotateAgentConnectorSecret({
+	connectorId,
+	forceInvalidate = false,
+	gracePeriodSeconds,
+	signal,
+}: {
+	connectorId: string;
+	forceInvalidate?: boolean;
+	gracePeriodSeconds?: number;
+	signal?: AbortSignal;
+}): Promise<AgentConnectorSecretRotation> {
+	const token = requireAccessToken();
+	const body = new URLSearchParams();
+
+	if (forceInvalidate) {
+		body.set('force_invalidate', 'true');
+	} else if (typeof gracePeriodSeconds === 'number' && Number.isFinite(gracePeriodSeconds)) {
+		body.set('grace_period_seconds', String(gracePeriodSeconds));
+	}
+
+	try {
+		const data = await restRequest<{
+			client_id: string;
+			client_secret: string;
+			forced_invalidation?: boolean;
+			grace_period_seconds?: number;
+			previous_secret_valid_until?: string;
+			rotated_at?: string;
+			token_endpoint_auth_method?: string;
+		}>({
+			path: `/api/v1/apps/${encodeURIComponent(connectorId)}/rotate_secret`,
+			method: 'POST',
+			headers: {
+				'content-type': 'application/x-www-form-urlencoded',
+			},
+			body,
+			token,
+			signal,
+		});
+
+		return {
+			clientId: data.client_id,
+			clientSecret: data.client_secret,
+			tokenEndpointAuthMethod: data.token_endpoint_auth_method ?? null,
+			rotation: {
+				rotatedAt: data.rotated_at ?? null,
+				forcedInvalidation: data.forced_invalidation ?? false,
+				gracePeriodSeconds:
+					typeof data.grace_period_seconds === 'number' ? data.grace_period_seconds : null,
+				previousSecretValidUntil: data.previous_secret_valid_until ?? null,
+				lastError: null,
+				lastErrorAt: null,
+			},
+		};
+	} catch (error) {
+		throw new Error(restErrorMessage(error, 'Connector secret rotation failed.'));
 	}
 }
 
@@ -4420,6 +4502,7 @@ export const api = {
 	fetchAgentAccessLeases,
 	fetchAgentRuntimeSessions,
 	registerAgentConnector,
+	rotateAgentConnectorSecret,
 	delegateToAgent,
 	createAgentAccessLeasePrincipalChallenge,
 	createAgentAccessLeaseAgentChallenge,

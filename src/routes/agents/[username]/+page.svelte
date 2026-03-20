@@ -11,6 +11,7 @@
 		type AgentConnectorGrantProfile,
 		type AgentActivityConnection,
 		type AgentConnectorRegistration,
+		type AgentConnectorRotationStatus,
 		type AgentDelegation,
 		type AgentLeaseToken,
 		type AgentRuntimeSession,
@@ -241,12 +242,50 @@
 		tokenEndpointAuthMethod: string | null;
 		grantProfile: AgentConnectorGrantProfile;
 		clientPreset: AgentConnectorClientPreset;
+		rotation: AgentConnectorRotationStatus;
 	};
 
 	const AGENT_CONNECTOR_STORAGE_PREFIX = 'simulacrum:agent-connectors:';
 
 	function agentConnectorStorageKey(username: string): string {
 		return `${AGENT_CONNECTOR_STORAGE_PREFIX}${normalizeUsername(username)}`;
+	}
+
+	function emptyConnectorRotationStatus(): AgentConnectorRotationStatus {
+		return {
+			rotatedAt: null,
+			forcedInvalidation: false,
+			gracePeriodSeconds: null,
+			previousSecretValidUntil: null,
+			lastError: null,
+			lastErrorAt: null,
+		};
+	}
+
+	function normalizeConnectorRotationStatus(value: unknown): AgentConnectorRotationStatus {
+		if (!value || typeof value !== 'object') return emptyConnectorRotationStatus();
+
+		const rotation = value as {
+			rotatedAt?: unknown;
+			forcedInvalidation?: unknown;
+			gracePeriodSeconds?: unknown;
+			previousSecretValidUntil?: unknown;
+			lastError?: unknown;
+			lastErrorAt?: unknown;
+		};
+
+		return {
+			rotatedAt: typeof rotation.rotatedAt === 'string' ? rotation.rotatedAt : null,
+			forcedInvalidation: rotation.forcedInvalidation === true,
+			gracePeriodSeconds:
+				typeof rotation.gracePeriodSeconds === 'number' ? rotation.gracePeriodSeconds : null,
+			previousSecretValidUntil:
+				typeof rotation.previousSecretValidUntil === 'string'
+					? rotation.previousSecretValidUntil
+					: null,
+			lastError: typeof rotation.lastError === 'string' ? rotation.lastError : null,
+			lastErrorAt: typeof rotation.lastErrorAt === 'string' ? rotation.lastErrorAt : null,
+		};
 	}
 
 	function normalizeStoredAgentConnector(value: unknown): StoredAgentConnector | null {
@@ -263,6 +302,7 @@
 			tokenEndpointAuthMethod?: unknown;
 			grantProfile?: unknown;
 			clientPreset?: unknown;
+			rotation?: unknown;
 		};
 
 		if (
@@ -301,6 +341,7 @@
 					: 'client_secret_post',
 			grantProfile,
 			clientPreset,
+			rotation: normalizeConnectorRotationStatus(connector.rotation),
 		};
 	}
 
@@ -332,6 +373,18 @@
 		}
 	}
 
+	function upsertStoredAgentConnector(
+		username: string,
+		connector: StoredAgentConnector
+	): StoredAgentConnector[] {
+		const nextConnectors = [
+			connector,
+			...readStoredAgentConnectors(username).filter((existing) => existing.clientId !== connector.clientId),
+		];
+		writeStoredAgentConnectors(username, nextConnectors);
+		return nextConnectors;
+	}
+
 	function rememberAgentConnector(
 		username: string,
 		registration: AgentConnectorRegistration
@@ -347,17 +400,10 @@
 			tokenEndpointAuthMethod: registration.tokenEndpointAuthMethod,
 			grantProfile: registration.grantProfile,
 			clientPreset: registration.clientPreset,
+			rotation: registration.rotation,
 		};
 
-		const nextConnectors = [
-			nextConnector,
-			...readStoredAgentConnectors(username).filter(
-				(connector) => connector.clientId !== registration.clientId
-			),
-		];
-
-		writeStoredAgentConnectors(username, nextConnectors);
-		return nextConnectors;
+		return upsertStoredAgentConnector(username, nextConnector);
 	}
 
 	let viewer = $state<Account | null>(null);
@@ -467,6 +513,7 @@
 		connectorWebsite = browser ? window.location.origin : '';
 		connectorScopes = { read: true, write: true, follow: true };
 		connectorLoading = false;
+		connectorRotateClientId = null;
 		connectorError = null;
 		connectorMessage = null;
 
@@ -558,6 +605,7 @@
 	let connectorWebsite = $state('');
 	let connectorScopes = $state({ read: true, write: true, follow: true });
 	let connectorLoading = $state(false);
+	let connectorRotateClientId = $state<string | null>(null);
 	let connectorError = $state<string | null>(null);
 	let connectorMessage = $state<string | null>(null);
 
@@ -642,6 +690,25 @@
 		connectorRedirectUri = defaultConnectorRedirectUriForPreset(preset);
 	}
 
+	function connectorRotationSummary(rotation: AgentConnectorRotationStatus): string {
+		if (rotation.lastError) {
+			return `Last rotation failed ${formatDateTime(rotation.lastErrorAt)}: ${rotation.lastError}`;
+		}
+		if (!rotation.rotatedAt) {
+			return 'Secret has not been rotated from this browser yet.';
+		}
+		if (rotation.forcedInvalidation) {
+			return `Rotated ${formatDateTime(rotation.rotatedAt)} with immediate invalidation.`;
+		}
+		if (rotation.previousSecretValidUntil) {
+			return `Rotated ${formatDateTime(rotation.rotatedAt)}. Previous secret valid until ${formatDateTime(rotation.previousSecretValidUntil)}.`;
+		}
+		if (rotation.gracePeriodSeconds && rotation.gracePeriodSeconds > 0) {
+			return `Rotated ${formatDateTime(rotation.rotatedAt)} with a ${rotation.gracePeriodSeconds}s grace window.`;
+		}
+		return `Rotated ${formatDateTime(rotation.rotatedAt)}.`;
+	}
+
 	function ensureAbsoluteUrl(value: string, fieldLabel: string): string {
 		const trimmed = value.trim();
 		if (!trimmed) {
@@ -719,6 +786,72 @@
 
 	function connectorTitle(connector: StoredAgentConnector, fallbackSession?: AgentRuntimeSession | null): string {
 		return connector.name.trim() || fallbackSession?.deviceLabel?.trim() || connector.clientId;
+	}
+
+	async function handleRotateConnectorSecret(
+		connector: StoredAgentConnector,
+		{ forceInvalidate }: { forceInvalidate: boolean }
+	) {
+		if (!agent) return;
+		if (!isOwner) return;
+		if (connectorRotateClientId) return;
+
+		const prompt = forceInvalidate
+			? `Rotate the secret for ${connectorTitle(connector)} and invalidate the previous secret immediately? Existing bearer access tokens remain valid until expiry, but new client-authenticated exchanges will require the replacement secret right away.`
+			: `Rotate the secret for ${connectorTitle(connector)} with Lesser's standard grace window? Existing bearer access tokens stay valid and the previous secret will keep working only until the grace period ends.`;
+		if (typeof window !== 'undefined' && !window.confirm(prompt)) {
+			return;
+		}
+
+		connectorRotateClientId = connector.clientId;
+		connectorError = null;
+		connectorMessage = null;
+
+		try {
+			const rotation = await api.rotateAgentConnectorSecret({
+				connectorId: connector.id,
+				forceInvalidate,
+			});
+			const nextConnector: StoredAgentConnector = {
+				...connector,
+				tokenEndpointAuthMethod:
+					rotation.tokenEndpointAuthMethod ?? connector.tokenEndpointAuthMethod ?? 'client_secret_post',
+				rotation: rotation.rotation,
+			};
+			connectorRegistrations = upsertStoredAgentConnector(agent.username, nextConnector);
+			latestConnector = {
+				id: connector.id,
+				name: connector.name,
+				clientId: rotation.clientId,
+				clientSecret: rotation.clientSecret,
+				redirectUri: connector.redirectUri,
+				website: connector.website ?? null,
+				vapidKey: latestConnector?.clientId === connector.clientId ? latestConnector.vapidKey : null,
+				grantTypes: connector.grantTypes,
+				tokenEndpointAuthMethod:
+					rotation.tokenEndpointAuthMethod ?? connector.tokenEndpointAuthMethod ?? 'client_secret_post',
+				grantProfile: connector.grantProfile,
+				clientPreset: connector.clientPreset,
+				rotation: rotation.rotation,
+			};
+			connectorMessage = forceInvalidate
+				? 'Connector secret rotated with immediate invalidation. Distribute the replacement secret before the client reconnects.'
+				: 'Connector secret rotated. The replacement secret is shown once below while Lesser keeps a grace window for the previous secret.';
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			connectorError = message;
+			const nextConnector: StoredAgentConnector = {
+				...connector,
+				rotation: {
+					...connector.rotation,
+					lastError: message,
+					lastErrorAt: new Date().toISOString(),
+				},
+			};
+			connectorRegistrations = upsertStoredAgentConnector(agent.username, nextConnector);
+		} finally {
+			connectorRotateClientId = null;
+		}
 	}
 
 	function refreshSelectedRuntimeSessionId(nextSessions: readonly AgentRuntimeSession[] = runtimeSessions) {
@@ -2077,6 +2210,7 @@
 								<span> • website {latestConnector.website}</span>
 							{/if}
 						</div>
+						<div class="page__meta">{connectorRotationSummary(latestConnector.rotation)}</div>
 					{/if}
 				</div>
 
@@ -2100,6 +2234,7 @@
 											session(s)
 										</span>
 									</div>
+									<div class="page__meta">{connectorRotationSummary(connector.rotation)}</div>
 								</div>
 								<div class="settings-form__actions">
 									<button
@@ -2119,6 +2254,24 @@
 											}}
 										>
 											Copy current secret
+										</button>
+									{/if}
+									{#if isOwner}
+										<button
+											type="button"
+											class="gr-button gr-button--outline"
+											disabled={connectorRotateClientId === connector.clientId}
+											onclick={() => void handleRotateConnectorSecret(connector, { forceInvalidate: false })}
+										>
+											{connectorRotateClientId === connector.clientId ? 'Rotating…' : 'Rotate secret'}
+										</button>
+										<button
+											type="button"
+											class="gr-button gr-button--outline"
+											disabled={connectorRotateClientId === connector.clientId}
+											onclick={() => void handleRotateConnectorSecret(connector, { forceInvalidate: true })}
+										>
+											Force invalidate
 										</button>
 									{/if}
 								</div>
