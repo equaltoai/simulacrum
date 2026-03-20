@@ -7,9 +7,11 @@
 		type Agent,
 		type AgentAccessLease,
 		type AgentAccessLeaseChallenge,
+		type AgentConnectorClientPreset,
+		type AgentConnectorGrantProfile,
 		type AgentActivityConnection,
 		type AgentConnectorRegistration,
-		type AgentDelegation,
+		type AgentConnectorRotationStatus,
 		type AgentLeaseToken,
 		type AgentRuntimeSession,
 		type LinkedWallet,
@@ -46,8 +48,92 @@
 		{ value: 'CUSTOM', label: 'Custom' },
 	];
 
+	const CLAUDE_AI_REDIRECT_URI = 'https://claude.ai/api/mcp/auth_callback';
+	const CLAUDE_CODE_REDIRECT_URI = 'http://localhost:8787/callback';
+	const HEADLESS_REDIRECT_URI = 'urn:ietf:wg:oauth:2.0:oob';
+	const CONNECTOR_SESSION_EXPIRING_SOON_MS = 6 * 60 * 60 * 1000;
+	const CONNECTOR_CLIENT_PRESETS: Array<{
+		value: Exclude<AgentConnectorClientPreset, 'headless'>;
+		label: string;
+	}> = [
+		{ value: 'claude_ai', label: 'Claude.ai' },
+		{ value: 'claude_code', label: 'Claude Code' },
+		{ value: 'custom', label: 'Custom' },
+	];
+
 	function formatAgentType(value: AgentType) {
 		return AGENT_TYPES.find((entry) => entry.value === value)?.label ?? value;
+	}
+
+	function isConnectorGrantProfile(value: unknown): value is AgentConnectorGrantProfile {
+		return value === 'authorization_code' || value === 'client_credentials';
+	}
+
+	function isConnectorClientPreset(value: unknown): value is AgentConnectorClientPreset {
+		return value === 'claude_ai' || value === 'claude_code' || value === 'custom' || value === 'headless';
+	}
+
+	function connectorGrantTypes(profile: AgentConnectorGrantProfile): string[] {
+		return profile === 'client_credentials'
+			? ['client_credentials']
+			: ['authorization_code', 'refresh_token'];
+	}
+
+	function connectorGrantProfileLabel(profile: AgentConnectorGrantProfile): string {
+		return profile === 'client_credentials' ? 'Client credentials' : 'Authorization code';
+	}
+
+	function connectorClientPresetLabel(preset: AgentConnectorClientPreset): string {
+		switch (preset) {
+			case 'claude_ai':
+				return 'Claude.ai';
+			case 'claude_code':
+				return 'Claude Code';
+			case 'headless':
+				return 'Headless connector';
+			default:
+				return 'Custom client';
+		}
+	}
+
+	function formatGrantTypes(grantTypes: readonly string[]): string {
+		return grantTypes.join(', ') || 'authorization_code, refresh_token';
+	}
+
+	function defaultConnectorRedirectUriForPreset(
+		preset: Exclude<AgentConnectorClientPreset, 'headless'>
+	): string {
+		if (preset === 'claude_ai') return CLAUDE_AI_REDIRECT_URI;
+		if (preset === 'claude_code') return CLAUDE_CODE_REDIRECT_URI;
+		return '';
+	}
+
+	function inferConnectorGrantProfile(grantTypes: readonly string[] = []): AgentConnectorGrantProfile {
+		return grantTypes.includes('client_credentials') ? 'client_credentials' : 'authorization_code';
+	}
+
+	function inferConnectorClientPreset({
+		redirectUri,
+		grantProfile,
+	}: {
+		redirectUri: string;
+		grantProfile: AgentConnectorGrantProfile;
+	}): AgentConnectorClientPreset {
+		if (grantProfile === 'client_credentials' || redirectUri === HEADLESS_REDIRECT_URI) {
+			return 'headless';
+		}
+
+		const normalized = redirectUri.trim().toLowerCase();
+		if (normalized === CLAUDE_AI_REDIRECT_URI) return 'claude_ai';
+		if (
+			normalized.startsWith('http://localhost:') ||
+			normalized.startsWith('http://127.0.0.1:') ||
+			normalized.startsWith('https://localhost:') ||
+			normalized.startsWith('https://127.0.0.1:')
+		) {
+			return 'claude_code';
+		}
+		return 'custom';
 	}
 
 	function profileHref(username: string, domain?: string | null) {
@@ -152,12 +238,111 @@
 		redirectUri: string;
 		website?: string | null;
 		createdAt: number;
+		grantTypes: string[];
+		tokenEndpointAuthMethod: string | null;
+		grantProfile: AgentConnectorGrantProfile;
+		clientPreset: AgentConnectorClientPreset;
+		rotation: AgentConnectorRotationStatus;
 	};
 
 	const AGENT_CONNECTOR_STORAGE_PREFIX = 'simulacrum:agent-connectors:';
 
 	function agentConnectorStorageKey(username: string): string {
 		return `${AGENT_CONNECTOR_STORAGE_PREFIX}${normalizeUsername(username)}`;
+	}
+
+	function emptyConnectorRotationStatus(): AgentConnectorRotationStatus {
+		return {
+			rotatedAt: null,
+			forcedInvalidation: false,
+			gracePeriodSeconds: null,
+			previousSecretValidUntil: null,
+			lastError: null,
+			lastErrorAt: null,
+		};
+	}
+
+	function normalizeConnectorRotationStatus(value: unknown): AgentConnectorRotationStatus {
+		if (!value || typeof value !== 'object') return emptyConnectorRotationStatus();
+
+		const rotation = value as {
+			rotatedAt?: unknown;
+			forcedInvalidation?: unknown;
+			gracePeriodSeconds?: unknown;
+			previousSecretValidUntil?: unknown;
+			lastError?: unknown;
+			lastErrorAt?: unknown;
+		};
+
+		return {
+			rotatedAt: typeof rotation.rotatedAt === 'string' ? rotation.rotatedAt : null,
+			forcedInvalidation: rotation.forcedInvalidation === true,
+			gracePeriodSeconds:
+				typeof rotation.gracePeriodSeconds === 'number' ? rotation.gracePeriodSeconds : null,
+			previousSecretValidUntil:
+				typeof rotation.previousSecretValidUntil === 'string'
+					? rotation.previousSecretValidUntil
+					: null,
+			lastError: typeof rotation.lastError === 'string' ? rotation.lastError : null,
+			lastErrorAt: typeof rotation.lastErrorAt === 'string' ? rotation.lastErrorAt : null,
+		};
+	}
+
+	function normalizeStoredAgentConnector(value: unknown): StoredAgentConnector | null {
+		if (!value || typeof value !== 'object') return null;
+
+		const connector = value as {
+			id?: unknown;
+			name?: unknown;
+			clientId?: unknown;
+			redirectUri?: unknown;
+			website?: unknown;
+			createdAt?: unknown;
+			grantTypes?: unknown;
+			tokenEndpointAuthMethod?: unknown;
+			grantProfile?: unknown;
+			clientPreset?: unknown;
+			rotation?: unknown;
+		};
+
+		if (
+			typeof connector.id !== 'string' ||
+			typeof connector.name !== 'string' ||
+			typeof connector.clientId !== 'string' ||
+			typeof connector.redirectUri !== 'string'
+		) {
+			return null;
+		}
+
+		const parsedGrantTypes = Array.isArray(connector.grantTypes)
+			? connector.grantTypes.filter((entry): entry is string => typeof entry === 'string' && !!entry.trim())
+			: [];
+		const grantProfile = isConnectorGrantProfile(connector.grantProfile)
+			? connector.grantProfile
+			: inferConnectorGrantProfile(parsedGrantTypes);
+		const clientPreset = isConnectorClientPreset(connector.clientPreset)
+			? connector.clientPreset
+			: inferConnectorClientPreset({
+					redirectUri: connector.redirectUri,
+					grantProfile,
+				});
+
+		return {
+			id: connector.id,
+			name: connector.name,
+			clientId: connector.clientId,
+			redirectUri: connector.redirectUri,
+			website: typeof connector.website === 'string' ? connector.website : null,
+			createdAt: typeof connector.createdAt === 'number' ? connector.createdAt : Date.now(),
+			grantTypes: parsedGrantTypes.length > 0 ? parsedGrantTypes : connectorGrantTypes(grantProfile),
+			tokenEndpointAuthMethod:
+				typeof connector.tokenEndpointAuthMethod === 'string'
+					? connector.tokenEndpointAuthMethod
+					: 'client_secret_post',
+			grantProfile,
+			clientPreset,
+			rotation: normalizeConnectorRotationStatus(connector.rotation),
+		};
 	}
 
 	function readStoredAgentConnectors(username: string): StoredAgentConnector[] {
@@ -167,17 +352,12 @@
 			const raw = localStorage.getItem(agentConnectorStorageKey(username));
 			if (!raw) return [];
 
-			const parsed = JSON.parse(raw) as StoredAgentConnector[];
+			const parsed = JSON.parse(raw) as unknown[];
 			if (!Array.isArray(parsed)) return [];
 
 			return parsed
-				.filter((connector) => connector && typeof connector === 'object')
-				.filter(
-					(connector) =>
-						typeof connector.clientId === 'string' &&
-						typeof connector.name === 'string' &&
-						typeof connector.redirectUri === 'string'
-				);
+				.map((connector) => normalizeStoredAgentConnector(connector))
+				.filter((connector): connector is StoredAgentConnector => connector !== null);
 		} catch {
 			return [];
 		}
@@ -193,6 +373,18 @@
 		}
 	}
 
+	function upsertStoredAgentConnector(
+		username: string,
+		connector: StoredAgentConnector
+	): StoredAgentConnector[] {
+		const nextConnectors = [
+			connector,
+			...readStoredAgentConnectors(username).filter((existing) => existing.clientId !== connector.clientId),
+		];
+		writeStoredAgentConnectors(username, nextConnectors);
+		return nextConnectors;
+	}
+
 	function rememberAgentConnector(
 		username: string,
 		registration: AgentConnectorRegistration
@@ -204,17 +396,14 @@
 			redirectUri: registration.redirectUri,
 			website: registration.website,
 			createdAt: Date.now(),
+			grantTypes: registration.grantTypes,
+			tokenEndpointAuthMethod: registration.tokenEndpointAuthMethod,
+			grantProfile: registration.grantProfile,
+			clientPreset: registration.clientPreset,
+			rotation: registration.rotation,
 		};
 
-		const nextConnectors = [
-			nextConnector,
-			...readStoredAgentConnectors(username).filter(
-				(connector) => connector.clientId !== registration.clientId
-			),
-		];
-
-		writeStoredAgentConnectors(username, nextConnectors);
-		return nextConnectors;
+		return upsertStoredAgentConnector(username, nextConnector);
 	}
 
 	let viewer = $state<Account | null>(null);
@@ -318,10 +507,13 @@
 		connectorRegistrations = [];
 		latestConnector = null;
 		connectorClientName = '';
-		connectorRedirectUri = '';
+		connectorGrantProfile = 'authorization_code';
+		connectorClientPreset = 'claude_ai';
+		connectorRedirectUri = CLAUDE_AI_REDIRECT_URI;
 		connectorWebsite = browser ? window.location.origin : '';
 		connectorScopes = { read: true, write: true, follow: true };
 		connectorLoading = false;
+		connectorRotateClientId = null;
 		connectorError = null;
 		connectorMessage = null;
 
@@ -343,6 +535,11 @@
 		connectorRegistrations = readStoredAgentConnectors(agent.username);
 		if (!connectorClientName) {
 			connectorClientName = `${agent.displayName || agent.username} connector`;
+		}
+		if (connectorGrantProfile === 'authorization_code' && !connectorRedirectUri) {
+			connectorRedirectUri = defaultConnectorRedirectUriForPreset(
+				connectorClientPreset === 'headless' ? 'claude_ai' : connectorClientPreset
+			);
 		}
 		if (!connectorWebsite && browser) {
 			connectorWebsite = window.location.origin;
@@ -402,10 +599,13 @@
 	let connectorRegistrations = $state<StoredAgentConnector[]>([]);
 	let latestConnector = $state<AgentConnectorRegistration | null>(null);
 	let connectorClientName = $state('');
+	let connectorGrantProfile = $state<AgentConnectorGrantProfile>('authorization_code');
+	let connectorClientPreset = $state<AgentConnectorClientPreset>('claude_ai');
 	let connectorRedirectUri = $state('');
 	let connectorWebsite = $state('');
 	let connectorScopes = $state({ read: true, write: true, follow: true });
 	let connectorLoading = $state(false);
+	let connectorRotateClientId = $state<string | null>(null);
 	let connectorError = $state<string | null>(null);
 	let connectorMessage = $state<string | null>(null);
 
@@ -413,33 +613,15 @@
 		browser ? resolveMcpTransport(window.location.origin) : null
 	);
 
-	// Standard runtime bearer + refresh sessions
+	// Runtime session inventory for connector diagnostics and cleanup
 	let runtimeSessions = $state<AgentRuntimeSession[]>([]);
-	let selectedRuntimeSessionId = $state('');
-	let runtimeCredentials = $state<AgentDelegation | null>(null);
-	let runtimeScopes = $state({ read: true, write: true, follow: true });
-	let runtimeExpiresIn = $state('');
 	let runtimeLoading = $state(false);
-	let runtimeIssueLoading = $state(false);
 	let runtimeRevokeAllLoading = $state(false);
 	let runtimeRevokeSessionId = $state<string | null>(null);
 	let runtimeLoadError = $state<string | null>(null);
 	let runtimeActionError = $state<string | null>(null);
 	let runtimeActionMessage = $state<string | null>(null);
 
-	const selectedRuntimeSession = $derived.by(
-		() => runtimeSessions.find((session) => session.sessionID === selectedRuntimeSessionId) ?? null
-	);
-	const runtimeTokenValue = $derived.by(
-		() =>
-			runtimeCredentials?.accessToken?.trim() ||
-			(runtimeIssueLoading ? 'Issuing runtime credentials…' : 'Issue runtime credentials to reveal an access token.')
-	);
-	const runtimeRefreshValue = $derived.by(
-		() =>
-			runtimeCredentials?.refreshToken?.trim() ||
-			(runtimeIssueLoading ? 'Issuing runtime credentials…' : 'Refresh tokens are shown only after issuing a runtime session.')
-	);
 	const knownConnectorClientIds = $derived.by(
 		() => new Set(connectorRegistrations.map((connector) => connector.clientId))
 	);
@@ -456,20 +638,123 @@
 		runtimeSessions.filter((session) => !knownConnectorClientIds.has(session.clientID))
 	);
 
-	function selectedRuntimeScopes(): string[] {
-		const scopes: string[] = [];
-		if (runtimeScopes.read) scopes.push('read');
-		if (runtimeScopes.write) scopes.push('write');
-		if (runtimeScopes.follow) scopes.push('follow');
-		return scopes;
-	}
-
 	function selectedConnectorScopes(): string[] {
 		const scopes: string[] = [];
 		if (connectorScopes.read) scopes.push('read');
 		if (connectorScopes.write) scopes.push('write');
 		if (connectorScopes.follow) scopes.push('follow');
 		return scopes;
+	}
+
+	function setConnectorGrantProfile(profile: AgentConnectorGrantProfile) {
+		connectorGrantProfile = profile;
+		if (profile === 'client_credentials') {
+			connectorClientPreset = 'headless';
+			return;
+		}
+
+		if (connectorClientPreset === 'headless') {
+			connectorClientPreset = 'claude_ai';
+			connectorRedirectUri = CLAUDE_AI_REDIRECT_URI;
+		}
+	}
+
+	function setConnectorClientPreset(preset: Exclude<AgentConnectorClientPreset, 'headless'>) {
+		connectorClientPreset = preset;
+		connectorRedirectUri = defaultConnectorRedirectUriForPreset(preset);
+	}
+
+	function connectorRotationSummary(rotation: AgentConnectorRotationStatus): string {
+		if (rotation.lastError) {
+			return `Last rotation failed ${formatDateTime(rotation.lastErrorAt)}: ${rotation.lastError}`;
+		}
+		if (!rotation.rotatedAt) {
+			return 'Secret has not been rotated from this browser yet.';
+		}
+		if (rotation.forcedInvalidation) {
+			return `Rotated ${formatDateTime(rotation.rotatedAt)} with immediate invalidation.`;
+		}
+		if (rotation.previousSecretValidUntil) {
+			return `Rotated ${formatDateTime(rotation.rotatedAt)}. Previous secret valid until ${formatDateTime(rotation.previousSecretValidUntil)}.`;
+		}
+		if (rotation.gracePeriodSeconds && rotation.gracePeriodSeconds > 0) {
+			return `Rotated ${formatDateTime(rotation.rotatedAt)} with a ${rotation.gracePeriodSeconds}s grace window.`;
+		}
+		return `Rotated ${formatDateTime(rotation.rotatedAt)}.`;
+	}
+
+	type ConnectorSessionHealth = 'healthy' | 'expiring_soon' | 'refresh_needed' | 'revoked';
+
+	function formatDuration(ms: number): string {
+		if (!Number.isFinite(ms)) return '—';
+		if (ms <= 0) return 'expired';
+
+		const totalMinutes = Math.ceil(ms / 60000);
+		if (totalMinutes < 60) return `${totalMinutes}m`;
+
+		const totalHours = Math.ceil(totalMinutes / 60);
+		if (totalHours < 48) return `${totalHours}h`;
+
+		const days = Math.floor(totalHours / 24);
+		const hours = totalHours % 24;
+		return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+	}
+
+	function connectorSessionRemainingMs(session: AgentRuntimeSession): number {
+		const idleRemaining = parseDateMs(session.idleExpiresAt) - Date.now();
+		const absoluteRemaining = parseDateMs(session.absoluteExpiresAt) - Date.now();
+		return Math.min(idleRemaining, absoluteRemaining);
+	}
+
+	function connectorSessionHealth(session: AgentRuntimeSession): ConnectorSessionHealth {
+		if (session.revoked) return 'revoked';
+		const remainingMs = connectorSessionRemainingMs(session);
+		if (remainingMs <= 0) return 'refresh_needed';
+		if (remainingMs <= CONNECTOR_SESSION_EXPIRING_SOON_MS) return 'expiring_soon';
+		return 'healthy';
+	}
+
+	function connectorSessionHealthLabel(status: ConnectorSessionHealth): string {
+		switch (status) {
+			case 'revoked':
+				return 'Revoked';
+			case 'refresh_needed':
+				return 'Refresh needed';
+			case 'expiring_soon':
+				return 'Expiring soon';
+			default:
+				return 'Healthy';
+		}
+	}
+
+	function connectorSessionHealthClass(status: ConnectorSessionHealth): string {
+		switch (status) {
+			case 'healthy':
+				return 'gr-badge gr-badge--sm gr-badge--outlined gr-badge--success';
+			case 'expiring_soon':
+				return 'gr-badge gr-badge--sm gr-badge--outlined gr-badge--info';
+			case 'refresh_needed':
+				return 'gr-badge gr-badge--sm gr-badge--outlined gr-badge--error';
+			default:
+				return 'gr-badge gr-badge--sm gr-badge--outlined gr-badge--gray';
+		}
+	}
+
+	function connectorSessionHealthSummary(session: AgentRuntimeSession): string {
+		const status = connectorSessionHealth(session);
+		const remaining = formatDuration(connectorSessionRemainingMs(session));
+		if (status === 'revoked') {
+			return session.revokedReason?.trim()
+				? `Revoked ${formatDateTime(session.revokedAt)} (${session.revokedReason}). Reauthorize this connector in your MCP client.`
+				: `Revoked ${formatDateTime(session.revokedAt)}. Reauthorize this connector in your MCP client.`;
+		}
+		if (status === 'refresh_needed') {
+			return `This refresh-token session has expired or gone idle. Reauthorize the connector in your MCP client.`;
+		}
+		if (status === 'expiring_soon') {
+			return `Action soon: the current session window closes in ${remaining}. Let the client refresh or reauthorize if it stops reconnecting.`;
+		}
+		return `Healthy. Current session window closes in ${remaining}. No operator action is needed right now.`;
 	}
 
 	function ensureAbsoluteUrl(value: string, fieldLabel: string): string {
@@ -504,9 +789,15 @@
 
 		let redirectUri = '';
 		let website: string | undefined;
+		const grantTypes = connectorGrantTypes(connectorGrantProfile);
+		const clientPreset =
+			connectorGrantProfile === 'client_credentials' ? 'headless' : connectorClientPreset;
 
 		try {
-			redirectUri = ensureAbsoluteUrl(connectorRedirectUri, 'Redirect URI');
+			redirectUri =
+				connectorGrantProfile === 'client_credentials'
+					? HEADLESS_REDIRECT_URI
+					: ensureAbsoluteUrl(connectorRedirectUri, 'Redirect URI');
 			const trimmedWebsite = connectorWebsite.trim();
 			website = trimmedWebsite ? ensureAbsoluteUrl(trimmedWebsite, 'Website URL') : undefined;
 		} catch (error) {
@@ -524,13 +815,16 @@
 				clientName,
 				redirectUri,
 				scopes: scopes.join(' '),
+				grantTypes,
+				tokenEndpointAuthMethod: 'client_secret_post',
+				grantProfile: connectorGrantProfile,
+				clientPreset,
 				website,
 			});
 
 			latestConnector = registration;
 			connectorRegistrations = rememberAgentConnector(agent.username, registration);
-			connectorMessage =
-				'Connector registered. Paste the client credentials into your MCP client and finish OAuth authorization there.';
+			connectorMessage = `Connector registered for ${connectorClientPresetLabel(registration.clientPreset)} using ${connectorGrantProfileLabel(registration.grantProfile).toLowerCase()}.`;
 		} catch (error) {
 			connectorError = error instanceof Error ? error.message : String(error);
 		} finally {
@@ -542,20 +836,77 @@
 		return connector.name.trim() || fallbackSession?.deviceLabel?.trim() || connector.clientId;
 	}
 
-	function refreshSelectedRuntimeSessionId(nextSessions: readonly AgentRuntimeSession[] = runtimeSessions) {
-		selectedRuntimeSessionId =
-			selectedRuntimeSessionId && nextSessions.some((session) => session.sessionID === selectedRuntimeSessionId)
-				? selectedRuntimeSessionId
-				: nextSessions[0]?.sessionID ?? '';
+	async function handleRotateConnectorSecret(
+		connector: StoredAgentConnector,
+		{ forceInvalidate }: { forceInvalidate: boolean }
+	) {
+		if (!agent) return;
+		if (!isOwner) return;
+		if (connectorRotateClientId) return;
+
+		const prompt = forceInvalidate
+			? `Rotate the secret for ${connectorTitle(connector)} and invalidate the previous secret immediately? Existing bearer access tokens remain valid until expiry, but new client-authenticated exchanges will require the replacement secret right away.`
+			: `Rotate the secret for ${connectorTitle(connector)} with Lesser's standard grace window? Existing bearer access tokens stay valid and the previous secret will keep working only until the grace period ends.`;
+		if (typeof window !== 'undefined' && !window.confirm(prompt)) {
+			return;
+		}
+
+		connectorRotateClientId = connector.clientId;
+		connectorError = null;
+		connectorMessage = null;
+
+		try {
+			const rotation = await api.rotateAgentConnectorSecret({
+				connectorId: connector.id,
+				forceInvalidate,
+			});
+			const nextConnector: StoredAgentConnector = {
+				...connector,
+				tokenEndpointAuthMethod:
+					rotation.tokenEndpointAuthMethod ?? connector.tokenEndpointAuthMethod ?? 'client_secret_post',
+				rotation: rotation.rotation,
+			};
+			connectorRegistrations = upsertStoredAgentConnector(agent.username, nextConnector);
+			latestConnector = {
+				id: connector.id,
+				name: connector.name,
+				clientId: rotation.clientId,
+				clientSecret: rotation.clientSecret,
+				redirectUri: connector.redirectUri,
+				website: connector.website ?? null,
+				vapidKey: latestConnector?.clientId === connector.clientId ? latestConnector.vapidKey : null,
+				grantTypes: connector.grantTypes,
+				tokenEndpointAuthMethod:
+					rotation.tokenEndpointAuthMethod ?? connector.tokenEndpointAuthMethod ?? 'client_secret_post',
+				grantProfile: connector.grantProfile,
+				clientPreset: connector.clientPreset,
+				rotation: rotation.rotation,
+			};
+			connectorMessage = forceInvalidate
+				? 'Connector secret rotated with immediate invalidation. Distribute the replacement secret before the client reconnects.'
+				: 'Connector secret rotated. The replacement secret is shown once below while Lesser keeps a grace window for the previous secret.';
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			connectorError = message;
+			const nextConnector: StoredAgentConnector = {
+				...connector,
+				rotation: {
+					...connector.rotation,
+					lastError: message,
+					lastErrorAt: new Date().toISOString(),
+				},
+			};
+			connectorRegistrations = upsertStoredAgentConnector(agent.username, nextConnector);
+		} finally {
+			connectorRotateClientId = null;
+		}
 	}
 
 	function upsertRuntimeSession(nextSession: AgentRuntimeSession) {
-		const nextSessions = sortRuntimeSessions([
+		runtimeSessions = sortRuntimeSessions([
 			nextSession,
 			...runtimeSessions.filter((existingSession) => existingSession.sessionID !== nextSession.sessionID),
 		]);
-		runtimeSessions = nextSessions;
-		selectedRuntimeSessionId = nextSession.sessionID;
 	}
 
 	async function loadRuntimeSessions({ signal }: { signal?: AbortSignal } = {}) {
@@ -569,60 +920,12 @@
 				await api.fetchAgentRuntimeSessions({ username: agent.username, signal })
 			);
 			runtimeSessions = nextSessions;
-			refreshSelectedRuntimeSessionId(nextSessions);
 		} catch (err) {
 			if (err instanceof DOMException && err.name === 'AbortError') return;
 			runtimeLoadError = err instanceof Error ? err.message : String(err);
 			runtimeSessions = [];
-			selectedRuntimeSessionId = '';
 		} finally {
 			runtimeLoading = false;
-		}
-	}
-
-	async function handleIssueRuntimeCredentials() {
-		if (!agent) return;
-		if (!isOwner) return;
-		if (runtimeIssueLoading) return;
-
-		const scopes = selectedRuntimeScopes();
-		if (scopes.length === 0) {
-			runtimeActionError = 'Select at least one runtime scope.';
-			return;
-		}
-
-		const expiresInRaw = runtimeExpiresIn.trim();
-		const parsedExpiresIn = expiresInRaw ? Number.parseInt(expiresInRaw, 10) : null;
-		if (expiresInRaw && (parsedExpiresIn === null || !Number.isFinite(parsedExpiresIn) || parsedExpiresIn <= 0)) {
-			runtimeActionError = 'Runtime access token TTL must be a positive whole number of seconds.';
-			return;
-		}
-
-		runtimeIssueLoading = true;
-		runtimeActionError = null;
-		runtimeActionMessage = null;
-
-		try {
-			runtimeCredentials = await api.delegateToAgent({
-				input: {
-					agentUsername: agent.username,
-					displayName: agent.displayName,
-					bio: agent.bio ?? undefined,
-					scopes,
-					expiresIn: parsedExpiresIn !== null && Number.isFinite(parsedExpiresIn) ? parsedExpiresIn : undefined,
-					agentType: agent.agentType,
-					agentVersion: agent.agentVersion,
-					version: agent.agentVersion,
-				},
-			});
-
-			await loadRuntimeSessions();
-			runtimeActionMessage =
-				'Runtime credentials issued. Copy the refresh token into your local runtime; it is not stored outside this page.';
-		} catch (err) {
-			runtimeActionError = err instanceof Error ? err.message : String(err);
-		} finally {
-			runtimeIssueLoading = false;
 		}
 	}
 
@@ -1002,12 +1305,7 @@
 		const username = agent?.username ?? '';
 
 		runtimeSessions = [];
-		selectedRuntimeSessionId = '';
-		runtimeCredentials = null;
-		runtimeScopes = { read: true, write: true, follow: true };
-		runtimeExpiresIn = '';
 		runtimeLoading = false;
-		runtimeIssueLoading = false;
 		runtimeRevokeAllLoading = false;
 		runtimeRevokeSessionId = null;
 		runtimeLoadError = null;
@@ -1058,18 +1356,6 @@
 		}
 
 		currentLeaseToken = readStoredLeaseToken(agent.username, selectedLeaseId);
-	});
-
-	$effect(() => {
-		if (!agent) return;
-		const allowedScopes = new Set(agent.delegatedScopes.map((scope) => scope.trim().toLowerCase()));
-		if (allowedScopes.size === 0) return;
-
-		runtimeScopes = {
-			read: allowedScopes.has('read'),
-			write: allowedScopes.has('write'),
-			follow: allowedScopes.has('follow'),
-		};
 	});
 
 	$effect(() => {
@@ -1645,7 +1931,8 @@
 				<div class="settings-form__notice">
 					Connector client secrets are shown only when you register them here. Simulacrum keeps the non-secret
 					client metadata in this browser so matching refresh-token sessions can be surfaced after OAuth
-					authorization completes.
+					authorization completes. Each connector stores a single redirect URI, so register separate connectors for
+					Claude.ai, Claude Code, and any custom MCP clients you want to keep distinct.
 				</div>
 
 				{#if isOwner}
@@ -1668,20 +1955,88 @@
 						</div>
 
 						<div class="settings-field">
-							<label class="settings-field__label" for="agent-connector-redirect">
-								Redirect URI from your MCP client
-							</label>
-							<input
-								class="settings-field__input"
-								id="agent-connector-redirect"
-								type="url"
-								placeholder="https://claude.ai/api/mcp/auth_callback"
-								bind:value={connectorRedirectUri}
-							/>
+							<label class="settings-field__label" for="agent-connector-grant">Grant type</label>
+							<select
+								class="settings-field__select"
+								id="agent-connector-grant"
+								bind:value={connectorGrantProfile}
+								onchange={(event) =>
+									setConnectorGrantProfile(
+										(event.currentTarget as HTMLSelectElement).value as AgentConnectorGrantProfile
+									)}
+							>
+								<option value="authorization_code">Authorization code</option>
+								<option value="client_credentials">Client credentials</option>
+							</select>
 							<p class="page__meta">
-								Claude.ai currently uses <code>https://claude.ai/api/mcp/auth_callback</code>.
+								{#if connectorGrantProfile === 'client_credentials'}
+									Use this for autonomous or headless connectors that do not need an interactive browser
+									callback.
+								{:else}
+									Use this for OAuth-aware MCP clients that complete an interactive browser authorization
+									flow.
+								{/if}
 							</p>
 						</div>
+
+						{#if connectorGrantProfile === 'authorization_code'}
+							<div class="settings-field">
+								<label class="settings-field__label" for="agent-connector-client">MCP client</label>
+								<select
+									class="settings-field__select"
+									id="agent-connector-client"
+									bind:value={connectorClientPreset}
+									onchange={(event) =>
+										setConnectorClientPreset(
+											(event.currentTarget as HTMLSelectElement).value as Exclude<
+												AgentConnectorClientPreset,
+												'headless'
+											>
+										)}
+								>
+									{#each CONNECTOR_CLIENT_PRESETS as preset (preset.value)}
+										<option value={preset.value}>{preset.label}</option>
+									{/each}
+								</select>
+								<p class="page__meta">
+									Simulacrum stores one redirect URI per connector. Add a separate connector for each hosted
+									or local MCP client you use.
+								</p>
+							</div>
+
+							<div class="settings-field">
+								<label class="settings-field__label" for="agent-connector-redirect">
+									Redirect URI from your MCP client
+								</label>
+								<input
+									class="settings-field__input"
+									id="agent-connector-redirect"
+									type="url"
+									placeholder={
+										connectorClientPreset === 'claude_code'
+											? 'http://localhost:8787/callback'
+											: 'https://example.com/callback'
+									}
+									bind:value={connectorRedirectUri}
+								/>
+								<p class="page__meta">
+									{#if connectorClientPreset === 'claude_ai'}
+										Claude.ai currently uses <code>{CLAUDE_AI_REDIRECT_URI}</code>.
+									{:else if connectorClientPreset === 'claude_code'}
+										Claude Code typically uses a localhost callback such as <code>{CLAUDE_CODE_REDIRECT_URI}</code>.
+										Adjust the port if your local client shows a different callback.
+									{:else}
+										Enter the exact callback URI your custom MCP client expects.
+									{/if}
+								</p>
+							</div>
+						{:else}
+							<div class="settings-form__notice">
+								Simulacrum will register <code>{HEADLESS_REDIRECT_URI}</code> behind the scenes because Lesser
+								still requires a redirect URI at registration time, but the connector will only allow
+								<code>client_credentials</code> token exchange.
+							</div>
+						{/if}
 
 						<div class="settings-field">
 							<label class="settings-field__label" for="agent-connector-website">
@@ -1714,7 +2069,9 @@
 								</label>
 							</div>
 							<p class="page__meta">
-								Most MCP clients should request at least <code>read write</code>.
+								Most MCP clients should request at least <code>read write</code>. Stored grants:
+								<code>{formatGrantTypes(connectorGrantTypes(connectorGrantProfile))}</code> with
+								<code>client_secret_post</code>.
 							</p>
 						</div>
 
@@ -1789,7 +2146,21 @@
 					</pre>
 
 					<div class="settings-token__row">
-						<strong>Discovery URL</strong>
+						<strong>OAuth discovery URL</strong>
+						<button
+							type="button"
+							class="gr-button gr-button--outline"
+							disabled={!connectorTransport?.oauthDiscoveryUrl}
+							onclick={() =>
+								connectorTransport?.oauthDiscoveryUrl && copy(connectorTransport.oauthDiscoveryUrl)}
+						>
+							Copy
+						</button>
+					</div>
+					<pre class="settings-token__value">{connectorTransport?.oauthDiscoveryUrl ?? 'Loading…'}</pre>
+
+					<div class="settings-token__row">
+						<strong>MCP transport discovery</strong>
 						<button
 							type="button"
 							class="gr-button gr-button--outline"
@@ -1816,11 +2187,18 @@
 
 					{#if latestConnector}
 						<div class="settings-token__meta">
-							Redirect URI: {latestConnector.redirectUri}
+							{connectorClientPresetLabel(latestConnector.clientPreset)} •
+							{connectorGrantProfileLabel(latestConnector.grantProfile)} • grants
+							{formatGrantTypes(latestConnector.grantTypes)} • auth
+							{latestConnector.tokenEndpointAuthMethod ?? 'client_secret_post'}
+							<span>
+								• redirect {latestConnector.redirectUri}
+							</span>
 							{#if latestConnector.website}
 								<span> • website {latestConnector.website}</span>
 							{/if}
 						</div>
+						<div class="page__meta">{connectorRotationSummary(latestConnector.rotation)}</div>
 					{/if}
 				</div>
 
@@ -1833,6 +2211,10 @@
 									<div class="settings-list__title">{connectorTitle(connector)}</div>
 									<div class="settings-list__meta">
 										Client <code>{connector.clientId}</code>
+										<span> • {connectorClientPresetLabel(connector.clientPreset)}</span>
+										<span> • {connectorGrantProfileLabel(connector.grantProfile)}</span>
+										<span> • grants {formatGrantTypes(connector.grantTypes)}</span>
+										<span> • auth {connector.tokenEndpointAuthMethod ?? 'client_secret_post'}</span>
 										<span> • redirect <code>{connector.redirectUri}</code></span>
 										<span> • added {new Date(connector.createdAt).toLocaleString()}</span>
 										<span>
@@ -1840,6 +2222,7 @@
 											session(s)
 										</span>
 									</div>
+									<div class="page__meta">{connectorRotationSummary(connector.rotation)}</div>
 								</div>
 								<div class="settings-form__actions">
 									<button
@@ -1861,6 +2244,24 @@
 											Copy current secret
 										</button>
 									{/if}
+									{#if isOwner}
+										<button
+											type="button"
+											class="gr-button gr-button--outline"
+											disabled={connectorRotateClientId === connector.clientId}
+											onclick={() => void handleRotateConnectorSecret(connector, { forceInvalidate: false })}
+										>
+											{connectorRotateClientId === connector.clientId ? 'Rotating…' : 'Rotate secret'}
+										</button>
+										<button
+											type="button"
+											class="gr-button gr-button--outline"
+											disabled={connectorRotateClientId === connector.clientId}
+											onclick={() => void handleRotateConnectorSecret(connector, { forceInvalidate: true })}
+										>
+											Force invalidate
+										</button>
+									{/if}
 								</div>
 							</li>
 						{/each}
@@ -1872,7 +2273,7 @@
 				<h3>Connector sessions</h3>
 				<p class="page__meta">
 					Authorized refresh-token sessions are matched to the connectors registered from this browser by client
-					ID.
+					ID. Health below is inferred from idle expiry, absolute expiry, last use, and revocation state.
 				</p>
 
 				{#if runtimeLoading}
@@ -1883,32 +2284,33 @@
 					<ul class="settings-list">
 						{#each connectorSessionGroups as group (group.connector.clientId)}
 							{#each group.sessions as session (session.sessionID)}
+								{@const health = connectorSessionHealth(session)}
 								<li class="settings-list__item">
 									<div class="settings-list__body">
-										<div class="settings-list__title">{connectorTitle(group.connector, session)}</div>
+										<div class="settings-list__title">
+											{connectorTitle(group.connector, session)}
+											<span class={connectorSessionHealthClass(health)}>
+												{connectorSessionHealthLabel(health)}
+											</span>
+										</div>
 										<div class="settings-list__meta">
 											Client <code>{session.clientID}</code> • session <code>{session.sessionID}</code>
-											<span> • {session.revoked ? 'revoked' : 'active'}</span>
 											<span> • scope {session.scope}</span>
 											<span> • created {formatDateTime(session.createdAt)}</span>
 											<span> • last used {formatDateTime(session.lastUsedAt)}</span>
+											<span> • idle {formatDateTime(session.idleExpiresAt)}</span>
+											<span> • absolute {formatDateTime(session.absoluteExpiresAt)}</span>
+											<span> • window {formatDuration(connectorSessionRemainingMs(session))}</span>
 											{#if session.revokedAt}
 												<span> • revoked {formatDateTime(session.revokedAt)}</span>
 											{/if}
+											{#if session.revokedReason}
+												<span> • reason {session.revokedReason}</span>
+											{/if}
 										</div>
+										<div class="page__meta">{connectorSessionHealthSummary(session)}</div>
 									</div>
 									<div class="settings-form__actions">
-										<button
-											type="button"
-											class="gr-button gr-button--outline"
-											onclick={() => {
-												selectedRuntimeSessionId = session.sessionID;
-												runtimeActionError = null;
-												runtimeActionMessage = null;
-											}}
-										>
-											{selectedRuntimeSessionId === session.sessionID ? 'Selected' : 'Select'}
-										</button>
 										<button
 											type="button"
 											class="gr-button gr-button--outline"
@@ -1926,117 +2328,40 @@
 			{/if}
 		</section>
 
-		<section class="page__notice">
-			<div class="settings-token__row">
-				<div>
-					<h2>Runtime sessions</h2>
-					<p class="page__meta">
-						Issue direct bearer + refresh credentials for local runtimes, CLI tools, or advanced debugging.
-						OAuth connectors above remain the recommended path for hosted MCP clients.
-					</p>
+		{#if canManage}
+			<section class="page__notice">
+				<div class="settings-token__row">
+					<div>
+						<h2>Session cleanup</h2>
+						<p class="page__meta">
+							Connector sessions are surfaced above. Any unmatched sessions below were created outside the
+							connector flow or before this prototype switched to OAuth-first setup.
+						</p>
+					</div>
+					<div class="settings-form__actions">
+						<button
+							type="button"
+							class="gr-button gr-button--outline"
+							disabled={runtimeLoading || runtimeRevokeAllLoading || runtimeRevokeSessionId !== null}
+							onclick={() => void loadRuntimeSessions()}
+						>
+							Refresh inventory
+						</button>
+						<button
+							type="button"
+							class="gr-button gr-button--outline"
+							disabled={runtimeRevokeAllLoading || runtimeSessions.length === 0}
+							onclick={() => void handleRevokeAllRuntimeSessions()}
+						>
+							{runtimeRevokeAllLoading ? 'Revoking all…' : 'Revoke all sessions'}
+						</button>
+					</div>
 				</div>
-				{#if canManage}
-					<button
-						type="button"
-						class="gr-button gr-button--outline"
-						disabled={runtimeLoading || runtimeIssueLoading || runtimeRevokeAllLoading || runtimeRevokeSessionId !== null}
-						onclick={() => void loadRuntimeSessions()}
-					>
-						Refresh
-					</button>
-				{/if}
-			</div>
 
-			{#if !canManage}
-				<p class="page__meta">
-					You can view this agent, but only the owner or an admin can inspect its runtime sessions.
-				</p>
-			{:else}
 				<div class="settings-form__notice">
-					Use these direct bearer credentials only when you need a local runtime bootstrap or a manual MCP/debug
-					session. Keep the refresh token only in the runtime that will rotate it.
+					Use this section only to audit or revoke older sessions. New agent setup should happen through OAuth
+					connectors above, with lease auth kept below as an advanced debugging fallback.
 				</div>
-
-				{#if isOwner}
-					<form
-						class="settings-form"
-						onsubmit={(event) => {
-							event.preventDefault();
-							void handleIssueRuntimeCredentials();
-						}}
-					>
-						<div class="settings-field">
-							<label class="settings-field__label" for="agent-runtime-expires">
-								Access token TTL override (seconds)
-							</label>
-							<input
-								class="settings-field__input"
-								id="agent-runtime-expires"
-								type="number"
-								min="60"
-								step="60"
-								placeholder="optional"
-								bind:value={runtimeExpiresIn}
-							/>
-							<p class="page__meta">
-								Leave blank unless you want a shorter-lived bearer token for a one-off local bootstrap.
-							</p>
-						</div>
-
-						<div class="settings-field">
-							<span class="settings-field__label">Scopes</span>
-							<div class="settings-scopes">
-								<label class="settings-field__checkbox-label">
-									<input class="settings-field__checkbox" type="checkbox" bind:checked={runtimeScopes.read} />
-									read
-								</label>
-								<label class="settings-field__checkbox-label">
-									<input class="settings-field__checkbox" type="checkbox" bind:checked={runtimeScopes.write} />
-									write
-								</label>
-								<label class="settings-field__checkbox-label">
-									<input class="settings-field__checkbox" type="checkbox" bind:checked={runtimeScopes.follow} />
-									follow
-								</label>
-							</div>
-							<p class="page__meta">
-								MCP write tools require <code>write</code>. <code>follow</code> alone is not enough.
-							</p>
-						</div>
-
-						<div class="settings-form__actions">
-							<button type="submit" class="gr-button gr-button--solid" disabled={runtimeIssueLoading}>
-								{runtimeIssueLoading ? 'Issuing runtime credentials…' : 'Issue runtime credentials'}
-							</button>
-							{#if runtimeCredentials}
-								<button
-									type="button"
-									class="gr-button gr-button--outline"
-									onclick={() => {
-										runtimeCredentials = null;
-										runtimeActionError = null;
-										runtimeActionMessage = 'Runtime secrets cleared from the page.';
-									}}
-								>
-									Clear current secrets
-								</button>
-							{/if}
-							<button
-								type="button"
-								class="gr-button gr-button--outline"
-								disabled={runtimeRevokeAllLoading || runtimeSessions.length === 0}
-								onclick={() => void handleRevokeAllRuntimeSessions()}
-							>
-								{runtimeRevokeAllLoading ? 'Revoking all…' : 'Revoke all agent sessions'}
-							</button>
-						</div>
-					</form>
-				{:else}
-					<p class="page__meta">
-						Admins can inspect and revoke runtime sessions here, but only the agent owner can issue new runtime
-						credentials.
-					</p>
-				{/if}
 
 				{#if runtimeLoadError}
 					<div class="settings-form__notice settings-form__notice--error" role="alert">{runtimeLoadError}</div>
@@ -2048,47 +2373,10 @@
 					<div class="settings-form__notice" role="status">{runtimeActionMessage}</div>
 				{/if}
 
-				<div class="settings-token" aria-live="polite">
-					<div class="settings-token__row">
-						<strong>Current runtime access token</strong>
-						<button
-							type="button"
-							class="gr-button gr-button--outline"
-							disabled={!runtimeCredentials?.accessToken?.trim()}
-							onclick={() => runtimeCredentials?.accessToken && copy(runtimeCredentials.accessToken)}
-						>
-							Copy
-						</button>
-					</div>
-					<pre class="settings-token__value">{runtimeTokenValue}</pre>
-
-					<div class="settings-token__row">
-						<strong>Current runtime refresh token</strong>
-						<button
-							type="button"
-							class="gr-button gr-button--outline"
-							disabled={!runtimeCredentials?.refreshToken?.trim()}
-							onclick={() => runtimeCredentials?.refreshToken && copy(runtimeCredentials.refreshToken)}
-						>
-							Copy
-						</button>
-					</div>
-					<pre class="settings-token__value">{runtimeRefreshValue}</pre>
-
-					{#if runtimeCredentials}
-						<div class="settings-token__meta">
-							Scope: {runtimeCredentials.scope} • Access token expires in {runtimeCredentials.expiresIn}s
-							{#if selectedRuntimeSession}
-								<span> • session <code>{selectedRuntimeSession.sessionID}</code></span>
-							{/if}
-						</div>
-					{/if}
-				</div>
-
 				{#if runtimeLoading}
-					<div class="page__notice">Loading runtime sessions…</div>
+					<div class="page__notice">Loading session inventory…</div>
 				{:else if otherRuntimeSessions.length === 0}
-					<div class="page__notice">No local runtime sessions exist outside the connector sessions above.</div>
+					<div class="page__notice">No unmatched runtime sessions are present outside the connector sessions above.</div>
 				{:else}
 					<ul class="settings-list">
 						{#each otherRuntimeSessions as session (session.sessionID)}
@@ -2097,6 +2385,7 @@
 									<div class="settings-list__title">{session.deviceLabel || session.clientID}</div>
 									<div class="settings-list__meta">
 										Session <code>{session.sessionID}</code> • {session.revoked ? 'revoked' : 'active'}
+										<span> • client <code>{session.clientID}</code></span>
 										<span> • scope {session.scope}</span>
 										<span> • created {formatDateTime(session.createdAt)}</span>
 										<span> • last used {formatDateTime(session.lastUsedAt)}</span>
@@ -2105,20 +2394,12 @@
 										{#if session.revokedAt}
 											<span> • revoked {formatDateTime(session.revokedAt)}</span>
 										{/if}
+										{#if session.revokedReason}
+											<span> • reason {session.revokedReason}</span>
+										{/if}
 									</div>
 								</div>
 								<div class="settings-form__actions">
-									<button
-										type="button"
-										class="gr-button gr-button--outline"
-										onclick={() => {
-											selectedRuntimeSessionId = session.sessionID;
-											runtimeActionError = null;
-											runtimeActionMessage = null;
-										}}
-									>
-										{selectedRuntimeSessionId === session.sessionID ? 'Selected' : 'Select'}
-									</button>
 									<button
 										type="button"
 										class="gr-button gr-button--outline"
@@ -2132,17 +2413,13 @@
 						{/each}
 					</ul>
 				{/if}
-			{/if}
-		</section>
+			</section>
+		{/if}
 
 		<AgentMcpPanel
-			agentUsername={agent.username}
 			{canManage}
-			canIssueRuntimeCredentials={isOwner}
 			{latestConnector}
 			{connectorSessionCount}
-			{runtimeCredentials}
-			{selectedRuntimeSession}
 			selectedLease={selectedLease}
 			leaseToken={currentLeaseToken}
 		/>
@@ -2152,10 +2429,8 @@
 				<div>
 						<h2>Lease-based auth (advanced)</h2>
 						<p class="page__meta">
-							OAuth connectors above are the standard hosted-client path, and direct runtime sessions above are the
-							normal local bearer path. Use wallet-backed leases only when you specifically need a browser-assisted,
-							wallet-mediated bearer flow; each renewal here mints a short-lived bearer token from the selected
-							lease.
+							OAuth connectors above are the standard setup path. Use wallet-backed leases only when you
+							specifically need a browser-assisted authenticated probe or another manual debugging flow.
 						</p>
 					</div>
 				{#if canManage}
