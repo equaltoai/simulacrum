@@ -57,6 +57,7 @@ export type {
 	Conversation,
 	ConversationFolder,
 	DmRequestState,
+	SendMessageOptions,
 	MessagesHandlers,
 	MessagesState,
 	MessagesContext,
