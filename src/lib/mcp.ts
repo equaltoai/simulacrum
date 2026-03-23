@@ -620,6 +620,21 @@ export async function inspectMcpServer({
 	};
 }
 
+export function isInsufficientScopeError(error: unknown): boolean {
+	return (
+		error instanceof McpClientError &&
+		error.status === 403 &&
+		error.challenge?.error === 'insufficient_scope'
+	);
+}
+
+export function requiredScopeFromError(error: unknown): string | null {
+	if (error instanceof McpClientError && error.challenge?.scope) {
+		return error.challenge.scope;
+	}
+	return null;
+}
+
 export function describeMcpError(error: unknown): string {
 	if (error instanceof McpClientError) {
 		if (error.challenge?.scope && error.status === 401) {

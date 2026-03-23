@@ -6,6 +6,8 @@
 		KNOWN_MCP_PROMPTS,
 		KNOWN_MCP_RESOURCES,
 		describeMcpError,
+		isInsufficientScopeError,
+		requiredScopeFromError,
 		fetchOAuthProtectedResource,
 		fetchMcpWellKnown,
 		inspectMcpServer,
@@ -62,6 +64,7 @@
 	let inspection = $state<McpInspection | null>(null);
 	let inspectionError = $state<string | null>(null);
 	let inspectionCheckedAt = $state<number | null>(null);
+	let inspectionRawError = $state<unknown>(null);
 
 	function tokenValue(): string {
 		return activeCredential?.accessToken?.trim() || '<advanced-access-token>';
@@ -150,6 +153,7 @@
 
 		inspectionStatus = 'loading';
 		inspectionError = null;
+		inspectionRawError = null;
 
 		try {
 			inspection = await inspectMcpServer({
@@ -163,6 +167,7 @@
 			inspection = null;
 			inspectionStatus = 'error';
 			inspectionError = describeMcpError(error);
+			inspectionRawError = error;
 		} finally {
 			inspectionCheckedAt = Date.now();
 		}
@@ -572,6 +577,13 @@
 					</p>
 				{:else if inspectionError}
 					<p class="mcp-panel__status-copy">{inspectionError}</p>
+					{#if isInsufficientScopeError(inspectionRawError)}
+						<p class="mcp-panel__status-copy">
+							The token's granted scopes do not cover this operation. Re-authorize the connector
+							with the required scope{requiredScopeFromError(inspectionRawError) ? ` (${requiredScopeFromError(inspectionRawError)})` : ''} to
+							resolve this. MCP clients should retry authorization no more than a few times to avoid loops.
+						</p>
+					{/if}
 				{:else}
 					<p class="mcp-panel__status-copy">
 						This advanced lease token is ready. Run a live check to verify authenticated MCP access.
