@@ -2564,6 +2564,7 @@
 			{canManage}
 			agentUsername={agent?.username ?? ''}
 			{latestConnector}
+			storedConnectors={connectorRegistrations}
 			{connectorSessionCount}
 			selectedLease={selectedLease}
 			leaseToken={currentLeaseToken}

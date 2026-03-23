@@ -23,10 +23,16 @@
 		type OAuthProtectedResourceDocument,
 	} from '$lib/mcp';
 
+	type StoredConnectorSummary = {
+		clientId: string;
+		clientPreset: string;
+	};
+
 	interface Props {
 		canManage: boolean;
 		agentUsername: string;
 		latestConnector: AgentConnectorRegistration | null;
+		storedConnectors: StoredConnectorSummary[];
 		connectorSessionCount: number;
 		selectedLease: AgentAccessLease | null;
 		leaseToken: AgentLeaseToken | null;
@@ -48,6 +54,7 @@
 		canManage,
 		agentUsername,
 		latestConnector,
+		storedConnectors = [],
 		connectorSessionCount,
 		selectedLease,
 		leaseToken,
@@ -201,7 +208,7 @@
 
 	$effect(() => {
 		const token = activeCredential?.accessToken?.trim() ?? '';
-		const endpoint = discoveryDoc?.endpoint?.trim() || transport?.endpoint || '';
+		const endpoint = transport?.endpoint || discoveryDoc?.endpoint?.trim() || '';
 
 		inspection = null;
 		inspectionError = null;
@@ -218,7 +225,7 @@
 		return () => controller.abort();
 	});
 
-	const mcpEndpoint = $derived.by(() => discoveryDoc?.endpoint?.trim() || transport?.endpoint || '');
+	const mcpEndpoint = $derived.by(() => transport?.endpoint || discoveryDoc?.endpoint?.trim() || '');
 	const mcpDiscoveryUrl = $derived.by(() => transport?.discoveryUrl ?? '');
 	const oauthDiscoveryUrl = $derived.by(() => transport?.oauthDiscoveryUrl ?? '');
 	const activeCredential = $derived.by<ActiveCredential | null>(() => {
@@ -250,35 +257,34 @@
 			methods,
 		};
 	});
+	function resolveClientId(preset: string): string | null {
+		if (latestConnector?.clientPreset === preset) return latestConnector.clientId;
+		return storedConnectors.find((c) => c.clientPreset === preset)?.clientId ?? null;
+	}
+
 	const claudeAiClientId = $derived.by(() =>
-		latestConnector?.clientPreset === 'claude_ai'
-			? latestConnector.clientId
-			: '<client-id from Claude.ai connector>'
+		resolveClientId('claude_ai') ?? '<register a Claude.ai connector above>'
 	);
 	const claudeAiClientSecret = $derived.by(() =>
 		latestConnector?.clientPreset === 'claude_ai'
 			? latestConnector.clientSecret
-			: '<client-secret from Claude.ai connector>'
+			: '<shown after registration>'
 	);
 	const claudeCodeClientId = $derived.by(() =>
-		latestConnector?.clientPreset === 'claude_code'
-			? latestConnector.clientId
-			: '<client-id from Claude Code connector>'
+		resolveClientId('claude_code') ?? '<register a Claude Code connector above>'
 	);
 	const claudeCodeClientSecret = $derived.by(() =>
 		latestConnector?.clientPreset === 'claude_code'
 			? latestConnector.clientSecret
-			: '<client-secret from Claude Code connector>'
+			: '<shown after registration>'
 	);
 	const headlessClientId = $derived.by(() =>
-		latestConnector?.clientPreset === 'headless'
-			? latestConnector.clientId
-			: '<client-id from headless connector>'
+		resolveClientId('headless') ?? '<register a headless connector above>'
 	);
 	const headlessClientSecret = $derived.by(() =>
 		latestConnector?.clientPreset === 'headless'
 			? latestConnector.clientSecret
-			: '<client-secret from headless connector>'
+			: '<shown after registration>'
 	);
 	const discoveryOverviewStatus = $derived.by<PanelStatus>(() => {
 		if (oauthDiscoveryStatus === 'error' || discoveryStatus === 'error') return 'error';
@@ -363,23 +369,24 @@
 
 	const claudeCodeMcpJson = $derived.by(() => {
 		const url = mcpEndpoint || 'https://api.example.com/mcp/agent';
+		const resolvedClientId = resolveClientId('claude_code');
 		const config: Record<string, unknown> = {
 			type: 'http',
 			url,
 		};
 
-		const hasRealCredentials =
-			latestConnector?.clientPreset === 'claude_code' && latestConnector.clientId;
-
-		if (hasRealCredentials) {
-			config.oauth = {
-				clientId: latestConnector!.clientId,
-				clientSecret: latestConnector!.clientSecret ?? undefined,
+		if (resolvedClientId) {
+			const oauth: Record<string, unknown> = {
+				clientId: resolvedClientId,
 				callbackPort: 8787,
 			};
+			if (latestConnector?.clientPreset === 'claude_code' && latestConnector.clientSecret) {
+				oauth.clientSecret = latestConnector.clientSecret;
+			}
+			config.oauth = oauth;
 		} else {
 			config.oauth = {
-				clientId: claudeCodeClientId,
+				clientId: '<register a Claude Code connector above>',
 				callbackPort: 8787,
 			};
 		}
