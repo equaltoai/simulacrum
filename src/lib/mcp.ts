@@ -74,17 +74,75 @@ export type McpInspection = {
 	capabilities: McpCapabilitiesSnapshot;
 };
 
+export type WwwAuthenticateChallenge = {
+	scheme: string;
+	realm?: string;
+	scope?: string;
+	error?: string;
+	errorDescription?: string;
+	resourceMetadata?: string;
+};
+
+export function parseWwwAuthenticate(header: string | null): WwwAuthenticateChallenge | null {
+	if (!header) return null;
+	const trimmed = header.trim();
+	if (!trimmed) return null;
+
+	const spaceIndex = trimmed.indexOf(' ');
+	if (spaceIndex === -1) return { scheme: trimmed };
+
+	const scheme = trimmed.slice(0, spaceIndex);
+	const paramsString = trimmed.slice(spaceIndex + 1);
+
+	const challenge: WwwAuthenticateChallenge = { scheme };
+	const paramPattern = /(\w+)="([^"]*?)"/g;
+	let match: RegExpExecArray | null;
+
+	while ((match = paramPattern.exec(paramsString)) !== null) {
+		const [, key, value] = match;
+		switch (key) {
+			case 'realm':
+				challenge.realm = value;
+				break;
+			case 'scope':
+				challenge.scope = value;
+				break;
+			case 'error':
+				challenge.error = value;
+				break;
+			case 'error_description':
+				challenge.errorDescription = value;
+				break;
+			case 'resource_metadata':
+				challenge.resourceMetadata = value;
+				break;
+		}
+	}
+
+	return challenge;
+}
+
 export class McpClientError extends Error {
 	readonly status?: number;
 	readonly code?: number | string;
 	readonly details?: unknown;
+	readonly challenge?: WwwAuthenticateChallenge;
 
-	constructor(message: string, options: { status?: number; code?: number | string; details?: unknown } = {}) {
+	constructor(
+		message: string,
+		options: {
+			status?: number;
+			code?: number | string;
+			details?: unknown;
+			challenge?: WwwAuthenticateChallenge;
+		} = {}
+	) {
 		super(message);
 		this.name = 'McpClientError';
 		this.status = options.status;
 		this.code = options.code;
 		this.details = options.details;
+		this.challenge = options.challenge;
 	}
 }
 
@@ -447,9 +505,23 @@ async function requestMcpRpc<T>({
 	const payload = await parseResponseBody(response);
 
 	if (!response.ok) {
-		throw new McpClientError(errorMessage(payload, `MCP ${method} failed (${response.status})`), {
+		const challenge =
+			response.status === 401 || response.status === 403
+				? parseWwwAuthenticate(response.headers.get('www-authenticate')) ?? undefined
+				: undefined;
+
+		const fallback =
+			response.status === 401
+				? challenge?.errorDescription || 'Authentication required. Re-authorize with the requested scope.'
+				: response.status === 403 && challenge?.error === 'insufficient_scope'
+					? challenge.errorDescription ||
+						`Insufficient scope. The server requires: ${challenge.scope || 'additional scopes'}.`
+					: `MCP ${method} failed (${response.status})`;
+
+		throw new McpClientError(errorMessage(payload, fallback), {
 			status: response.status,
 			details: payload,
+			challenge,
 		});
 	}
 
@@ -550,6 +622,12 @@ export async function inspectMcpServer({
 
 export function describeMcpError(error: unknown): string {
 	if (error instanceof McpClientError) {
+		if (error.challenge?.scope && error.status === 401) {
+			return `${error.message} Required scope: ${error.challenge.scope}`;
+		}
+		if (error.challenge?.error === 'insufficient_scope' && error.challenge.scope) {
+			return `${error.message} Required scope: ${error.challenge.scope}`;
+		}
 		return error.message;
 	}
 	if (error instanceof Error) {
