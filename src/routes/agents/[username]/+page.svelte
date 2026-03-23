@@ -243,6 +243,7 @@
 		grantProfile: AgentConnectorGrantProfile;
 		clientPreset: AgentConnectorClientPreset;
 		rotation: AgentConnectorRotationStatus;
+		clientSecretExpiresAt: number | null;
 	};
 
 	const AGENT_CONNECTOR_STORAGE_PREFIX = 'simulacrum:agent-connectors:';
@@ -303,6 +304,7 @@
 			grantProfile?: unknown;
 			clientPreset?: unknown;
 			rotation?: unknown;
+			clientSecretExpiresAt?: unknown;
 		};
 
 		if (
@@ -342,6 +344,8 @@
 			grantProfile,
 			clientPreset,
 			rotation: normalizeConnectorRotationStatus(connector.rotation),
+			clientSecretExpiresAt:
+				typeof connector.clientSecretExpiresAt === 'number' ? connector.clientSecretExpiresAt : null,
 		};
 	}
 
@@ -401,6 +405,7 @@
 			grantProfile: registration.grantProfile,
 			clientPreset: registration.clientPreset,
 			rotation: registration.rotation,
+			clientSecretExpiresAt: registration.clientSecretExpiresAt,
 		};
 
 		return upsertStoredAgentConnector(username, nextConnector);
@@ -683,6 +688,18 @@
 		return `Rotated ${formatDateTime(rotation.rotatedAt)}.`;
 	}
 
+	function connectorSecretExpirySummary(expiresAt: number | null): string | null {
+		if (!expiresAt || expiresAt === 0) return null;
+		const expiresMs = expiresAt * 1000;
+		const now = Date.now();
+		if (expiresMs <= now) return 'Client secret has expired. Rotate the secret to restore access.';
+		const hoursRemaining = Math.floor((expiresMs - now) / (60 * 60 * 1000));
+		if (hoursRemaining < 24) return `Client secret expires in ${hoursRemaining}h. Consider rotating soon.`;
+		const daysRemaining = Math.floor(hoursRemaining / 24);
+		if (daysRemaining <= 7) return `Client secret expires in ${daysRemaining}d.`;
+		return null;
+	}
+
 	type ConnectorSessionHealth =
 		| 'healthy'
 		| 'expiring_soon'
@@ -929,11 +946,21 @@
 				website: connector.website ?? null,
 				vapidKey: latestConnector?.clientId === connector.clientId ? latestConnector.vapidKey : null,
 				grantTypes: connector.grantTypes,
+				responseTypes: latestConnector?.clientId === connector.clientId ? latestConnector.responseTypes : [],
 				tokenEndpointAuthMethod:
 					rotation.tokenEndpointAuthMethod ?? connector.tokenEndpointAuthMethod ?? 'client_secret_post',
 				grantProfile: connector.grantProfile,
 				clientPreset: connector.clientPreset,
 				rotation: rotation.rotation,
+				logoUri: latestConnector?.clientId === connector.clientId ? latestConnector.logoUri : null,
+				contacts: latestConnector?.clientId === connector.clientId ? latestConnector.contacts : [],
+				tosUri: latestConnector?.clientId === connector.clientId ? latestConnector.tosUri : null,
+				policyUri: latestConnector?.clientId === connector.clientId ? latestConnector.policyUri : null,
+				clientIdIssuedAt: latestConnector?.clientId === connector.clientId ? latestConnector.clientIdIssuedAt : null,
+				clientSecretExpiresAt: latestConnector?.clientId === connector.clientId ? latestConnector.clientSecretExpiresAt : null,
+				scope: latestConnector?.clientId === connector.clientId ? latestConnector.scope : null,
+				softwareId: latestConnector?.clientId === connector.clientId ? latestConnector.softwareId : null,
+				softwareVersion: latestConnector?.clientId === connector.clientId ? latestConnector.softwareVersion : null,
 			};
 			connectorMessage = forceInvalidate
 				? 'Connector secret rotated with immediate invalidation. Distribute the replacement secret before the client reconnects.'
@@ -2252,6 +2279,11 @@
 							{/if}
 						</div>
 						<div class="page__meta">{connectorRotationSummary(latestConnector.rotation)}</div>
+						{#if connectorSecretExpirySummary(latestConnector.clientSecretExpiresAt)}
+							<div class="settings-form__notice settings-form__notice--error" role="alert">
+								{connectorSecretExpirySummary(latestConnector.clientSecretExpiresAt)}
+							</div>
+						{/if}
 					{/if}
 				</div>
 
@@ -2276,6 +2308,11 @@
 										</span>
 									</div>
 									<div class="page__meta">{connectorRotationSummary(connector.rotation)}</div>
+									{#if connectorSecretExpirySummary(connector.clientSecretExpiresAt)}
+										<div class="settings-form__notice settings-form__notice--error" role="alert">
+											{connectorSecretExpirySummary(connector.clientSecretExpiresAt)}
+										</div>
+									{/if}
 								</div>
 								<div class="settings-form__actions">
 									<button
