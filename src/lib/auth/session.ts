@@ -33,6 +33,7 @@ const STORAGE_KEYS = {
 	oauthVerifier: 'simulacrum:oauth_verifier',
 	oauthScope: 'simulacrum:oauth_scope',
 	oauthReturnTo: 'simulacrum:oauth_return_to',
+	oauthResource: 'simulacrum:oauth_resource',
 } as const;
 
 export const authSession = writable<AuthSession | null>(null);
@@ -208,9 +209,11 @@ async function ensureOAuthClient({
 export async function startOAuthLogin({
 	scope = DEFAULT_OAUTH_SCOPE,
 	returnTo,
+	resource,
 }: {
 	scope?: string;
 	returnTo?: string;
+	resource?: string;
 } = {}) {
 	if (!browser) return;
 
@@ -227,6 +230,12 @@ export async function startOAuthLogin({
 		returnTo ?? `${window.location.pathname}${window.location.search}${window.location.hash}`
 	);
 
+	if (resource) {
+		sessionStorage.setItem(STORAGE_KEYS.oauthResource, resource);
+	} else {
+		sessionStorage.removeItem(STORAGE_KEYS.oauthResource);
+	}
+
 	const loginParams = new URLSearchParams({
 		client_id: client.clientId,
 		redirect_uri: redirectUri,
@@ -236,6 +245,10 @@ export async function startOAuthLogin({
 		code_challenge: codeChallenge,
 		code_challenge_method: 'S256',
 	});
+
+	if (resource) {
+		loginParams.set('resource', resource);
+	}
 
 	window.location.assign(`/auth/login?${loginParams.toString()}`);
 }
@@ -262,6 +275,7 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	const expectedState = sessionStorage.getItem(STORAGE_KEYS.oauthState);
 	const codeVerifier = sessionStorage.getItem(STORAGE_KEYS.oauthVerifier);
 	const scope = sessionStorage.getItem(STORAGE_KEYS.oauthScope) ?? DEFAULT_OAUTH_SCOPE;
+	const resource = sessionStorage.getItem(STORAGE_KEYS.oauthResource);
 
 	if (!expectedState || state !== expectedState) {
 		return { ok: false as const, error: 'OAuth state mismatch. Please try again.' };
@@ -280,6 +294,10 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 		redirect_uri: redirectUri,
 		code_verifier: codeVerifier,
 	});
+
+	if (resource) {
+		tokenBody.set('resource', resource);
+	}
 
 	const tokenHeaders: Record<string, string> = {
 		'content-type': 'application/x-www-form-urlencoded',
@@ -341,6 +359,7 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	sessionStorage.removeItem(STORAGE_KEYS.oauthState);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthVerifier);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthScope);
+	sessionStorage.removeItem(STORAGE_KEYS.oauthResource);
 
 	const returnTo = sessionStorage.getItem(STORAGE_KEYS.oauthReturnTo) ?? `${base}/`;
 	sessionStorage.removeItem(STORAGE_KEYS.oauthReturnTo);

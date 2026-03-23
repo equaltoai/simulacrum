@@ -23,6 +23,7 @@ export type McpTransportConfig = {
 	endpoint: string;
 	discoveryUrl: string;
 	oauthDiscoveryUrl: string;
+	resource: string;
 };
 
 export type McpWellKnownToolHint = {
@@ -344,7 +345,7 @@ type JsonRpcEnvelope<T> = {
 	};
 };
 
-export function resolveMcpTransport(origin: string): McpTransportConfig {
+export function resolveMcpTransport(origin: string, actor?: string): McpTransportConfig {
 	const url = new URL(origin);
 
 	let apiOrigin = origin;
@@ -353,11 +354,15 @@ export function resolveMcpTransport(origin: string): McpTransportConfig {
 		apiOrigin = `${url.protocol}//${apiHost}${url.port ? `:${url.port}` : ''}`;
 	}
 
+	const mcpPath = actor ? `/mcp/${encodeURIComponent(actor)}` : '/mcp';
+	const endpoint = new URL(mcpPath, `${apiOrigin}/`).toString();
+
 	return {
 		apiOrigin,
-		endpoint: new URL('/mcp', `${apiOrigin}/`).toString(),
+		endpoint,
 		discoveryUrl: new URL('/.well-known/mcp.json', `${apiOrigin}/`).toString(),
 		oauthDiscoveryUrl: new URL('/.well-known/oauth-protected-resource', `${apiOrigin}/`).toString(),
+		resource: endpoint,
 	};
 }
 
