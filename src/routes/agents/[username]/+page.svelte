@@ -603,11 +603,19 @@
 	// OAuth connector registration
 	let connectorRegistrations = $state<StoredAgentConnector[]>([]);
 	let latestConnector = $state<AgentConnectorRegistration | null>(null);
+	type TokenEndpointAuthMethod = 'client_secret_post' | 'client_secret_basic' | 'none';
+	const TOKEN_ENDPOINT_AUTH_METHODS: Array<{ value: TokenEndpointAuthMethod; label: string }> = [
+		{ value: 'client_secret_post', label: 'client_secret_post (default)' },
+		{ value: 'client_secret_basic', label: 'client_secret_basic (HTTP Basic)' },
+		{ value: 'none', label: 'none (public client)' },
+	];
+
 	let connectorClientName = $state('');
 	let connectorGrantProfile = $state<AgentConnectorGrantProfile>('authorization_code');
 	let connectorClientPreset = $state<AgentConnectorClientPreset>('claude_ai');
 	let connectorRedirectUri = $state('');
 	let connectorWebsite = $state('');
+	let connectorAuthMethod = $state<TokenEndpointAuthMethod>('client_secret_post');
 	let connectorScopes = $state({ read: true, write: true, follow: true });
 	let connectorLoading = $state(false);
 	let connectorRotateClientId = $state<string | null>(null);
@@ -886,7 +894,7 @@
 				redirectUri,
 				scopes: scopes.join(' '),
 				grantTypes,
-				tokenEndpointAuthMethod: 'client_secret_post',
+				tokenEndpointAuthMethod: connectorAuthMethod,
 				grantProfile: connectorGrantProfile,
 				clientPreset,
 				website,
@@ -2151,7 +2159,34 @@
 							<p class="page__meta">
 								Most MCP clients should request at least <code>read write</code>. Stored grants:
 								<code>{formatGrantTypes(connectorGrantTypes(connectorGrantProfile))}</code> with
-								<code>client_secret_post</code>.
+								<code>{connectorAuthMethod}</code>.
+							</p>
+						</div>
+
+						<div class="settings-field">
+							<label class="settings-field__label" for="agent-connector-auth-method">
+								Token endpoint auth method
+							</label>
+							<select
+								class="settings-field__select"
+								id="agent-connector-auth-method"
+								bind:value={connectorAuthMethod}
+							>
+								{#each TOKEN_ENDPOINT_AUTH_METHODS as method (method.value)}
+									<option value={method.value}>{method.label}</option>
+								{/each}
+							</select>
+							<p class="page__meta">
+								{#if connectorAuthMethod === 'client_secret_basic'}
+									The MCP client sends credentials via HTTP Basic authentication header instead of the
+									request body. Some clients require this method.
+								{:else if connectorAuthMethod === 'none'}
+									Public client with no client secret. Use only when the client cannot securely store a
+									secret, such as browser-only applications.
+								{:else}
+									The default method sends client credentials in the token request body. Compatible with
+									most MCP clients including Claude.ai and Claude Code.
+								{/if}
 							</p>
 						</div>
 

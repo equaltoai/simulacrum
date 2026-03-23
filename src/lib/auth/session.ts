@@ -5,12 +5,15 @@ import { createPkcePair, generateRandomString } from './pkce';
 
 export const DEFAULT_OAUTH_SCOPE = 'read write follow';
 
+type TokenEndpointAuthMethod = 'client_secret_post' | 'client_secret_basic' | 'none';
+
 type StoredOAuthClient = {
 	clientId: string;
 	clientSecret?: string;
 	redirectUri: string;
 	scope: string;
 	createdAt: number;
+	tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
 };
 
 export type AuthSession = {
@@ -273,17 +276,29 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 
 	const tokenBody = new URLSearchParams({
 		grant_type: 'authorization_code',
-		client_id: client.clientId,
 		code,
 		redirect_uri: redirectUri,
 		code_verifier: codeVerifier,
 	});
 
-	if (client.clientSecret) tokenBody.set('client_secret', client.clientSecret);
+	const tokenHeaders: Record<string, string> = {
+		'content-type': 'application/x-www-form-urlencoded',
+	};
+
+	const authMethod = client.tokenEndpointAuthMethod ?? 'client_secret_post';
+	if (authMethod === 'client_secret_basic' && client.clientSecret) {
+		const credentials = btoa(`${client.clientId}:${client.clientSecret}`);
+		tokenHeaders['authorization'] = `Basic ${credentials}`;
+	} else {
+		tokenBody.set('client_id', client.clientId);
+		if (authMethod !== 'none' && client.clientSecret) {
+			tokenBody.set('client_secret', client.clientSecret);
+		}
+	}
 
 	const tokenResponse = await fetch('/oauth/token', {
 		method: 'POST',
-		headers: { 'content-type': 'application/x-www-form-urlencoded' },
+		headers: tokenHeaders,
 		body: tokenBody,
 	});
 
