@@ -3636,10 +3636,20 @@ export type AgentConnectorRegistration = {
 	website: string | null;
 	vapidKey: string | null;
 	grantTypes: string[];
+	responseTypes: string[];
 	tokenEndpointAuthMethod: string | null;
 	grantProfile: AgentConnectorGrantProfile;
 	clientPreset: AgentConnectorClientPreset;
 	rotation: AgentConnectorRotationStatus;
+	logoUri: string | null;
+	contacts: string[];
+	tosUri: string | null;
+	policyUri: string | null;
+	clientIdIssuedAt: number | null;
+	clientSecretExpiresAt: number | null;
+	scope: string | null;
+	softwareId: string | null;
+	softwareVersion: string | null;
 };
 export type AgentConnectorSecretRotation = {
 	clientId: string;
@@ -3837,7 +3847,17 @@ export async function registerAgentConnector({
 			website?: string;
 			vapid_key?: string;
 			grant_types?: string[];
+			response_types?: string[];
 			token_endpoint_auth_method?: string;
+			logo_uri?: string;
+			contacts?: string[];
+			tos_uri?: string;
+			policy_uri?: string;
+			client_id_issued_at?: number;
+			client_secret_expires_at?: number;
+			scope?: string;
+			software_id?: string;
+			software_version?: string;
 		}>({
 			path: '/api/v1/apps',
 			method: 'POST',
@@ -3858,6 +3878,7 @@ export async function registerAgentConnector({
 			website: data.website ?? null,
 			vapidKey: data.vapid_key ?? null,
 			grantTypes: [...(data.grant_types ?? grantTypes)],
+			responseTypes: [...(data.response_types ?? [])],
 			tokenEndpointAuthMethod: data.token_endpoint_auth_method ?? trimmedAuthMethod ?? null,
 			grantProfile,
 			clientPreset,
@@ -3869,6 +3890,15 @@ export async function registerAgentConnector({
 				lastError: null,
 				lastErrorAt: null,
 			},
+			logoUri: data.logo_uri ?? null,
+			contacts: [...(data.contacts ?? [])],
+			tosUri: data.tos_uri ?? null,
+			policyUri: data.policy_uri ?? null,
+			clientIdIssuedAt: data.client_id_issued_at ?? null,
+			clientSecretExpiresAt: data.client_secret_expires_at ?? null,
+			scope: data.scope ?? null,
+			softwareId: data.software_id ?? null,
+			softwareVersion: data.software_version ?? null,
 		};
 	} catch (error) {
 		throw new Error(restErrorMessage(error, 'Agent connector registration failed.'));

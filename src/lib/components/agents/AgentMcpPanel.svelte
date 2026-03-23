@@ -6,6 +6,8 @@
 		KNOWN_MCP_PROMPTS,
 		KNOWN_MCP_RESOURCES,
 		describeMcpError,
+		isInsufficientScopeError,
+		requiredScopeFromError,
 		fetchOAuthProtectedResource,
 		fetchMcpWellKnown,
 		inspectMcpServer,
@@ -23,6 +25,7 @@
 
 	interface Props {
 		canManage: boolean;
+		agentUsername: string;
 		latestConnector: AgentConnectorRegistration | null;
 		connectorSessionCount: number;
 		selectedLease: AgentAccessLease | null;
@@ -43,6 +46,7 @@
 
 	let {
 		canManage,
+		agentUsername,
 		latestConnector,
 		connectorSessionCount,
 		selectedLease,
@@ -62,6 +66,7 @@
 	let inspection = $state<McpInspection | null>(null);
 	let inspectionError = $state<string | null>(null);
 	let inspectionCheckedAt = $state<number | null>(null);
+	let inspectionRawError = $state<unknown>(null);
 
 	function tokenValue(): string {
 		return activeCredential?.accessToken?.trim() || '<advanced-access-token>';
@@ -150,6 +155,7 @@
 
 		inspectionStatus = 'loading';
 		inspectionError = null;
+		inspectionRawError = null;
 
 		try {
 			inspection = await inspectMcpServer({
@@ -163,13 +169,14 @@
 			inspection = null;
 			inspectionStatus = 'error';
 			inspectionError = describeMcpError(error);
+			inspectionRawError = error;
 		} finally {
 			inspectionCheckedAt = Date.now();
 		}
 	}
 
 	const transport = $derived.by<McpTransportConfig | null>(() =>
-		browser ? resolveMcpTransport(window.location.origin) : null
+		browser ? resolveMcpTransport(window.location.origin, agentUsername) : null
 	);
 
 	$effect(() => {
@@ -338,6 +345,11 @@
 		return live.map((name) => known.get(name) ?? { name, description: 'Prompt exposed by the MCP server.' });
 	});
 
+	const serverName = $derived.by(() => {
+		const label = agentUsername ? `@${agentUsername}` : 'agent';
+		return `simulacrum-${label.replace(/^@/, '')}`;
+	});
+
 	const claudeAiSnippet = $derived.by(() => {
 		const discovery = oauthDiscoveryUrl || 'https://api.example.com/.well-known/oauth-protected-resource';
 		return [
@@ -347,6 +359,32 @@
 			`Client ID: ${claudeAiClientId}`,
 			`Client Secret: ${claudeAiClientSecret}`,
 		].join('\n');
+	});
+
+	const claudeCodeMcpJson = $derived.by(() => {
+		const url = mcpEndpoint || 'https://api.example.com/mcp/agent';
+		const config: Record<string, unknown> = {
+			type: 'http',
+			url,
+		};
+
+		const hasRealCredentials =
+			latestConnector?.clientPreset === 'claude_code' && latestConnector.clientId;
+
+		if (hasRealCredentials) {
+			config.oauth = {
+				clientId: latestConnector!.clientId,
+				clientSecret: latestConnector!.clientSecret ?? undefined,
+				callbackPort: 8787,
+			};
+		} else {
+			config.oauth = {
+				clientId: claudeCodeClientId,
+				callbackPort: 8787,
+			};
+		}
+
+		return JSON.stringify({ mcpServers: { [serverName]: config } }, null, 2);
 	});
 
 	const claudeCodeSnippet = $derived.by(() => {
@@ -572,6 +610,13 @@
 					</p>
 				{:else if inspectionError}
 					<p class="mcp-panel__status-copy">{inspectionError}</p>
+					{#if isInsufficientScopeError(inspectionRawError)}
+						<p class="mcp-panel__status-copy">
+							The token's granted scopes do not cover this operation. Re-authorize the connector
+							with the required scope{requiredScopeFromError(inspectionRawError) ? ` (${requiredScopeFromError(inspectionRawError)})` : ''} to
+							resolve this. MCP clients should retry authorization no more than a few times to avoid loops.
+						</p>
+					{/if}
 				{:else}
 					<p class="mcp-panel__status-copy">
 						This advanced lease token is ready. Run a live check to verify authenticated MCP access.
@@ -591,6 +636,20 @@
 		</article>
 	</div>
 
+	<article class="mcp-panel__config-block">
+		<div class="settings-token__row">
+			<strong>Claude Code — .mcp.json config</strong>
+			<button type="button" class="gr-button gr-button--outline" onclick={() => copy(claudeCodeMcpJson)}>
+				Copy JSON
+			</button>
+		</div>
+		<pre class="settings-token__value settings-token__value--code">{claudeCodeMcpJson}</pre>
+		<p class="page__meta">
+			Register a Claude Code connector above, then paste this into your project’s <code>.mcp.json</code> file.
+			Claude Code will open a browser window to complete OAuth authorization on first use.
+		</p>
+	</article>
+
 	<div class="mcp-panel__snippet-grid">
 		<article class="mcp-panel__snippet">
 			<div class="settings-token__row">
@@ -607,14 +666,14 @@
 
 		<article class="mcp-panel__snippet">
 			<div class="settings-token__row">
-				<strong>Claude Code preset</strong>
+				<strong>Claude Code — manual fields</strong>
 				<button type="button" class="gr-button gr-button--outline" onclick={() => copy(claudeCodeSnippet)}>
 					Copy
 				</button>
 			</div>
 			<pre class="settings-token__value">{claudeCodeSnippet}</pre>
 			<p class="page__meta">
-				Register a dedicated Claude Code connector above, then use these values in the local MCP connector setup.
+				Individual field values if you prefer to configure a custom MCP client manually.
 			</p>
 		</article>
 
@@ -742,10 +801,15 @@
 		grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
 	}
 
+	.mcp-panel__config-block {
+		margin-top: var(--gr-spacing-scale-4);
+	}
+
 	.mcp-panel__fact,
 	.mcp-panel__setup,
 	.mcp-panel__status,
 	.mcp-panel__snippet,
+	.mcp-panel__config-block,
 	.mcp-panel__extra,
 	.mcp-panel__tool {
 		padding: var(--gr-spacing-scale-4);

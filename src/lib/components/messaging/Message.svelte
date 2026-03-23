@@ -2,8 +2,6 @@
   Messages.Message - Individual Message Display
 -->
 <script lang="ts">
-	import AgentDisclosureBadge from '$lib/components/agents/AgentDisclosureBadge.svelte';
-	import ContentRenderer from '$lib/components/ContentRenderer.svelte';
 	import { Menu } from '$lib/greater/primitives';
 	import { MoreVerticalIcon, TrashIcon } from '$lib/greater/icons';
 	import { formatMessageTime } from './utils.js';
@@ -19,11 +17,6 @@
 	let { message, currentUserId = 'me', class: className = '' }: Props = $props();
 
 	const isOwnMessage = $derived(message.sender.id === currentUserId);
-	const spoilerText = $derived.by(() => {
-		const trimmed = message.spoilerText?.trim();
-		if (trimmed) return trimmed;
-		return message.sensitive ? 'Sensitive message' : undefined;
-	});
 
 	const context = (() => {
 		try {
@@ -65,10 +58,7 @@
 	<div class="message__bubble">
 		<div class="message__header">
 			{#if !isOwnMessage}
-				<div class="message__sender">
-					{message.sender.displayName}
-					<AgentDisclosureBadge actor={message.sender} />
-				</div>
+				<div class="message__sender">{message.sender.displayName}</div>
 			{/if}
 
 			{#if context?.handlers.onDeleteMessage}
@@ -88,9 +78,7 @@
 			{/if}
 		</div>
 
-		<div class="message__content">
-			<ContentRenderer content={message.content} {spoilerText} />
-		</div>
+		<div class="message__content">{message.content}</div>
 		<time class="message__time">{formatMessageTime(message.createdAt)}</time>
 	</div>
 </div>

@@ -14,7 +14,6 @@ Handles reblog indicators automatically from context.
 -->
 
 <script lang="ts">
-	import AgentDisclosureBadge from '$lib/components/agents/AgentDisclosureBadge.svelte';
 	import type { Snippet } from 'svelte';
 	import { getStatusContext } from './context.js';
 	import { formatDateTime } from '$lib/greater/utils';
@@ -50,30 +49,6 @@ Handles reblog indicators automatically from context.
 
 	const dateTime = $derived(formatDateTime(actualStatus.createdAt));
 	const avatarSize = $derived(config.density === 'compact' ? 'sm' : 'md');
-	const agentAccount = $derived.by(() => {
-		if (!account || typeof account !== 'object') return null;
-		if (!('isAgent' in account) || !account.isAgent) return null;
-
-		return {
-			isAgent: true,
-			agentInfo:
-				'agentInfo' in account && account.agentInfo && typeof account.agentInfo === 'object'
-					? {
-							agentType:
-								'agentType' in account.agentInfo && typeof account.agentInfo.agentType === 'string'
-									? account.agentInfo.agentType
-									: undefined,
-							verified:
-								'verified' in account.agentInfo && typeof account.agentInfo.verified === 'boolean'
-									? account.agentInfo.verified
-									: undefined,
-						}
-					: undefined,
-		};
-	});
-	const isBotAccount = $derived.by(
-		() => !!account && typeof account === 'object' && 'bot' in account && Boolean(account.bot)
-	);
 </script>
 
 <div class={`status-header ${className}`}>
@@ -117,9 +92,7 @@ Handles reblog indicators automatically from context.
 					<a href={account.url} class="status-header__display-name">
 						{account.displayName || account.username}
 					</a>
-					{#if agentAccount}
-						<AgentDisclosureBadge actor={agentAccount} />
-					{:else if isBotAccount}
+					{#if account.bot}
 						<span class="status-header__bot-badge" aria-label="Bot account"> BOT </span>
 					{/if}
 				</div>

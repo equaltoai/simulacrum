@@ -243,6 +243,7 @@
 		grantProfile: AgentConnectorGrantProfile;
 		clientPreset: AgentConnectorClientPreset;
 		rotation: AgentConnectorRotationStatus;
+		clientSecretExpiresAt: number | null;
 	};
 
 	const AGENT_CONNECTOR_STORAGE_PREFIX = 'simulacrum:agent-connectors:';
@@ -303,6 +304,7 @@
 			grantProfile?: unknown;
 			clientPreset?: unknown;
 			rotation?: unknown;
+			clientSecretExpiresAt?: unknown;
 		};
 
 		if (
@@ -342,6 +344,8 @@
 			grantProfile,
 			clientPreset,
 			rotation: normalizeConnectorRotationStatus(connector.rotation),
+			clientSecretExpiresAt:
+				typeof connector.clientSecretExpiresAt === 'number' ? connector.clientSecretExpiresAt : null,
 		};
 	}
 
@@ -401,6 +405,7 @@
 			grantProfile: registration.grantProfile,
 			clientPreset: registration.clientPreset,
 			rotation: registration.rotation,
+			clientSecretExpiresAt: registration.clientSecretExpiresAt,
 		};
 
 		return upsertStoredAgentConnector(username, nextConnector);
@@ -598,11 +603,19 @@
 	// OAuth connector registration
 	let connectorRegistrations = $state<StoredAgentConnector[]>([]);
 	let latestConnector = $state<AgentConnectorRegistration | null>(null);
+	type TokenEndpointAuthMethod = 'client_secret_post' | 'client_secret_basic' | 'none';
+	const TOKEN_ENDPOINT_AUTH_METHODS: Array<{ value: TokenEndpointAuthMethod; label: string }> = [
+		{ value: 'client_secret_post', label: 'client_secret_post (default)' },
+		{ value: 'client_secret_basic', label: 'client_secret_basic (HTTP Basic)' },
+		{ value: 'none', label: 'none (public client)' },
+	];
+
 	let connectorClientName = $state('');
 	let connectorGrantProfile = $state<AgentConnectorGrantProfile>('authorization_code');
 	let connectorClientPreset = $state<AgentConnectorClientPreset>('claude_ai');
 	let connectorRedirectUri = $state('');
 	let connectorWebsite = $state('');
+	let connectorAuthMethod = $state<TokenEndpointAuthMethod>('client_secret_post');
 	let connectorScopes = $state({ read: true, write: true, follow: true });
 	let connectorLoading = $state(false);
 	let connectorRotateClientId = $state<string | null>(null);
@@ -610,7 +623,7 @@
 	let connectorMessage = $state<string | null>(null);
 
 	const connectorTransport = $derived.by(() =>
-		browser ? resolveMcpTransport(window.location.origin) : null
+		browser ? resolveMcpTransport(window.location.origin, agent?.username) : null
 	);
 
 	// Runtime session inventory for connector diagnostics and cleanup
@@ -681,6 +694,18 @@
 			return `Rotated ${formatDateTime(rotation.rotatedAt)} with a ${rotation.gracePeriodSeconds}s grace window.`;
 		}
 		return `Rotated ${formatDateTime(rotation.rotatedAt)}.`;
+	}
+
+	function connectorSecretExpirySummary(expiresAt: number | null): string | null {
+		if (!expiresAt || expiresAt === 0) return null;
+		const expiresMs = expiresAt * 1000;
+		const now = Date.now();
+		if (expiresMs <= now) return 'Client secret has expired. Rotate the secret to restore access.';
+		const hoursRemaining = Math.floor((expiresMs - now) / (60 * 60 * 1000));
+		if (hoursRemaining < 24) return `Client secret expires in ${hoursRemaining}h. Consider rotating soon.`;
+		const daysRemaining = Math.floor(hoursRemaining / 24);
+		if (daysRemaining <= 7) return `Client secret expires in ${daysRemaining}d.`;
+		return null;
 	}
 
 	type ConnectorSessionHealth =
@@ -869,7 +894,7 @@
 				redirectUri,
 				scopes: scopes.join(' '),
 				grantTypes,
-				tokenEndpointAuthMethod: 'client_secret_post',
+				tokenEndpointAuthMethod: connectorAuthMethod,
 				grantProfile: connectorGrantProfile,
 				clientPreset,
 				website,
@@ -929,11 +954,21 @@
 				website: connector.website ?? null,
 				vapidKey: latestConnector?.clientId === connector.clientId ? latestConnector.vapidKey : null,
 				grantTypes: connector.grantTypes,
+				responseTypes: latestConnector?.clientId === connector.clientId ? latestConnector.responseTypes : [],
 				tokenEndpointAuthMethod:
 					rotation.tokenEndpointAuthMethod ?? connector.tokenEndpointAuthMethod ?? 'client_secret_post',
 				grantProfile: connector.grantProfile,
 				clientPreset: connector.clientPreset,
 				rotation: rotation.rotation,
+				logoUri: latestConnector?.clientId === connector.clientId ? latestConnector.logoUri : null,
+				contacts: latestConnector?.clientId === connector.clientId ? latestConnector.contacts : [],
+				tosUri: latestConnector?.clientId === connector.clientId ? latestConnector.tosUri : null,
+				policyUri: latestConnector?.clientId === connector.clientId ? latestConnector.policyUri : null,
+				clientIdIssuedAt: latestConnector?.clientId === connector.clientId ? latestConnector.clientIdIssuedAt : null,
+				clientSecretExpiresAt: latestConnector?.clientId === connector.clientId ? latestConnector.clientSecretExpiresAt : null,
+				scope: latestConnector?.clientId === connector.clientId ? latestConnector.scope : null,
+				softwareId: latestConnector?.clientId === connector.clientId ? latestConnector.softwareId : null,
+				softwareVersion: latestConnector?.clientId === connector.clientId ? latestConnector.softwareVersion : null,
 			};
 			connectorMessage = forceInvalidate
 				? 'Connector secret rotated with immediate invalidation. Distribute the replacement secret before the client reconnects.'
@@ -2124,7 +2159,34 @@
 							<p class="page__meta">
 								Most MCP clients should request at least <code>read write</code>. Stored grants:
 								<code>{formatGrantTypes(connectorGrantTypes(connectorGrantProfile))}</code> with
-								<code>client_secret_post</code>.
+								<code>{connectorAuthMethod}</code>.
+							</p>
+						</div>
+
+						<div class="settings-field">
+							<label class="settings-field__label" for="agent-connector-auth-method">
+								Token endpoint auth method
+							</label>
+							<select
+								class="settings-field__select"
+								id="agent-connector-auth-method"
+								bind:value={connectorAuthMethod}
+							>
+								{#each TOKEN_ENDPOINT_AUTH_METHODS as method (method.value)}
+									<option value={method.value}>{method.label}</option>
+								{/each}
+							</select>
+							<p class="page__meta">
+								{#if connectorAuthMethod === 'client_secret_basic'}
+									The MCP client sends credentials via HTTP Basic authentication header instead of the
+									request body. Some clients require this method.
+								{:else if connectorAuthMethod === 'none'}
+									Public client with no client secret. Use only when the client cannot securely store a
+									secret, such as browser-only applications.
+								{:else}
+									The default method sends client credentials in the token request body. Compatible with
+									most MCP clients including Claude.ai and Claude Code.
+								{/if}
 							</p>
 						</div>
 
@@ -2252,6 +2314,11 @@
 							{/if}
 						</div>
 						<div class="page__meta">{connectorRotationSummary(latestConnector.rotation)}</div>
+						{#if connectorSecretExpirySummary(latestConnector.clientSecretExpiresAt)}
+							<div class="settings-form__notice settings-form__notice--error" role="alert">
+								{connectorSecretExpirySummary(latestConnector.clientSecretExpiresAt)}
+							</div>
+						{/if}
 					{/if}
 				</div>
 
@@ -2276,6 +2343,11 @@
 										</span>
 									</div>
 									<div class="page__meta">{connectorRotationSummary(connector.rotation)}</div>
+									{#if connectorSecretExpirySummary(connector.clientSecretExpiresAt)}
+										<div class="settings-form__notice settings-form__notice--error" role="alert">
+											{connectorSecretExpirySummary(connector.clientSecretExpiresAt)}
+										</div>
+									{/if}
 								</div>
 								<div class="settings-form__actions">
 									<button
@@ -2490,6 +2562,7 @@
 
 		<AgentMcpPanel
 			{canManage}
+			agentUsername={agent?.username ?? ''}
 			{latestConnector}
 			{connectorSessionCount}
 			selectedLease={selectedLease}

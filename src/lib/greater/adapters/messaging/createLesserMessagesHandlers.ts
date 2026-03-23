@@ -7,6 +7,7 @@ import {
 	DeclineMessageRequestDocument,
 	DeleteConversationDocument,
 	DeleteMessageDocument,
+	SendMessageDocument,
 } from '../graphql/generated/types.js';
 
 export type ConversationFolder = 'INBOX' | 'REQUESTS';
@@ -23,14 +24,6 @@ export interface MessageParticipant {
 	username: string;
 	displayName: string;
 	avatar?: string;
-	bot?: boolean;
-	isAgent?: boolean;
-	agentInfo?: {
-		id?: string;
-		agentType?: string | null;
-		verified?: boolean;
-		verifiedAt?: string | null;
-	} | null;
 }
 
 export interface DirectMessage {
@@ -38,26 +31,14 @@ export interface DirectMessage {
 	conversationId: string;
 	sender: MessageParticipant;
 	content: string;
-	language?: string | null;
 	createdAt: string;
-	inReplyToId?: string | null;
 	read: boolean;
-	sensitive?: boolean;
-	spoilerText?: string | null;
 	mediaAttachments?: {
 		url: string;
 		type: string;
 		previewUrl?: string;
 		description?: string;
 	}[];
-}
-
-export interface SendMessageOptions {
-	mediaIds?: string[];
-	sensitive?: boolean;
-	spoilerText?: string | null;
-	language?: string | null;
-	inReplyToId?: string | null;
 }
 
 export interface Conversation {
@@ -92,7 +73,7 @@ export interface MessagesHandlers {
 	onSendMessage?: (
 		conversationId: string,
 		content: string,
-		options?: SendMessageOptions
+		mediaIds?: string[]
 	) => Promise<DirectMessage>;
 	onMarkRead?: (conversationId: string) => Promise<void>;
 	onDeleteMessage?: (messageId: string) => Promise<boolean>;
@@ -131,16 +112,6 @@ function mapActorToParticipant(actor: ActorSummaryFragment): MessageParticipant 
 		username: actor.username,
 		displayName: actor.displayName ?? actor.username,
 		avatar: actor.avatar ?? undefined,
-		bot: actor.bot,
-		isAgent: actor.isAgent,
-		agentInfo: actor.agentInfo
-			? {
-					id: actor.agentInfo.id,
-					agentType: actor.agentInfo.agentType,
-					verified: actor.agentInfo.verified,
-					verifiedAt: actor.agentInfo.verifiedAt ?? null,
-				}
-			: null,
 	};
 }
 
@@ -148,18 +119,13 @@ function mapObjectToDirectMessage(
 	object: ObjectFieldsFragment,
 	conversationId: string
 ): DirectMessage {
-	const primaryContent = object.contentMap[0];
 	return {
 		id: object.id,
 		conversationId,
 		sender: mapActorToParticipant(object.actor),
 		content: object.content,
-		language: primaryContent?.language ?? null,
 		createdAt: object.createdAt,
-		inReplyToId: object.inReplyTo?.id ?? null,
 		read: true,
-		sensitive: object.sensitive,
-		spoilerText: object.spoilerText ?? null,
 		mediaAttachments: object.attachments.map((attachment) => ({
 			url: attachment.url,
 			type: attachment.type,
@@ -216,14 +182,14 @@ export function createLesserMessagesHandlers(
 				mapObjectToDirectMessage(edge.node, conversationId)
 			);
 		},
-		onSendMessage: async (conversationId, content, options) => {
-			const payload = await adapter.sendMessage(conversationId, content, {
-				...options,
-				mediaIds:
-					options?.mediaIds && options.mediaIds.length > 0 ? options.mediaIds : undefined,
+		onSendMessage: async (conversationId, content, mediaIds) => {
+			const data = await adapter.mutate(SendMessageDocument, {
+				conversationId,
+				content,
+				mediaIds: mediaIds && mediaIds.length > 0 ? mediaIds : undefined,
 			});
 
-			return mapObjectToDirectMessage(payload.message, conversationId);
+			return mapObjectToDirectMessage(data.sendMessage.message, conversationId);
 		},
 		onCreateConversation: async (participantIds) => {
 			if (participantIds.length !== 1) {
