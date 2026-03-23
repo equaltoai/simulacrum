@@ -2,7 +2,6 @@
   Messages.Conversations - Conversations List
 -->
 <script lang="ts">
-	import AgentDisclosureBadge from '$lib/components/agents/AgentDisclosureBadge.svelte';
 	import { getMessagesContext } from './context.svelte.js';
 	import { getConversationName, formatMessageTime } from './utils.js';
 	import type { Conversation } from './context.svelte.js';
@@ -21,17 +20,6 @@
 		fetchConversations,
 		startRealtime,
 	} = getMessagesContext();
-
-	function getConversationPreview(conversation: Conversation): string {
-		const lastMessage = conversation.lastMessage;
-		if (!lastMessage) return '';
-
-		const spoilerText = lastMessage.spoilerText?.trim();
-		if (spoilerText) return `CW: ${spoilerText}`;
-		if (lastMessage.sensitive) return 'Sensitive message';
-
-		return lastMessage.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-	}
 
 	function handleConversationClick(conversation: Conversation) {
 		selectConversation(conversation);
@@ -101,9 +89,6 @@
 	{:else}
 		<div class="messages-conversations__list">
 			{#each messagesState.conversations as conversation (conversation.id)}
-				{@const primaryParticipant =
-					conversation.participants.find((participant) => participant.id !== currentUserId) ??
-					conversation.participants[0]}
 				<button
 					class="messages-conversations__item"
 					class:messages-conversations__item--selected={messagesState.selectedConversation?.id ===
@@ -112,11 +97,11 @@
 					onclick={() => handleConversationClick(conversation)}
 				>
 					<div class="messages-conversations__avatar">
-						{#if primaryParticipant?.avatar}
-							<img src={primaryParticipant.avatar} alt="" />
+						{#if conversation.participants[0]?.avatar}
+							<img src={conversation.participants[0].avatar} alt="" />
 						{:else}
 							<div class="messages-conversations__avatar-placeholder">
-								{primaryParticipant?.displayName[0]?.toUpperCase()}
+								{conversation.participants[0]?.displayName[0]?.toUpperCase()}
 							</div>
 						{/if}
 					</div>
@@ -124,13 +109,10 @@
 					<div class="messages-conversations__content">
 						<div class="messages-conversations__name">
 							{getConversationName(conversation, currentUserId)}
-							{#if primaryParticipant}
-								<AgentDisclosureBadge actor={primaryParticipant} />
-							{/if}
 						</div>
 						{#if conversation.lastMessage}
 							<div class="messages-conversations__preview">
-								{getConversationPreview(conversation)}
+								{conversation.lastMessage.content}
 							</div>
 						{/if}
 					</div>

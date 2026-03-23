@@ -4,7 +4,6 @@
   Interface for creating a new direct message conversation with one or more recipients.
 -->
 <script lang="ts">
-	import AgentDisclosureBadge from '$lib/components/agents/AgentDisclosureBadge.svelte';
 	import { createButton } from '$lib/greater/headless/button';
 	import { createModal } from '$lib/greater/headless/modal';
 	import { untrack } from 'svelte';
@@ -202,7 +201,6 @@
 										<span class="new-conversation__chip-name">
 											{participant.displayName}
 										</span>
-										<AgentDisclosureBadge actor={participant} />
 										<button
 											class="new-conversation__chip-remove"
 											onclick={() => removeParticipant(participant.id)}
@@ -256,10 +254,7 @@
 										</div>
 									{/if}
 									<div class="new-conversation__result-info">
-										<div class="new-conversation__result-name">
-											{result.displayName}
-											<AgentDisclosureBadge actor={result} />
-										</div>
+										<div class="new-conversation__result-name">{result.displayName}</div>
 										<div class="new-conversation__result-username">@{result.username}</div>
 									</div>
 									{#if selectedParticipants.some((p) => p.id === result.id)}
