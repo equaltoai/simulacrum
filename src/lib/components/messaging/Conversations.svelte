@@ -22,6 +22,17 @@
 		startRealtime,
 	} = getMessagesContext();
 
+	function getConversationPreview(conversation: Conversation): string {
+		const lastMessage = conversation.lastMessage;
+		if (!lastMessage) return '';
+
+		const spoilerText = lastMessage.spoilerText?.trim();
+		if (spoilerText) return `CW: ${spoilerText}`;
+		if (lastMessage.sensitive) return 'Sensitive message';
+
+		return lastMessage.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+	}
+
 	function handleConversationClick(conversation: Conversation) {
 		selectConversation(conversation);
 		handlers.onConversationClick?.(conversation);
@@ -119,7 +130,7 @@
 						</div>
 						{#if conversation.lastMessage}
 							<div class="messages-conversations__preview">
-								{conversation.lastMessage.content}
+								{getConversationPreview(conversation)}
 							</div>
 						{/if}
 					</div>

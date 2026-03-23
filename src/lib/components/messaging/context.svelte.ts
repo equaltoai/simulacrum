@@ -39,8 +39,12 @@ export interface DirectMessage {
 	conversationId: string;
 	sender: MessageParticipant;
 	content: string;
+	language?: string | null;
 	createdAt: string;
+	inReplyToId?: string | null;
 	read: boolean;
+	sensitive?: boolean;
+	spoilerText?: string | null;
 	mediaAttachments?: {
 		url: string;
 		type: string;
@@ -128,7 +132,7 @@ export interface MessagesHandlers {
 	onSendMessage?: (
 		conversationId: string,
 		content: string,
-		mediaIds?: string[]
+		options?: SendMessageOptions
 	) => Promise<DirectMessage>;
 
 	/**
@@ -198,6 +202,14 @@ export interface MessageMediaUploadMetadata {
 	sensitive: boolean;
 	spoilerText?: string;
 	description?: string;
+}
+
+export interface SendMessageOptions {
+	mediaIds?: string[];
+	sensitive?: boolean;
+	spoilerText?: string | null;
+	language?: string | null;
+	inReplyToId?: string | null;
 }
 
 export interface FetchConversationsOptions {
@@ -305,7 +317,7 @@ export interface MessagesContext {
 	/**
 	 * Send a message
 	 */
-	sendMessage: (content: string, mediaIds?: string[]) => Promise<void>;
+	sendMessage: (content: string, options?: SendMessageOptions) => Promise<void>;
 
 	/**
 	 * Delete a message
@@ -696,7 +708,7 @@ export function createMessagesContext(handlers: MessagesHandlers = {}): Messages
 				}
 			}
 		},
-		sendMessage: async (content: string, mediaIds?: string[]) => {
+		sendMessage: async (content: string, options?: SendMessageOptions) => {
 			if (!state.selectedConversation || !content.trim()) return;
 			if ((state.selectedConversation.requestState ?? 'ACCEPTED') === 'PENDING') return;
 
@@ -707,7 +719,7 @@ export function createMessagesContext(handlers: MessagesHandlers = {}): Messages
 				const message = await handlers.onSendMessage?.(
 					state.selectedConversation.id,
 					content,
-					mediaIds
+					options
 				);
 				if (message) {
 					state.messages = [...state.messages, message];

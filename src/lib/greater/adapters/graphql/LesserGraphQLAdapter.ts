@@ -261,6 +261,14 @@ import {
 
 export type ViewerQuery = { viewer: Actor };
 
+export interface SendConversationMessageOptions {
+	mediaIds?: string[];
+	sensitive?: boolean;
+	spoilerText?: string | null;
+	language?: string | null;
+	inReplyToId?: string | null;
+}
+
 const ViewerDocument = {
 	kind: 'Document',
 	definitions: [
@@ -973,11 +981,20 @@ export class LesserGraphQLAdapter {
 		return data.createConversation;
 	}
 
-	async sendMessage(conversationId: string, content: string, mediaIds?: string[]) {
+	async sendMessage(
+		conversationId: string,
+		content: string,
+		options: SendConversationMessageOptions = {}
+	) {
+		const { mediaIds, sensitive, spoilerText, language, inReplyToId } = options;
 		const data = await this.mutate(SendMessageDocument, {
 			conversationId,
 			content,
 			mediaIds,
+			...(typeof sensitive === 'boolean' ? { sensitive } : {}),
+			...(spoilerText !== undefined ? { spoilerText } : {}),
+			...(language !== undefined ? { language } : {}),
+			...(inReplyToId !== undefined ? { inReplyToId } : {}),
 		});
 		return data.sendMessage;
 	}

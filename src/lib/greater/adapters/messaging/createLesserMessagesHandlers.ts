@@ -7,7 +7,6 @@ import {
 	DeclineMessageRequestDocument,
 	DeleteConversationDocument,
 	DeleteMessageDocument,
-	SendMessageDocument,
 } from '../graphql/generated/types.js';
 
 export type ConversationFolder = 'INBOX' | 'REQUESTS';
@@ -39,14 +38,26 @@ export interface DirectMessage {
 	conversationId: string;
 	sender: MessageParticipant;
 	content: string;
+	language?: string | null;
 	createdAt: string;
+	inReplyToId?: string | null;
 	read: boolean;
+	sensitive?: boolean;
+	spoilerText?: string | null;
 	mediaAttachments?: {
 		url: string;
 		type: string;
 		previewUrl?: string;
 		description?: string;
 	}[];
+}
+
+export interface SendMessageOptions {
+	mediaIds?: string[];
+	sensitive?: boolean;
+	spoilerText?: string | null;
+	language?: string | null;
+	inReplyToId?: string | null;
 }
 
 export interface Conversation {
@@ -81,7 +92,7 @@ export interface MessagesHandlers {
 	onSendMessage?: (
 		conversationId: string,
 		content: string,
-		mediaIds?: string[]
+		options?: SendMessageOptions
 	) => Promise<DirectMessage>;
 	onMarkRead?: (conversationId: string) => Promise<void>;
 	onDeleteMessage?: (messageId: string) => Promise<boolean>;
@@ -137,13 +148,18 @@ function mapObjectToDirectMessage(
 	object: ObjectFieldsFragment,
 	conversationId: string
 ): DirectMessage {
+	const primaryContent = object.contentMap[0];
 	return {
 		id: object.id,
 		conversationId,
 		sender: mapActorToParticipant(object.actor),
 		content: object.content,
+		language: primaryContent?.language ?? null,
 		createdAt: object.createdAt,
+		inReplyToId: object.inReplyTo?.id ?? null,
 		read: true,
+		sensitive: object.sensitive,
+		spoilerText: object.spoilerText ?? null,
 		mediaAttachments: object.attachments.map((attachment) => ({
 			url: attachment.url,
 			type: attachment.type,
@@ -200,14 +216,14 @@ export function createLesserMessagesHandlers(
 				mapObjectToDirectMessage(edge.node, conversationId)
 			);
 		},
-		onSendMessage: async (conversationId, content, mediaIds) => {
-			const data = await adapter.mutate(SendMessageDocument, {
-				conversationId,
-				content,
-				mediaIds: mediaIds && mediaIds.length > 0 ? mediaIds : undefined,
+		onSendMessage: async (conversationId, content, options) => {
+			const payload = await adapter.sendMessage(conversationId, content, {
+				...options,
+				mediaIds:
+					options?.mediaIds && options.mediaIds.length > 0 ? options.mediaIds : undefined,
 			});
 
-			return mapObjectToDirectMessage(data.sendMessage.message, conversationId);
+			return mapObjectToDirectMessage(payload.message, conversationId);
 		},
 		onCreateConversation: async (participantIds) => {
 			if (participantIds.length !== 1) {
