@@ -623,7 +623,7 @@
 	let connectorMessage = $state<string | null>(null);
 
 	const connectorTransport = $derived.by(() =>
-		browser ? resolveMcpTransport(window.location.origin) : null
+		browser ? resolveMcpTransport(window.location.origin, agent?.username) : null
 	);
 
 	// Runtime session inventory for connector diagnostics and cleanup
@@ -2562,6 +2562,7 @@
 
 		<AgentMcpPanel
 			{canManage}
+			agentUsername={agent?.username ?? ''}
 			{latestConnector}
 			{connectorSessionCount}
 			selectedLease={selectedLease}
