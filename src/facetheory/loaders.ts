@@ -75,6 +75,10 @@ import type {
 	HostWorkflowState,
 	MintTranscriptMessage,
 } from './types';
+import {
+	HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+	HOST_WORKFLOW_BRIDGE_ENABLED,
+} from './flags';
 
 interface ViewerInfo {
 	id: string;
@@ -694,8 +698,11 @@ const PREVIEW_MY_SOULS: readonly SoulInventoryRecord[] = [
 ];
 
 const PREVIEW_HOST_WORKFLOW: HostWorkflowState = {
+	bridgeEnabled: HOST_WORKFLOW_BRIDGE_ENABLED,
 	tokenConfigured: false,
-	authNote: SOUL_WORKFLOW_HOST_AUTH_NOTE,
+	authNote: HOST_WORKFLOW_BRIDGE_ENABLED
+		? SOUL_WORKFLOW_HOST_AUTH_NOTE
+		: HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
 	promotion: null,
 	lifecycleEvents: [
 		{
@@ -931,13 +938,15 @@ export async function loadClientAppState({
 			])
 		: [null, null];
 
-	const hostWorkflow = activeAgent
-		? await loadHostWorkflow({
-				token: hostToken ?? null,
-				agentId: activeAgent.id,
-				signal,
-			})
-		: emptyHostWorkflow(Boolean(hostToken?.trim()));
+	const hostWorkflow = !HOST_WORKFLOW_BRIDGE_ENABLED
+		? emptyHostWorkflow(false, false)
+		: activeAgent
+			? await loadHostWorkflow({
+					token: hostToken ?? null,
+					agentId: activeAgent.id,
+					signal,
+				})
+			: emptyHostWorkflow(Boolean(hostToken?.trim()), true);
 
 	return assembleAppState({
 		page,
@@ -1000,7 +1009,7 @@ async function loadHostWorkflow({
 	signal?: AbortSignal;
 }): Promise<HostWorkflowState> {
 	if (!token?.trim()) {
-		return emptyHostWorkflow(false);
+		return emptyHostWorkflow(false, true);
 	}
 
 	try {
@@ -1036,6 +1045,7 @@ async function loadHostWorkflow({
 		const producedDeclarations = parseProducedDeclarations(fullConversation);
 
 		return {
+			bridgeEnabled: true,
 			tokenConfigured: true,
 			authNote: SOUL_WORKFLOW_HOST_AUTH_NOTE,
 			promotion,
@@ -1047,14 +1057,15 @@ async function loadHostWorkflow({
 			expectedWallet: promotion?.wallet ?? null,
 		};
 	} catch {
-		return emptyHostWorkflow(true);
+		return emptyHostWorkflow(true, true);
 	}
 }
 
-function emptyHostWorkflow(tokenConfigured: boolean): HostWorkflowState {
+function emptyHostWorkflow(tokenConfigured: boolean, bridgeEnabled: boolean): HostWorkflowState {
 	return {
+		bridgeEnabled,
 		tokenConfigured,
-		authNote: SOUL_WORKFLOW_HOST_AUTH_NOTE,
+		authNote: bridgeEnabled ? SOUL_WORKFLOW_HOST_AUTH_NOTE : HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
 		promotion: null,
 		lifecycleEvents: [],
 		conversations: [],
@@ -1158,7 +1169,13 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		hero: {
 			eyebrow: input.page.eyebrow,
 			title: input.page.title,
-			summary: `${input.page.summary} ${input.hostWorkflow.tokenConfigured ? 'Host workflow data is connected.' : 'Connect a lesser-host control-plane token to load the live mint lane.'}`,
+			summary: `${input.page.summary} ${
+				input.hostWorkflow.bridgeEnabled
+					? input.hostWorkflow.tokenConfigured
+						? 'Host workflow data is connected.'
+						: 'Connect a lesser-host control-plane token to load the live mint lane.'
+					: 'This build keeps the host workflow bridge deliberately gated.'
+			}`,
 		},
 		filters: buildRequestFilters(rawRequestQueue),
 		notifications,
@@ -1168,10 +1185,18 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		callouts: [
 			{
 				id: 'request-note-host',
-				title: input.hostWorkflow.tokenConfigured ? 'Host workflow linked' : 'Host token required for mint lane',
+				title: input.hostWorkflow.bridgeEnabled
+					? input.hostWorkflow.tokenConfigured
+						? 'Host workflow linked'
+						: 'Host token required for mint lane'
+					: 'Host bridge disabled for this build',
 				summary: input.hostWorkflow.authNote,
 				meta: input.hostWorkflow.selectedConversation?.conversation_id ?? undefined,
-				tone: input.hostWorkflow.tokenConfigured ? 'success' : 'warning',
+				tone: input.hostWorkflow.bridgeEnabled
+					? input.hostWorkflow.tokenConfigured
+						? 'success'
+						: 'warning'
+					: 'accent',
 			},
 			{
 				id: 'request-note-entry',
@@ -1208,10 +1233,18 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		focusNotes: [
 			{
 				id: 'genesis-note-token',
-				title: input.hostWorkflow.tokenConfigured ? 'Streaming lane is unlocked' : 'Connect lesser-host for live streaming',
+				title: input.hostWorkflow.bridgeEnabled
+					? input.hostWorkflow.tokenConfigured
+						? 'Streaming lane is unlocked'
+						: 'Connect lesser-host for live streaming'
+					: 'Streaming lane deliberately gated',
 				summary: input.hostWorkflow.authNote,
 				meta: input.hostWorkflow.selectedConversation?.status ?? undefined,
-				tone: input.hostWorkflow.tokenConfigured ? 'success' : 'warning',
+				tone: input.hostWorkflow.bridgeEnabled
+					? input.hostWorkflow.tokenConfigured
+						? 'success'
+						: 'warning'
+					: 'accent',
 			},
 			{
 				id: 'genesis-note-llm',
@@ -1583,9 +1616,21 @@ function buildStatusChips(
 			tone: semantics.bodyIdentityPreserved ? 'success' : 'warning',
 		},
 		{
-			label: hostWorkflow.tokenConfigured ? 'Host workflow linked' : 'Host workflow gated',
-			detail: hostWorkflow.tokenConfigured ? 'conversation and finalize actions unlocked' : 'requires control-plane token',
-			tone: hostWorkflow.tokenConfigured ? 'success' : 'warning',
+			label: hostWorkflow.bridgeEnabled
+				? hostWorkflow.tokenConfigured
+					? 'Host workflow linked'
+					: 'Host workflow gated'
+				: 'Host bridge disabled',
+			detail: hostWorkflow.bridgeEnabled
+				? hostWorkflow.tokenConfigured
+					? 'conversation and finalize actions unlocked'
+					: 'requires control-plane token'
+				: 'mint conversation and finalize intentionally gated',
+			tone: hostWorkflow.bridgeEnabled
+				? hostWorkflow.tokenConfigured
+					? 'success'
+					: 'warning'
+				: 'accent',
 		},
 	];
 }
