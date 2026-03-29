@@ -4,13 +4,11 @@
 		ReplyIcon as Reply,
 		RepeatIcon as Boost,
 		FavoriteIcon as Favorite,
-		BookmarkIcon as Bookmark,
-		MapPinIcon as Pin,
-		Trash2Icon as Trash,
 		ShareIcon as Share,
 		RepeatIcon as Unboost,
 		UnfavoriteIcon as Unfavorite,
 	} from '$lib/greater/icons';
+	import { copyToClipboard } from '$lib/greater/utils';
 	import type { Snippet } from 'svelte';
 
 	interface ActionCounts {
@@ -21,21 +19,17 @@
 	}
 
 	interface ActionStates {
-		boosted?: boolean | null;
-		favorited?: boolean | null;
-		bookmarked?: boolean | null;
-		pinned?: boolean | null;
+		boosted?: boolean;
+		favorited?: boolean;
+		bookmarked?: boolean;
 	}
 
 	interface ActionHandlers {
 		onReply?: () => Promise<void> | void;
 		onBoost?: () => Promise<void> | void;
 		onFavorite?: () => Promise<void> | void;
-		onBookmark?: () => Promise<void> | void;
-		onPin?: () => Promise<void> | void;
 		onShare?: () => Promise<void> | void;
 		onQuote?: () => Promise<void> | void;
-		onDelete?: () => Promise<void> | void;
 	}
 
 	interface Props {
@@ -51,6 +45,18 @@
 		 * Action event handlers
 		 */
 		handlers?: ActionHandlers;
+		/**
+		 * URL to share/copy when `handlers.onShare` is not provided.
+		 */
+		shareUrl?: string;
+		/**
+		 * Optional title for Web Share API.
+		 */
+		shareTitle?: string;
+		/**
+		 * Optional text for Web Share API.
+		 */
+		shareText?: string;
 		/**
 		 * Whether the action bar is in read-only mode (disables all actions)
 		 */
@@ -71,16 +77,6 @@
 		 * ID prefix for accessibility
 		 */
 		idPrefix?: string;
-
-		/**
-		 * URL to share/copy when no custom onShare handler is provided.
-		 */
-		shareUrl?: string;
-
-		/**
-		 * Title used by the Web Share API (when available).
-		 */
-		shareTitle?: string;
 	}
 
 	let {
@@ -94,6 +90,7 @@
 		idPrefix = 'action',
 		shareUrl,
 		shareTitle,
+		shareText,
 	}: Props = $props();
 
 	// Loading states for each action
@@ -101,22 +98,13 @@
 	let boostLoading = $state(false);
 	let quoteLoading = $state(false);
 	let favoriteLoading = $state(false);
-	let bookmarkLoading = $state(false);
-	let pinLoading = $state(false);
 	let shareLoading = $state(false);
-	let deleteLoading = $state(false);
 
 	const quotesCount = $derived(counts.quotes ?? 0);
 
 	// Derived state for action states
-	const isBoosted = $derived(states.boosted === true);
-	const isFavorited = $derived(states.favorited === true);
-	const isBookmarked = $derived(states.bookmarked === true);
-	const isPinned = $derived(states.pinned === true);
-
-	function ariaPressed(value: boolean | null | undefined): boolean | undefined {
-		return typeof value === 'boolean' ? value : undefined;
-	}
+	const isBoosted = $derived(states.boosted ?? false);
+	const isFavorited = $derived(states.favorited ?? false);
 
 	// Format count display (e.g., 1K for 1000)
 	function formatCount(count: number): string {
@@ -166,34 +154,9 @@
 		}
 	}
 
-	async function handleBookmark() {
-		if (readonly || bookmarkLoading || !handlers.onBookmark) return;
-
-		bookmarkLoading = true;
-		try {
-			await handlers.onBookmark();
-		} catch (error) {
-			console.error('Bookmark action failed:', error);
-		} finally {
-			bookmarkLoading = false;
-		}
-	}
-
-	async function handlePin() {
-		if (readonly || pinLoading || !handlers.onPin) return;
-
-		pinLoading = true;
-		try {
-			await handlers.onPin();
-		} catch (error) {
-			console.error('Pin action failed:', error);
-		} finally {
-			pinLoading = false;
-		}
-	}
-
 	async function handleShare() {
 		if (readonly || shareLoading) return;
+		if (!handlers.onShare && !shareUrl) return;
 
 		shareLoading = true;
 		try {
@@ -202,36 +165,22 @@
 				return;
 			}
 
-			if (!shareUrl) return;
-
-			if (typeof navigator !== 'undefined' && 'share' in navigator) {
-				const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
-				if (nav.share) {
-					await nav.share({ url: shareUrl, title: shareTitle });
-					return;
+			const url = shareUrl!;
+			if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+				const data: { url: string; title?: string; text?: string } = { url };
+				if (shareTitle) data.title = shareTitle;
+				if (shareText) data.text = shareText;
+				await navigator.share(data);
+			} else {
+				const result = await copyToClipboard(url);
+				if (!result.success) {
+					throw new Error(result.error || 'Failed to copy link');
 				}
-			}
-
-			if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-				await navigator.clipboard.writeText(shareUrl);
 			}
 		} catch (error) {
 			console.error('Share action failed:', error);
 		} finally {
 			shareLoading = false;
-		}
-	}
-
-	async function handleDelete() {
-		if (readonly || deleteLoading || !handlers.onDelete) return;
-
-		deleteLoading = true;
-		try {
-			await handlers.onDelete();
-		} catch (error) {
-			console.error('Delete action failed:', error);
-		} finally {
-			deleteLoading = false;
 		}
 	}
 
@@ -253,7 +202,7 @@
 	<Button
 		variant="ghost"
 		{size}
-		disabled={readonly || replyLoading}
+		disabled={readonly || replyLoading || !handlers.onReply}
 		loading={replyLoading}
 		onclick={handleReply}
 		class="gr-action-bar__button gr-action-bar__button--reply"
@@ -277,7 +226,7 @@
 	<Button
 		variant="ghost"
 		{size}
-		disabled={readonly || boostLoading}
+		disabled={readonly || boostLoading || !handlers.onBoost}
 		loading={boostLoading}
 		onclick={handleBoost}
 		class={`gr-action-bar__button gr-action-bar__button--boost${isBoosted ? ' gr-action-bar__button--active' : ''}`}
@@ -286,7 +235,7 @@
 			: counts.boosts > 0
 				? `Boost this post. ${counts.boosts} boosts`
 				: 'Boost this post'}
-		aria-pressed={ariaPressed(states.boosted)}
+		aria-pressed={isBoosted}
 		id={`${idPrefix}-boost`}
 	>
 		{#snippet prefix()}
@@ -348,7 +297,7 @@
 	<Button
 		variant="ghost"
 		{size}
-		disabled={readonly || favoriteLoading}
+		disabled={readonly || favoriteLoading || !handlers.onFavorite}
 		loading={favoriteLoading}
 		onclick={handleFavorite}
 		class={`gr-action-bar__button gr-action-bar__button--favorite${isFavorited ? ' gr-action-bar__button--active' : ''}`}
@@ -357,7 +306,7 @@
 			: counts.favorites > 0
 				? `Add to favorites. ${counts.favorites} favorites`
 				: 'Add to favorites'}
-		aria-pressed={ariaPressed(states.favorited)}
+		aria-pressed={isFavorited}
 		id={`${idPrefix}-favorite`}
 	>
 		{#snippet prefix()}
@@ -375,47 +324,6 @@
 		{/if}
 	</Button>
 
-	<!-- Bookmark Button -->
-	{#if handlers.onBookmark}
-		<Button
-			variant="ghost"
-			{size}
-			disabled={readonly || bookmarkLoading}
-			loading={bookmarkLoading}
-			onclick={handleBookmark}
-			class={`gr-action-bar__button gr-action-bar__button--bookmark${isBookmarked ? ' gr-action-bar__button--active' : ''}`}
-			aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark this post'}
-			aria-pressed={ariaPressed(states.bookmarked)}
-				id={`${idPrefix}-bookmark`}
-			>
-				{#snippet prefix()}
-					<Bookmark
-						size={size === 'sm' ? 16 : size === 'md' ? 18 : 20}
-						fill={isBookmarked ? 'currentColor' : undefined}
-					/>
-				{/snippet}
-			</Button>
-		{/if}
-
-	<!-- Pin Button -->
-	{#if handlers.onPin}
-		<Button
-			variant="ghost"
-			{size}
-			disabled={readonly || pinLoading}
-			loading={pinLoading}
-			onclick={handlePin}
-			class={`gr-action-bar__button gr-action-bar__button--pin${isPinned ? ' gr-action-bar__button--active' : ''}`}
-			aria-label={isPinned ? 'Unpin this post' : 'Pin this post'}
-			aria-pressed={ariaPressed(states.pinned)}
-			id={`${idPrefix}-pin`}
-		>
-			{#snippet prefix()}
-				<Pin size={size === 'sm' ? 16 : size === 'md' ? 18 : 20} />
-			{/snippet}
-		</Button>
-	{/if}
-
 	<!-- Share Button -->
 	<Button
 		variant="ghost"
@@ -431,24 +339,6 @@
 			<Share size={size === 'sm' ? 16 : size === 'md' ? 18 : 20} />
 		{/snippet}
 	</Button>
-
-	<!-- Delete Button -->
-	{#if handlers.onDelete}
-		<Button
-			variant="ghost"
-			{size}
-			disabled={readonly || deleteLoading}
-			loading={deleteLoading}
-			onclick={handleDelete}
-			class="gr-action-bar__button gr-action-bar__button--delete"
-			aria-label="Delete this post"
-			id={`${idPrefix}-delete`}
-		>
-			{#snippet prefix()}
-				<Trash size={size === 'sm' ? 16 : size === 'md' ? 18 : 20} />
-			{/snippet}
-		</Button>
-	{/if}
 
 	<!-- Extensions slot for additional actions -->
 	{#if extensions}

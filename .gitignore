@@ -24,6 +24,7 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 # Local tooling
+/.codex
 /.pai
 /.theory
 

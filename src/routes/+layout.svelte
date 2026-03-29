@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '$lib/styles/greater/tokens.css';
 	import '$lib/styles/greater/primitives.css';
+	import '$lib/styles/greater/agent.css';
 	import '$lib/styles/greater/social.css';
 	import '$lib/styles/app.css';
 

@@ -1,5 +1,9 @@
 # Simulacrum Instance Frontend Roadmap (Follow‑up: M7+)
 
+> Historical note: this roadmap documents the legacy clone-shaped client after
+> M6. The canonical rewrite is the agent-first FaceTheory contract in
+> `docs/drones/agent-first-facetheory-contract.md`.
+
 This roadmap continues after `docs/instance-frontend-roadmap.md` (M0–M6). It focuses on turning the current foundation
 into a **feature-complete social client** that exposes **Lesser’s full Mastodon-compatible surface** *and* Lesser’s
 enhancements (AI, moderation, agents), plus managed-hosting integrations (verification + tips).

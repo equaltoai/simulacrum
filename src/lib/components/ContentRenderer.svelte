@@ -65,34 +65,21 @@
 		}
 	}
 
-	function escapeRegExp(text: string): string {
-		return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const allowedLinkProtocols = new Set(['http:', 'https:', 'mailto:']);
+
+	function escapeRegExp(value: string): string {
+		return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 	}
 
-	function safeExternalUrl(rawUrl: string): string | null {
-		if (!rawUrl || typeof rawUrl !== 'string') return null;
-		const value = rawUrl.trim();
-		if (!value) return null;
-
-		// Disallow scheme-relative URLs.
-		if (value.startsWith('//')) return null;
-
-		// Allow same-origin relative URLs.
-		if (
-			value.startsWith('/') ||
-			value.startsWith('./') ||
-			value.startsWith('../') ||
-			value.startsWith('#') ||
-			value.startsWith('?')
-		) {
-			return encodeURI(value);
-		}
+	function toSafeHref(url: string): string | null {
+		if (!url || typeof url !== 'string') return null;
+		const trimmed = url.trim();
+		if (!trimmed) return null;
 
 		try {
-			const parsed = new URL(value);
-			const protocol = parsed.protocol.toLowerCase();
-			if (protocol !== 'http:' && protocol !== 'https:') return null;
-			return parsed.toString();
+			const parsed = new URL(trimmed, 'https://example.invalid');
+			if (!allowedLinkProtocols.has(parsed.protocol)) return null;
+			return encodeURI(trimmed);
 		} catch {
 			return null;
 		}
@@ -130,18 +117,15 @@
 			allowedAttributes: ['href', 'title', 'class', 'rel', 'target'],
 		});
 
-		let modified = false;
-
 		// Replace mention links if we have mention data
 		if (mentions.length > 0) {
 			mentions.forEach((mention) => {
-				const pattern = new RegExp(`@${escapeRegExp(mention.username)}(?:@[\\w.-]+)?`, 'g');
-				const safeUrl = safeExternalUrl(mention.url) ?? '#';
-				const next = processed.replace(pattern, (match) => {
+				const pattern = new RegExp(`@${escapeRegExp(mention.username)}(@[\\w.-]+)?`, 'g');
+				const safeUrl = toSafeHref(mention.url);
+				processed = processed.replace(pattern, (match) => {
+					if (!safeUrl) return match;
 					return `<a href="${safeUrl}" class="mention" rel="noopener noreferrer" target="_blank">${match}</a>`;
 				});
-				if (next !== processed) modified = true;
-				processed = next;
 			});
 		}
 
@@ -149,63 +133,25 @@
 		if (tags.length > 0) {
 			tags.forEach((tag) => {
 				const pattern = new RegExp(`#${escapeRegExp(tag.name)}\\b`, 'gi');
-				const safeUrl = safeExternalUrl(tag.url) ?? '#';
-				const next = processed.replace(pattern, () => {
-					return `<a href="${safeUrl}" class="hashtag" rel="noopener noreferrer" target="_blank">#${tag.name}</a>`;
+				const safeUrl = toSafeHref(tag.url);
+				processed = processed.replace(pattern, (match) => {
+					if (!safeUrl) return match;
+					return `<a href="${safeUrl}" class="hashtag" rel="noopener noreferrer" target="_blank">${match}</a>`;
 				});
-				if (next !== processed) modified = true;
-				processed = next;
 			});
 		}
 
 		// If no specific mention/tag data, use generic linkification
 		if (mentions.length === 0 && tags.length === 0) {
-			// Only linkify if the sanitized output looks like plain text.
-			const containsHtmlTags = /<\/?[a-z][\s\S]*>/i.test(processed);
-			if (!containsHtmlTags) {
-				const next = linkifyMentions(processed, {
-					mentionBaseUrl,
-					hashtagBaseUrl,
-					openInNewTab: true,
-					nofollow: false,
-				});
-				if (next !== processed) modified = true;
-				processed = next;
-			}
+			processed = linkifyMentions(processed, {
+				mentionBaseUrl,
+				hashtagBaseUrl,
+				openInNewTab: true,
+				nofollow: false,
+			});
 		}
 
-		// Re-sanitize after linkification to enforce protocol/attribute allow-lists.
-		if (!modified) return processed;
-
-		return sanitizeHtml(processed, {
-			allowedTags: [
-				'p',
-				'br',
-				'span',
-				'a',
-				'del',
-				'pre',
-				'code',
-				'em',
-				'strong',
-				'b',
-				'i',
-				'u',
-				's',
-				'strike',
-				'ul',
-				'ol',
-				'li',
-				'blockquote',
-				'h1',
-				'h2',
-				'h3',
-				'h4',
-				'h5',
-				'h6',
-			],
-			allowedAttributes: ['href', 'title', 'class', 'rel', 'target'],
-		});
+		return processed;
 	}
 
 	const processedContent = $derived(processContent(content));
@@ -238,9 +184,9 @@
 	{#if !spoilerText || expanded}
 		<div
 			class="content"
-			class:collapsed={spoilerText && !expanded}
+			class:collapsed={!!spoilerText && !expanded}
 			id={contentId}
-			aria-hidden={Boolean(spoilerText) && !expanded}
+			aria-hidden={!!spoilerText && !expanded}
 			use:setHtml={processedContent}
 		></div>
 	{/if}

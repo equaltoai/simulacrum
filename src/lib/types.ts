@@ -80,36 +80,11 @@ export interface Account {
 	locked?: boolean;
 	verified?: boolean;
 	createdAt: string | Date;
-	fields?: Array<{ name: string; value: string; verifiedAt?: string | null }>;
 
 	// Lesser-specific fields
-	isAgent?: boolean;
-	agentInfo?: {
-		id: string;
-		agentType: string;
-		verified: boolean;
-		verifiedAt?: string | Date;
-	};
-	tipAddress?: string;
-	tipChainId?: number;
 	trustScore?: number;
 	reputation?: Reputation;
 	vouches?: Vouch[];
-}
-
-/**
- * Lesser-specific: Agent attribution on content
- */
-export interface AgentAttribution {
-	triggerType?: string;
-	triggerDetails?: string;
-	memoryCitations?: ReadonlyArray<string>;
-	delegatedBy?: string;
-	delegatedByDid?: string;
-	scopes?: ReadonlyArray<string>;
-	constraints?: ReadonlyArray<string>;
-	schemaVersion?: string;
-	modelId?: string;
 }
 
 /**
@@ -154,69 +129,21 @@ export interface AIAnalysis {
 	textAnalysis?: {
 		sentiment: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'MIXED';
 		toxicityScore: number;
-		toxicityLabels?: ReadonlyArray<string>;
 		containsPII: boolean;
 		dominantLanguage: string;
-		keyPhrases?: ReadonlyArray<string>;
-		sentimentScores?: {
-			positive: number;
-			negative: number;
-			neutral: number;
-			mixed: number;
-		};
-		entities?: ReadonlyArray<{
-			text: string;
-			type: string;
-			score: number;
-		}>;
-	} | null;
+	};
 	imageAnalysis?: {
 		isNSFW: boolean;
 		nsfwConfidence: number;
 		violenceScore: number;
-		deepfakeScore?: number;
 		weaponsDetected: boolean;
-		detectedText?: ReadonlyArray<string>;
-		textToxicity?: number;
-		moderationLabels?: ReadonlyArray<{
-			name: string;
-			confidence: number;
-			parentName?: string | null;
-		}>;
-		celebrityFaces?: ReadonlyArray<{
-			name: string;
-			confidence: number;
-		}>;
-	} | null;
-	aiDetection?: {
-		aiGeneratedProbability: number;
-		generationModel?: string | null;
-		patternConsistency: number;
-		styleDeviation: number;
-		semanticCoherence: number;
-		suspiciousPatterns: ReadonlyArray<string>;
-	} | null;
-	spamAnalysis?: {
-		spamScore: number;
-		postingVelocity: number;
-		repetitionScore: number;
-		linkDensity: number;
-		followerRatio: number;
-		interactionRate: number;
-		accountAgeDays: number;
-		spamIndicators: ReadonlyArray<{
-			type: string;
-			description: string;
-			severity: number;
-		}>;
-	} | null;
+	};
 }
 
 export interface Status {
 	id: string;
 	uri: string;
 	url: string;
-	contentHash?: string;
 	account: Account;
 	content: string;
 	createdAt: string | Date;
@@ -251,7 +178,6 @@ export interface Status {
 	estimatedCost?: number;
 	moderationScore?: number;
 	communityNotes?: CommunityNote[];
-	agentAttribution?: AgentAttribution;
 	quoteUrl?: string;
 	quoteable?: boolean;
 	quotePermissions?: QuotePermission;
@@ -293,7 +219,6 @@ export interface Poll {
 	expiresAt?: string | Date;
 	expired: boolean;
 	multiple: boolean;
-	hideTotals?: boolean;
 	votesCount: number;
 	votersCount?: number;
 	voted?: boolean;
@@ -302,37 +227,6 @@ export interface Poll {
 		title: string;
 		votesCount: number;
 	}>;
-}
-
-export interface CommunicationFrom {
-	address: string;
-	displayName?: string | null;
-	soulAgentId?: string | null;
-}
-
-export interface CommunicationTo {
-	address: string;
-}
-
-export interface CommunicationAttachment {
-	id: string;
-	filename: string;
-	contentType: string;
-	sizeBytes: number;
-	sha256: string;
-}
-
-export interface CommunicationNotification {
-	channel: string;
-	from: CommunicationFrom;
-	to?: CommunicationTo | null;
-	attachments: CommunicationAttachment[];
-	subject?: string | null;
-	body?: string | null;
-	receivedAt: string;
-	messageId: string;
-	inReplyTo?: string | null;
-	threadId?: string | null;
 }
 
 export type NotificationType =
@@ -351,8 +245,7 @@ export type NotificationType =
 	| 'community_note'
 	| 'trust_update'
 	| 'cost_alert'
-	| 'moderation_action'
-	| 'communication_inbound';
+	| 'moderation_action';
 
 export interface BaseNotification {
 	id: string;
@@ -486,11 +379,6 @@ export interface ModerationActionNotification extends BaseNotification {
 	reason: string;
 }
 
-export interface CommunicationInboundNotification extends BaseNotification {
-	type: 'communication_inbound';
-	communication: CommunicationNotification;
-}
-
 export type Notification =
 	| MentionNotification
 	| ReblogNotification
@@ -506,8 +394,7 @@ export type Notification =
 	| CommunityNoteNotification
 	| TrustUpdateNotification
 	| CostAlertNotification
-	| ModerationActionNotification
-	| CommunicationInboundNotification;
+	| ModerationActionNotification;
 
 export interface NotificationGroup {
 	id: string;

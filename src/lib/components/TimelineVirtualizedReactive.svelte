@@ -1,506 +1,430 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
-	import { base } from '$app/paths';
-	import { api } from '$lib/api';
-	import AgentDisclosureBadge from '$lib/components/agents/AgentDisclosureBadge.svelte';
-	import { authSession } from '$lib/auth/session';
-	import type { Status } from '$lib/types';
-	import ContentRenderer from './ContentRenderer.svelte';
-	import ActionBar from './ActionBar.svelte';
-	import Composer from './Composer.svelte';
-	import MediaAttachments from './MediaAttachments.svelte';
-	import PollCard from './PollCard.svelte';
-	import QuotePreview from './QuotePreview.svelte';
-	import ModerationTools from '$lib/patterns/ModerationTools.svelte';
-	import CommunityNotesPanel from '$lib/components/CommunityNotesPanel.svelte';
-	import TranslationPanel from '$lib/components/TranslationPanel.svelte';
-	import TipButton from '$lib/components/Tips/TipButton.svelte';
-	import { toActivityPubActor } from '$lib/utils/activitypub';
-	import { Avatar } from '$lib/greater/primitives';
-	import { formatDateTime } from '$lib/greater/utils';
+	import { createVirtualizer } from '@tanstack/svelte-virtual';
+	import { untrack, type Snippet } from 'svelte';
+	import { get } from 'svelte/store';
+	import StatusCard from './StatusCard.svelte';
+	import type { Status } from '../types';
+	import type { TimelineIntegrationConfig } from '../lib/integration';
+	import { createTimelineIntegration, createGraphQLTimelineIntegration } from '../lib/integration';
+	import type { LesserGraphQLAdapter } from '$lib/greater/adapters';
+	import type { GraphQLTimelineView } from '../lib/graphqlTimelineStore';
+
+	interface StatusCardActionHandlers {
+		onReply?: (status: Status) => Promise<void> | void;
+		onBoost?: (status: Status) => Promise<void> | void;
+		onFavorite?: (status: Status) => Promise<void> | void;
+		onShare?: (status: Status) => Promise<void> | void;
+		onQuote?: (status: Status) => Promise<void> | void;
+	}
 
 	interface Props {
+		/**
+		 * Array of status items to display (optional when using store integration)
+		 */
 		items?: Status[];
-		viewerId?: string;
-		adapter?: unknown;
-		view?: Record<string, unknown> | null;
-		enableRealtime?: boolean;
+		/**
+		 * Enable virtual scrolling (recommended for large timelines)
+		 * @default true
+		 */
 		virtualScrolling?: boolean;
+		/**
+		 * Store integration configuration (enables real-time updates)
+		 */
+		integration?: TimelineIntegrationConfig;
+		/**
+		 * GraphQL adapter for data fetching (alternative to integration)
+		 */
+		adapter?: LesserGraphQLAdapter;
+		/**
+		 * View configuration for GraphQL adapter
+		 */
+		view?: GraphQLTimelineView;
+		/**
+		 * Estimated height of each item (for virtualization)
+		 */
 		estimateSize?: number;
-		density?: 'compact' | 'comfortable';
-		class?: string;
+		/**
+		 * Overscan count for virtualization
+		 */
+		overscan?: number;
+		/**
+		 * Whether to show a loading indicator at the top
+		 */
+		loadingTop?: boolean;
+		/**
+		 * Whether to show a loading indicator at the bottom
+		 */
+		loadingBottom?: boolean;
+		/**
+		 * Whether we've reached the end of the feed
+		 */
+		endReached?: boolean;
+		/**
+		 * Callback when scrolling near the top
+		 */
+		onLoadMore?: () => void;
+		/**
+		 * Callback when scrolling near the bottom
+		 */
+		onLoadPrevious?: () => void;
+		/**
+		 * Callback when a status is clicked
+		 */
+		onStatusClick?: (status: Status) => void;
+		/**
+		 * Callback when a status is updated
+		 */
+		onStatusUpdate?: (status: Status) => void;
+		/**
+		 * Custom gap loader content
+		 */
+		gapLoader?: Snippet;
+		/**
+		 * Custom empty state content
+		 */
 		empty?: Snippet;
-		children?: Snippet;
+		/**
+		 * Custom end of feed content
+		 */
+		endOfFeed?: Snippet;
+		/**
+		 * Custom real-time indicator content
+		 */
+		realtimeIndicator?: Snippet<
+			[
+				{
+					connected: boolean;
+					error: string | null;
+					unreadCount: number;
+					onSync: () => void;
+				},
+			]
+		>;
+		/**
+		 * CSS class for the timeline
+		 */
+		class?: string;
+		/**
+		 * Density for status cards
+		 */
+		density?: 'compact' | 'comfortable';
+		/**
+		 * Auto-connect on mount
+		 */
+		autoConnect?: boolean;
+		/**
+		 * Show real-time status indicator
+		 */
+		showRealtimeIndicator?: boolean;
+		/**
+		 * Action handlers for timeline status cards
+		 */
+		actionHandlers?:
+			| StatusCardActionHandlers
+			| ((status: Status) => StatusCardActionHandlers | undefined);
 	}
 
 	let {
-		items = [],
-		viewerId,
-		class: className = '',
+		items: propItems = [],
+		virtualScrolling = true,
+		integration,
+		loadingTop: propLoadingTop = false,
+		loadingBottom: propLoadingBottom = false,
+		endReached: propEndReached = false,
+		onLoadMore,
+		onLoadPrevious,
+		onStatusClick,
+		onStatusUpdate,
+		gapLoader,
 		empty,
-		children,
+		endOfFeed,
+		realtimeIndicator,
+		class: className = '',
+		density = 'comfortable',
+		autoConnect = true,
+		showRealtimeIndicator = true,
+		actionHandlers,
+		adapter,
+		view,
+		estimateSize = 400,
+		overscan = 5,
 	}: Props = $props();
 
-	let displayItems = $state<Status[]>([]);
+	// Create integration instance if config is provided
+	const timelineIntegration = $derived(
+		integration
+			? createTimelineIntegration(integration)
+			: adapter && view
+				? createGraphQLTimelineIntegration(adapter, view)
+				: null
+	);
+	let mounted = false;
 
-	$effect(() => {
-		displayItems = items;
+	// Use store data when integration is available, otherwise fall back to props
+	const items = $derived(timelineIntegration ? timelineIntegration.items : propItems);
+	const loadingTop = $derived(
+		timelineIntegration ? timelineIntegration.state.loadingTop : propLoadingTop
+	);
+	const loadingBottom = $derived(
+		timelineIntegration ? timelineIntegration.state.loadingBottom : propLoadingBottom
+	);
+	const endReached = $derived(
+		timelineIntegration ? timelineIntegration.state.endReached : propEndReached
+	);
+	const connected = $derived(timelineIntegration ? timelineIntegration.state.connected : true);
+	const error = $derived(timelineIntegration ? timelineIntegration.state.error : null);
+	const unreadCount = $derived(timelineIntegration ? timelineIntegration.state.unreadCount : 0);
+
+	let scrollElement = $state<HTMLDivElement>();
+	let prevScrollTop = 0;
+	let prevItemCount = 0;
+
+	const rowVirtualizer = createVirtualizer<HTMLDivElement, HTMLElement>({
+		count: untrack(() => items.length),
+		getScrollElement: () => scrollElement ?? null,
+		estimateSize: () => estimateSize,
+		overscan: untrack(() => overscan),
+		enabled: untrack(() => virtualScrolling),
+		getItemKey: (index) => items[index]?.id ?? index,
+		indexAttribute: 'data-index',
 	});
 
-	let composerForId = $state<string | null>(null);
-	let composerMode = $state<'reply' | 'quote' | 'edit' | null>(null);
+	$effect(() => {
+		get(rowVirtualizer).setOptions?.({
+			count: items.length,
+			estimateSize: () => estimateSize,
+			overscan,
+			enabled: virtualScrolling,
+			getItemKey: (index) => items[index]?.id ?? index,
+		});
+	});
 
-	function profileHref(acct: string) {
-		return `${base}/profile/${encodeURIComponent(acct)}`;
+	function measureRow(node: HTMLElement) {
+		get(rowVirtualizer).measureElement?.(node);
+		return {
+			update: () => get(rowVirtualizer).measureElement?.(node),
+		};
 	}
 
-	function statusHref(id: string) {
-		return `${base}/status/${encodeURIComponent(id)}`;
-	}
+	// Auto-connect on mount
+	$effect(() => {
+		if (!mounted && timelineIntegration && autoConnect) {
+			mounted = true;
+			timelineIntegration.connect().catch((err) => {
+				console.error('Failed to connect timeline:', err);
+			});
 
-	function shareUrl(id: string) {
-		const href = statusHref(id);
-		if (typeof window === 'undefined') return href;
-		return `${window.location.origin}${href}`;
-	}
-
-	function idPrefix(id: string) {
-		return `action-${encodeURIComponent(id)}`;
-	}
-
-	function updateActionTarget(item: Status, updater: (target: Status) => Status): Status {
-		if (item.reblog) {
-			return { ...item, reblog: updater(item.reblog) };
+			return () => {
+				timelineIntegration?.disconnect();
+			};
 		}
-		return updater(item);
-	}
+	});
 
-	function updateItem(displayId: string, updater: (current: Status) => Status) {
-		displayItems = displayItems.map((item) => (item.id === displayId ? updater(item) : item));
-	}
-
-	async function refreshStatus(displayId: string, statusId: string) {
-		try {
-			const refreshed = await api.fetchObjectById({ id: statusId });
-			if (!refreshed) return;
-
-			updateItem(displayId, (current) =>
-				updateActionTarget(current, (target) => ({
-					...target,
-					communityNotes: refreshed.communityNotes,
-					quoteCount: refreshed.quoteCount,
-					quoteable: refreshed.quoteable,
-					quotePermissions: refreshed.quotePermissions,
-				}))
-			);
-		} catch (err) {
-			console.error('Failed to refresh status:', err);
+	// Handle status updates
+	$effect(() => {
+		if (onStatusUpdate && timelineIntegration) {
+			// Subscribe to status updates from the store
+			// This would be implemented based on the specific update mechanism
 		}
-	}
+	});
 
-	function getActionStatus(item: Status): Status {
-		return item.reblog ?? item;
-	}
+	function handleScroll() {
+		if (!scrollElement) return;
 
-	function openComposer(displayId: string, mode: 'reply' | 'quote' | 'edit') {
-		composerForId = displayId;
-		composerMode = mode;
-	}
+		const { scrollTop, scrollHeight, clientHeight } = scrollElement;
+		const scrollDirection = scrollTop > prevScrollTop ? 'down' : 'up';
+		prevScrollTop = scrollTop;
 
-	function closeComposer() {
-		composerForId = null;
-		composerMode = null;
-	}
-
-	function htmlToText(html: string): string {
-		if (typeof window === 'undefined') {
-			return html.replace(/<[^>]*>/g, '').trim();
-		}
-		const div = document.createElement('div');
-		div.innerHTML = html;
-		return (div.textContent ?? '').trim();
-	}
-
-	async function toggleBoost(displayId: string) {
-		if (!$authSession?.accessToken) return;
-
-		const displayItem = displayItems.find((item) => item.id === displayId);
-		if (!displayItem) return;
-
-		const target = getActionStatus(displayItem);
-		const currentlyBoosted = target.reblogged === true;
-		const nextBoosted = !currentlyBoosted;
-
-		updateItem(displayId, (item) =>
-			updateActionTarget(item, (status) => ({
-				...status,
-				reblogged: nextBoosted,
-				reblogsCount: Math.max(0, status.reblogsCount + (currentlyBoosted ? -1 : 1)),
-			}))
-		);
-
-		try {
-			if (currentlyBoosted) {
-				await api.unshareObject({ id: target.id });
-			} else {
-				await api.shareObject({ id: target.id });
+		// Load more when scrolling near the bottom
+		if (scrollDirection === 'down' && !loadingBottom && !endReached) {
+			const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+			if (distanceFromBottom < 500) {
+				if (timelineIntegration) {
+					timelineIntegration.loadOlder();
+				} else {
+					onLoadMore?.();
+				}
 			}
-		} catch (err) {
-			updateItem(displayId, (item) =>
-				updateActionTarget(item, (status) => ({
-					...status,
-					reblogged: currentlyBoosted,
-					reblogsCount: Math.max(0, status.reblogsCount + (currentlyBoosted ? 1 : -1)),
-				}))
-			);
-			console.error('Boost action failed:', err);
+		}
+
+		// Load previous when scrolling near the top
+		if (scrollDirection === 'up' && !loadingTop) {
+			if (scrollTop < 500) {
+				if (timelineIntegration) {
+					timelineIntegration.loadNewer();
+				} else {
+					onLoadPrevious?.();
+				}
+			}
 		}
 	}
 
-	async function toggleFavorite(displayId: string) {
-		if (!$authSession?.accessToken) return;
+	// Preserve scroll position when items are prepended
+	$effect(() => {
+		if (!scrollElement) return;
 
-		const displayItem = displayItems.find((item) => item.id === displayId);
-		if (!displayItem) return;
+		const currentItemCount = items.length;
 
-		const target = getActionStatus(displayItem);
-		const currentlyFavorited = target.favourited === true;
-		const nextFavorited = !currentlyFavorited;
+		if (currentItemCount > prevItemCount && prevItemCount > 0) {
+			const prevScrollHeight = scrollElement.scrollHeight;
+			// Capture scrollElement reference for closure
+			const element = scrollElement;
 
-		updateItem(displayId, (item) =>
-			updateActionTarget(item, (status) => ({
-				...status,
-				favourited: nextFavorited,
-				favouritesCount: Math.max(0, status.favouritesCount + (currentlyFavorited ? -1 : 1)),
-			}))
-		);
+			// Use requestAnimationFrame to wait for DOM updates
+			requestAnimationFrame(() => {
+				if (!element) return;
+				const newScrollHeight = element.scrollHeight;
+				const heightDiff = newScrollHeight - prevScrollHeight;
 
-		try {
-			if (currentlyFavorited) {
-				await api.unlikeObject({ id: target.id });
-			} else {
-				await api.likeObject({ id: target.id });
-			}
-		} catch (err) {
-			updateItem(displayId, (item) =>
-				updateActionTarget(item, (status) => ({
-					...status,
-					favourited: currentlyFavorited,
-					favouritesCount: Math.max(0, status.favouritesCount + (currentlyFavorited ? 1 : -1)),
-				}))
-			);
-			console.error('Favorite action failed:', err);
+				// If items were likely added to the top (scroll position near top)
+				if (heightDiff > 0 && element.scrollTop < 1000) {
+					element.scrollTop += heightDiff;
+				}
+			});
+		}
+
+		prevItemCount = currentItemCount;
+	});
+
+	function handleStatusCardClick(status: Status) {
+		onStatusClick?.(status);
+	}
+
+	function handleSyncClick() {
+		if (timelineIntegration) {
+			timelineIntegration.loadNewer();
 		}
 	}
 
-	async function toggleBookmark(displayId: string) {
-		if (!$authSession?.accessToken) return;
-
-		const displayItem = displayItems.find((item) => item.id === displayId);
-		if (!displayItem) return;
-
-		const target = getActionStatus(displayItem);
-		const currentlyBookmarked = target.bookmarked === true;
-		const nextBookmarked = !currentlyBookmarked;
-
-		updateItem(displayId, (item) =>
-			updateActionTarget(item, (status) => ({
-				...status,
-				bookmarked: nextBookmarked,
-			}))
-		);
-
-		try {
-			if (currentlyBookmarked) {
-				await api.unbookmarkObject({ id: target.id });
-			} else {
-				await api.bookmarkObject({ id: target.id });
-			}
-		} catch (err) {
-			updateItem(displayId, (item) =>
-				updateActionTarget(item, (status) => ({
-					...status,
-					bookmarked: currentlyBookmarked,
-				}))
-			);
-			console.error('Bookmark action failed:', err);
-		}
-	}
-
-	async function togglePin(displayId: string) {
-		if (!$authSession?.accessToken) return;
-
-		const displayItem = displayItems.find((item) => item.id === displayId);
-		if (!displayItem) return;
-
-		const target = getActionStatus(displayItem);
-		const currentlyPinned = target.pinned === true;
-		const nextPinned = !currentlyPinned;
-
-		updateItem(displayId, (item) =>
-			updateActionTarget(item, (status) => ({
-				...status,
-				pinned: nextPinned,
-			}))
-		);
-
-		try {
-			if (currentlyPinned) {
-				await api.unpinObject({ id: target.id });
-			} else {
-				await api.pinObject({ id: target.id });
-			}
-		} catch (err) {
-			updateItem(displayId, (item) =>
-				updateActionTarget(item, (status) => ({
-					...status,
-					pinned: currentlyPinned,
-				}))
-			);
-			console.error('Pin action failed:', err);
-		}
-	}
-
-	async function handleDelete(displayId: string) {
-		if (!$authSession?.accessToken) return;
-
-		const displayItem = displayItems.find((item) => item.id === displayId);
-		if (!displayItem) return;
-
-		const target = getActionStatus(displayItem);
-
-		if (!viewerId || target.account.id !== viewerId) return;
-		if (typeof window !== 'undefined') {
-			const confirmed = window.confirm('Delete this post?');
-			if (!confirmed) return;
-		}
-
-		const before = displayItems;
-		displayItems = displayItems.filter((item) => item.id !== displayId);
-
-		try {
-			const ok = await api.deleteObject({ id: target.id });
-			if (!ok) {
-				displayItems = before;
-			}
-		} catch (err) {
-			displayItems = before;
-			console.error('Delete action failed:', err);
+	function handleRefresh() {
+		if (timelineIntegration) {
+			timelineIntegration.refresh();
 		}
 	}
 </script>
 
-<div class={`timeline-virtualized ${className}`}>
-	{#if children}
-		{@render children()}
-	{:else if displayItems.length > 0}
-		{#each displayItems as item (item.id)}
-			{@const status = getActionStatus(item)}
-			<article class="timeline-virtualized__item">
-				<header class="timeline-virtualized__meta">
-					<div class="timeline-virtualized__byline">
-						<a
-							class="timeline-virtualized__avatar-link"
-							href={profileHref(status.account.acct)}
-							aria-label={`View ${status.account.displayName || status.account.username}'s profile`}
+<div
+	class={`timeline-virtualized ${className}`}
+	role="feed"
+	aria-label="Timeline"
+	aria-busy={loadingTop || loadingBottom}
+>
+	{#if showRealtimeIndicator && timelineIntegration}
+		<div class="realtime-status" class:connected class:error={!!error}>
+			{#if realtimeIndicator}
+				{@render realtimeIndicator({ connected, error, unreadCount, onSync: handleSyncClick })}
+			{:else}
+				<div class="realtime-indicator">
+					<div class="connection-status">
+						{#if connected}
+							<div class="status-dot connected" aria-label="Connected"></div>
+							<span>Live</span>
+						{:else if error}
+							<div class="status-dot error" aria-label="Connection error"></div>
+							<span>Error</span>
+						{:else}
+							<div class="status-dot reconnecting" aria-label="Reconnecting"></div>
+							<span>Connecting...</span>
+						{/if}
+					</div>
+
+					{#if unreadCount > 0}
+						<button
+							class="unread-indicator"
+							onclick={handleSyncClick}
+							aria-label={`Load ${unreadCount} new items`}
 						>
-							<Avatar
-								src={status.account.avatar}
-								name={status.account.displayName || status.account.username}
-								size="sm"
-								alt=""
-							/>
-						</a>
-						<a class="timeline-virtualized__author" href={profileHref(status.account.acct)}>
-							{status.account.displayName || status.account.username}
-						</a>
-						<a class="timeline-virtualized__handle" href={profileHref(status.account.acct)}>
-							@{status.account.acct}
-						</a>
-						{#if status.inReplyToAccount}
-							{@const replyAcct = status.inReplyToAccount.acct ?? status.inReplyToAccount.username}
-							<span class="timeline-virtualized__reply-context">
-								Replying to{' '}
-								{#if replyAcct}
-									<a class="timeline-virtualized__reply-link" href={profileHref(replyAcct)}>
-										@{replyAcct}
-									</a>
-								{:else}
-									<a class="timeline-virtualized__reply-link" href={status.inReplyToAccount.url}>
-										this account
-									</a>
-								{/if}
-							</span>
-						{/if}
-						{#if status.createdAt}
-							{@const createdAtLabel = formatDateTime(status.createdAt)}
-							<time
-								class="timeline-virtualized__timestamp"
-								datetime={createdAtLabel.iso}
-								title={createdAtLabel.absolute}
-							>
-								{createdAtLabel.relative}
-							</time>
-						{/if}
-						{#if status.account.isAgent}
-							<AgentDisclosureBadge actor={status.account} />
-						{/if}
-					</div>
-					<div class="timeline-virtualized__meta-actions">
-						<a class="timeline-virtualized__status-link" href={statusHref(status.id)}>Open</a>
-							<ModerationTools
-								targetType="status"
-								targetId={status.id}
-								targetAccount={toActivityPubActor(status.account)}
-								config={{ actions: ['report', 'addNote', 'mute', 'block'], mode: 'menu' }}
-								disabled={!$authSession?.accessToken}
-								handlers={{
-									onReport: async (_targetType, _targetId, reason) => {
-										await api.flagObject({ input: { objectId: status.id, reason } });
-								},
-								onBlock: async () => {
-									await api.blockActor({ id: status.account.id });
-								},
-								onMute: async () => {
-									await api.muteActor({ id: status.account.id });
-								},
-								onAddNote: async (objectId, content) => {
-									await api.addCommunityNote({ input: { objectId, content } });
-									await refreshStatus(item.id, status.id);
-								},
-							}}
-						/>
-					</div>
-				</header>
+							{unreadCount} new
+						</button>
+					{/if}
 
-				<ContentRenderer
-					content={status.content}
-					spoilerText={status.spoilerText}
-					mentions={status.mentions ?? []}
-					tags={status.tags ?? []}
-				/>
-
-				<TranslationPanel statusId={status.id} />
-
-				<QuotePreview quoteUrl={status.quoteUrl} quoteContext={status.quoteContext} />
-
-				{#if status.mediaAttachments && status.mediaAttachments.length > 0}
-					<MediaAttachments attachments={status.mediaAttachments} sensitive={status.sensitive ?? false} />
-				{/if}
-				{#if status.poll}
-					<PollCard poll={status.poll} />
-				{/if}
-
-				{#if (status.communityNotes ?? []).length > 0}
-					<CommunityNotesPanel
-						notes={status.communityNotes ?? []}
-						onVote={async (noteId, helpful) => {
-							await api.voteCommunityNote({ id: noteId, helpful });
-							await refreshStatus(item.id, status.id);
-						}}
-					/>
-				{/if}
-
-				<ActionBar
-					counts={{
-						replies: status.repliesCount,
-						boosts: status.reblogsCount,
-						favorites: status.favouritesCount,
-						quotes: status.quoteCount ?? 0,
-					}}
-					states={{
-						boosted: status.reblogged ?? null,
-						favorited: status.favourited ?? null,
-						bookmarked: status.bookmarked ?? null,
-						pinned: status.pinned ?? null,
-					}}
-					handlers={{
-						onReply: () => openComposer(item.id, 'reply'),
-						onBoost: () => toggleBoost(item.id),
-						onQuote: status.quoteable ? () => openComposer(item.id, 'quote') : undefined,
-						onFavorite: () => toggleFavorite(item.id),
-						onBookmark: () => toggleBookmark(item.id),
-						onPin: () => togglePin(item.id),
-						onDelete: viewerId && status.account.id === viewerId ? () => handleDelete(item.id) : undefined,
-					}}
-					shareUrl={shareUrl(status.id)}
-					shareTitle={`Post by ${status.account.displayName || status.account.username}`}
-					idPrefix={idPrefix(item.id)}
-				>
-					{#snippet extensions()}
-						{#if status.account.tipAddress && (!viewerId || status.account.id !== viewerId)}
-							<TipButton recipient={status.account} contentHash={status.contentHash ?? null} />
-						{/if}
-						{#if viewerId && status.account.id === viewerId}
-							<button
-								type="button"
-								class="gr-button gr-button--outline"
-								onclick={() => openComposer(item.id, 'edit')}
-							>
-								Edit
-							</button>
-						{/if}
-					{/snippet}
-				</ActionBar>
-
-				{#if composerForId === item.id && composerMode === 'reply'}
-					<Composer
-						mode="reply"
-						inReplyToId={status.id}
-						onCancel={closeComposer}
-						onSubmitted={() => {
-							updateItem(item.id, (current) =>
-								updateActionTarget(current, (target) => ({
-									...target,
-									repliesCount: Math.max(0, target.repliesCount + 1),
-								}))
-							);
-						}}
-					/>
-				{:else if composerForId === item.id && composerMode === 'quote'}
-					<Composer
-						mode="quote"
-						quoteId={status.id}
-						onCancel={closeComposer}
-						onSubmitted={() => {
-							updateItem(item.id, (current) =>
-								updateActionTarget(current, (target) => ({
-									...target,
-									quoteCount: (target.quoteCount ?? 0) + 1,
-								}))
-							);
-						}}
-					/>
-				{:else if composerForId === item.id && composerMode === 'edit'}
-					<Composer
-						mode="edit"
-						editId={status.id}
-						initialContent={htmlToText(status.content)}
-						initialSpoilerText={status.spoilerText ?? ''}
-						initialSensitive={status.sensitive ?? false}
-						onCancel={closeComposer}
-						onSubmitted={(updated) => {
-							updateItem(item.id, (current) =>
-								updateActionTarget(current, (target) => ({
-									...target,
-									content: updated.content,
-									spoilerText: updated.spoilerText,
-									sensitive: updated.sensitive,
-									editedAt: updated.editedAt,
-									mediaAttachments: updated.mediaAttachments,
-									poll: updated.poll,
-								}))
-							);
-						}}
-					/>
-				{/if}
-			</article>
-		{/each}
-	{:else}
-		{#if empty}
-			{@render empty()}
-		{:else}
-			<div class="timeline-virtualized__empty">No items yet.</div>
-		{/if}
+					{#if error}
+						<button class="retry-button" onclick={handleRefresh} aria-label="Retry connection">
+							Retry
+						</button>
+					{/if}
+				</div>
+			{/if}
+		</div>
 	{/if}
+
+	<div class="timeline-scroll" bind:this={scrollElement} onscroll={handleScroll}>
+		{#if loadingTop}
+			<div class="loading-indicator top">
+				<div class="spinner" aria-label="Loading new items"></div>
+			</div>
+		{/if}
+
+		{#if items.length === 0 && !loadingTop && !loadingBottom}
+			<div class="timeline-empty" role="status" aria-live="polite">
+				{#if empty}
+					{@render empty()}
+				{:else}
+					<p>No items to display</p>
+				{/if}
+			</div>
+		{:else}
+			<div class="virtual-list">
+				{#if virtualScrolling}
+					{@const virtualRows = $rowVirtualizer.getVirtualItems?.() ?? []}
+					{@const totalSize = $rowVirtualizer.getTotalSize?.() ?? 0}
+					{@const paddingTop = virtualRows[0]?.start ?? 0}
+					{@const paddingBottom = Math.max(
+						0,
+						totalSize - (virtualRows[virtualRows.length - 1]?.end ?? 0)
+					)}
+					<svg class="virtual-spacer" width="100%" height={paddingTop} aria-hidden="true" />
+					{#each virtualRows as virtualRow (virtualRow.key)}
+						{@const item = items[virtualRow.index]}
+						{#if item}
+							{@const handlersForItem =
+								typeof actionHandlers === 'function' ? actionHandlers(item) : actionHandlers}
+							<div class="virtual-row" role="article" data-index={virtualRow.index} use:measureRow>
+								<StatusCard
+									status={item}
+									{density}
+									showActions={true}
+									actionHandlers={handlersForItem}
+									onclick={handleStatusCardClick}
+								/>
+							</div>
+						{/if}
+					{/each}
+					<svg class="virtual-spacer" width="100%" height={paddingBottom} aria-hidden="true" />
+				{:else}
+					{#each items as item (item.id)}
+						{@const handlersForItem =
+							typeof actionHandlers === 'function' ? actionHandlers(item) : actionHandlers}
+						<StatusCard
+							status={item}
+							{density}
+							showActions={true}
+							actionHandlers={handlersForItem}
+							onclick={handleStatusCardClick}
+						/>
+					{/each}
+				{/if}
+			</div>
+
+			{#if loadingBottom && !endReached}
+				<div class="loading-indicator bottom">
+					{#if gapLoader}
+						{@render gapLoader()}
+					{:else}
+						<div class="spinner" aria-label="Loading more items"></div>
+					{/if}
+				</div>
+			{/if}
+
+			{#if endReached}
+				<div class="end-of-feed">
+					{#if endOfFeed}
+						{@render endOfFeed()}
+					{:else}
+						<p>You've reached the end</p>
+					{/if}
+				</div>
+			{/if}
+		{/if}
+	</div>
 </div>
