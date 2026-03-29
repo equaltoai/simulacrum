@@ -208,6 +208,49 @@ import { GraphQLRequestError, graphqlRequest } from './graphql';
 import { RestRequestError, restRequest } from './rest';
 import type { MastodonStatusContext } from './mastodon';
 import { toMastodonStatus } from './mastodon';
+export {
+	SOUL_WORKFLOW_HOST_AUTH_NOTE,
+	beginSoulAgentRegistration,
+	completeAgentMintConversation,
+	completeMintConversation,
+	finalizeAgentMintConversation,
+	finalizeMintConversation,
+	getAgentMintConversation,
+	getAgentMintConversationFinalizePreflight,
+	getAgentPromotion,
+	getMintConversation,
+	getMintConversationFinalizePreflight,
+	isSoulWorkflowHostError,
+	listAgentMintConversations,
+	listAgentPromotionLifecycleEvents,
+	listMyPromotionLifecycleEvents,
+	listMyPromotions,
+	startAgentMintConversationStream,
+	startMintConversationStream,
+	verifyAgentPromotion,
+	verifySoulAgentRegistration,
+} from './soulWorkflowHost';
+export type {
+	SafeTxPayload,
+	SoulAgentPromotion,
+	SoulAgentPromotionEventsQuery,
+	SoulAgentPromotionLifecycleEvent,
+	SoulAgentPromotionLifecycleEventListResponse,
+	SoulAgentPromotionListResponse,
+	SoulAgentPromotionPrerequisites,
+	SoulAgentPromotionResponse,
+	SoulAgentRegistration,
+	SoulAgentRegistrationBeginRequest,
+	SoulAgentRegistrationBeginResponse,
+	SoulAgentRegistrationVerifyRequest,
+	SoulAgentRegistrationVerifyResponse,
+	SoulMintConversation,
+	SoulMintConversationFinalizeResponse,
+	SoulOperation,
+	SoulRegistryProofInstructions,
+	SoulWorkflowCursorInput,
+	WalletChallengeResponse,
+} from './soulWorkflowHost';
 
 type ViewerQueryData = {
 	viewer: {

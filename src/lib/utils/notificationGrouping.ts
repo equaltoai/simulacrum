@@ -2,7 +2,7 @@
  * Utilities for grouping and processing notifications
  */
 
-import type { Notification, NotificationGroup, NotificationType } from '../types';
+import type { Notification, NotificationGroup, NotificationType } from '$lib/types';
 
 /**
  * Group notifications by type and similar content

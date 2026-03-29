@@ -9,7 +9,9 @@ legacy clone-shaped client with the agent-first Simulacrum.
 
 - Date: 2026-03-29
 - Scope owner: `equaltoai/simulacrum`
-- Project 9 milestone: M0 complete once this contract is landed in-repo
+- Project 9 milestones: M0 complete; M1 complete with the vendored
+  `greater-v0.8.0` lesser-host workflow contract consumed through
+  `src/lib/api/soulWorkflowHost.ts`
 - Product status: canonical for the rewrite
 - Legacy status: the SvelteKit social shell remains in the repo during
   migration, but it is no longer the target product model
