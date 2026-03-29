@@ -9,7 +9,7 @@
 	} from '$lib/components/agent';
 	import { WorkflowNotificationItem } from '$lib/components/notifications';
 	import AgentFaceFrame from './internal/AgentFaceFrame.svelte';
-	import type { NexusDashboardData } from './types.js';
+	import type { AgentFaceTimelineMoment, NexusDashboardData } from './types.js';
 
 	interface Props {
 		data: NexusDashboardData;
@@ -17,10 +17,10 @@
 	}
 
 	let { data, class: className = '' }: Props = $props();
-	const continuityMoments = $derived.by(() =>
+	const continuityMoments = $derived.by((): readonly AgentFaceTimelineMoment[] =>
 		data.continuityMoments?.length
 			? data.continuityMoments
-			: (data.continuity.followUps ?? []).map((followUp) => ({
+			: (data.continuity.followUps ?? []).map<AgentFaceTimelineMoment>((followUp) => ({
 					id: followUp.id,
 					title: followUp.title,
 					summary: followUp.summary,

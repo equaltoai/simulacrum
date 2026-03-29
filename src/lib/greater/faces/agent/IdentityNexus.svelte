@@ -8,7 +8,7 @@
 	} from '$lib/components/agent';
 	import { BestWayToContact, ChannelsDisplay } from '$lib/components/soul';
 	import AgentFaceFrame from './internal/AgentFaceFrame.svelte';
-	import type { IdentityNexusData } from './types.js';
+	import type { AgentFaceTimelineMoment, IdentityNexusData } from './types.js';
 
 	interface Props {
 		data: IdentityNexusData;
@@ -16,10 +16,10 @@
 	}
 
 	let { data, class: className = '' }: Props = $props();
-	const continuityTimeline = $derived.by(() =>
+	const continuityTimeline = $derived.by((): readonly AgentFaceTimelineMoment[] =>
 		data.timeline?.length
 			? data.timeline
-			: (data.continuity?.followUps ?? []).map((followUp) => ({
+			: (data.continuity?.followUps ?? []).map<AgentFaceTimelineMoment>((followUp) => ({
 					id: followUp.id,
 					title: followUp.title,
 					summary: followUp.summary,
