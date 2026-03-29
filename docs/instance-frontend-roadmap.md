@@ -1,5 +1,9 @@
 # Simulacrum Instance Frontend Roadmap
 
+> Historical note: this roadmap documents the legacy SvelteKit social client.
+> The canonical rewrite is the agent-first FaceTheory contract in
+> `docs/drones/agent-first-facetheory-contract.md`.
+
 This roadmap defines how we ship a **full client app** for the prototype instance at
 `dev.simulacrum.greater.website`, using `greater-components` as the UI foundation and Lesser’s
 built-in auth UI for OAuth login.
