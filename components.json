@@ -1,7 +1,7 @@
 {
   "$schema": "https://greater.components.dev/schema.json",
   "version": "1.0.0",
-  "ref": "greater-v0.6.0",
+  "ref": "greater-v0.6.1",
   "installMode": "vendored",
   "style": "default",
   "rsc": false,
