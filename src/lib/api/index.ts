@@ -209,6 +209,45 @@ import { RestRequestError, restRequest } from './rest';
 import type { MastodonStatusContext } from './mastodon';
 import { toMastodonStatus } from './mastodon';
 
+export {
+	DroneAgentStateDocument,
+	DroneWorkflowDocument,
+	FinalizeSoulPromotionDocument,
+	MyDroneRequestsDocument,
+	MyDroneReviewsDocument,
+	RequestSoulPromotionDocument,
+	ReviewSoulPromotionDocument,
+	fetchDroneAgentState,
+	fetchDroneWorkflow,
+	fetchMyDroneRequests,
+	fetchMyDroneReviews,
+	finalizeSoulPromotion,
+	requestSoulPromotion,
+	reviewSoulPromotion,
+} from './droneWorkflow';
+
+export type {
+	AgentIdentitySemantics,
+	AgentLifecycleStep,
+	AgentWorkflowConversationState,
+	AgentWorkflowSurface,
+	DroneAgentCapabilities,
+	DroneAgentState,
+	DroneGraduationReadiness,
+	DroneIdentityState,
+	DroneReviewDecision,
+	DroneSignerStatus,
+	DroneWorkflowMutationPayload,
+	DroneWorkflowPhase,
+	DroneWorkflowState,
+	FinalizeSoulPromotionInput,
+	GraduationSummaryCard,
+	RequestSoulPromotionInput,
+	ReviewDecisionCard,
+	ReviewSoulPromotionInput,
+	SoulRequestCard,
+} from './droneWorkflow';
+
 type ViewerQueryData = {
 	viewer: {
 		id: string;
