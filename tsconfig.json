@@ -1,6 +1,8 @@
 {
-	"extends": "./.svelte-kit/tsconfig.json",
 	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"baseUrl": ".",
 		"rewriteRelativeImportExtensions": true,
 		"allowJs": true,
 		"checkJs": true,
@@ -10,11 +12,22 @@
 		"skipLibCheck": true,
 		"sourceMap": true,
 		"strict": true,
-		"moduleResolution": "bundler"
-	}
-	// Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias
-	// except $lib which is handled by https://svelte.dev/docs/kit/configuration#files
-	//
-	// To make changes to top-level options such as include and exclude, we recommend extending
-	// the generated config; see https://svelte.dev/docs/kit/configuration#typescript
+		"moduleResolution": "bundler",
+		"types": ["node", "vite/client"],
+		"paths": {
+			"$lib": ["src/lib"],
+			"$lib/*": ["src/lib/*"],
+			"$app/environment": ["src/facetheory/shims/app-environment.ts"],
+			"$app/paths": ["src/facetheory/shims/app-paths.ts"],
+			"@equaltoai/greater-components-agent": ["src/lib/components/agent/index.ts"],
+			"@equaltoai/greater-components-chat": ["src/lib/components/chat/index.ts"],
+			"@equaltoai/greater-components-messaging": ["src/lib/components/messaging/index.ts"],
+			"@equaltoai/greater-components-notifications": [
+				"src/lib/components/notifications/index.ts"
+			],
+			"@equaltoai/greater-components-soul": ["src/lib/components/soul/index.ts"]
+		}
+	},
+	"include": ["src/**/*.d.ts", "src/**/*.ts", "src/**/*.svelte", "vite.config.ts", "svelte.config.js"],
+	"exclude": ["build", "dist", "node_modules", "src/routes/**/*"]
 }

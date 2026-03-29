@@ -26,8 +26,8 @@ export class GraphQLRequestError extends Error {
 }
 
 export async function graphqlRequest<
-	TData extends Record<string, unknown>,
-	TVariables extends Record<string, unknown> | undefined = undefined,
+	TData,
+	TVariables = undefined,
 >({
 	document,
 	variables,
