@@ -12,6 +12,7 @@ with the agent-first Simulacrum.
 - Product status: canonical for the rewrite
 - Legacy status: the SvelteKit social shell remains in the repo during
   migration, but it is no longer the target product model
+- Rollout notes: `docs/drones/agent-first-rollout.md`
 
 ## Canonical Product Statement
 
