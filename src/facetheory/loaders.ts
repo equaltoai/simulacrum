@@ -76,11 +76,21 @@ import type {
 	HostWorkflowState,
 	MintTranscriptMessage,
 } from './types';
+import {
+	HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+	HOST_WORKFLOW_BRIDGE_ENABLED,
+} from './runtime';
 
 interface ViewerInfo {
 	id: string;
 	name: string;
 	handle: string;
+}
+
+function hostWorkflowAuthNote(): string {
+	return HOST_WORKFLOW_BRIDGE_ENABLED
+		? SOUL_WORKFLOW_HOST_AUTH_NOTE
+		: HOST_WORKFLOW_BRIDGE_DISABLED_NOTE;
 }
 
 interface AgentRosterRecord {
@@ -785,7 +795,7 @@ const PREVIEW_MY_SOULS: readonly SoulInventoryRecord[] = [
 
 const PREVIEW_HOST_WORKFLOW: HostWorkflowState = {
 	tokenConfigured: false,
-	authNote: SOUL_WORKFLOW_HOST_AUTH_NOTE,
+	authNote: hostWorkflowAuthNote(),
 	promotion: null,
 	lifecycleEvents: [
 		{
@@ -1089,6 +1099,10 @@ async function loadHostWorkflow({
 	agentId: string;
 	signal?: AbortSignal;
 }): Promise<HostWorkflowState> {
+	if (!HOST_WORKFLOW_BRIDGE_ENABLED) {
+		return emptyHostWorkflow(false);
+	}
+
 	if (!token?.trim()) {
 		return emptyHostWorkflow(false);
 	}
@@ -1127,7 +1141,7 @@ async function loadHostWorkflow({
 
 		return {
 			tokenConfigured: true,
-			authNote: SOUL_WORKFLOW_HOST_AUTH_NOTE,
+			authNote: hostWorkflowAuthNote(),
 			promotion,
 			lifecycleEvents: lifecycleResponse.events ?? [],
 			conversations: conversationsResponse.conversations ?? [],
@@ -1144,7 +1158,7 @@ async function loadHostWorkflow({
 function emptyHostWorkflow(tokenConfigured: boolean): HostWorkflowState {
 	return {
 		tokenConfigured,
-		authNote: SOUL_WORKFLOW_HOST_AUTH_NOTE,
+		authNote: hostWorkflowAuthNote(),
 		promotion: null,
 		lifecycleEvents: [],
 		conversations: [],

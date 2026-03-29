@@ -22,6 +22,10 @@
 	import MintConversationPanel from './components/MintConversationPanel.svelte';
 	import SoulRequestActionPanel from './components/SoulRequestActionPanel.svelte';
 	import { createPreviewAppState, loadClientAppState } from './loaders';
+	import {
+		HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+		HOST_WORKFLOW_BRIDGE_ENABLED,
+	} from './runtime';
 	import { resolveWindowAgentHint, resolveWindowPage } from './routing';
 	import type { AppPageDescriptor, ClientAppState } from './types';
 
@@ -243,17 +247,33 @@
 
 		<section class="ft-shell__panels">
 			{#if isAuthenticated}
-				<HostTokenPanel
-					busy={busy}
-					configured={appState.hostWorkflow.tokenConfigured}
-					conversationCount={appState.hostWorkflow.conversations.length}
-					lifecycleEventCount={appState.hostWorkflow.lifecycleEvents.length}
-					note={appState.hostWorkflow.authNote}
-					onClear={handleHostTokenClear}
-					onSave={handleHostTokenSave}
-					selectedConversationId={appState.actionContext.activeConversationId}
-					token={hostToken}
-				/>
+				{#if HOST_WORKFLOW_BRIDGE_ENABLED}
+					<HostTokenPanel
+						busy={busy}
+						configured={appState.hostWorkflow.tokenConfigured}
+						conversationCount={appState.hostWorkflow.conversations.length}
+						lifecycleEventCount={appState.hostWorkflow.lifecycleEvents.length}
+						note={appState.hostWorkflow.authNote}
+						onClear={handleHostTokenClear}
+						onSave={handleHostTokenSave}
+						selectedConversationId={appState.actionContext.activeConversationId}
+						token={hostToken}
+					/>
+				{:else if currentPage.requiresHostToken}
+					<section class="ft-panel">
+						<header class="ft-panel__header">
+							<div>
+								<p class="ft-panel__eyebrow">Host workflow gate</p>
+								<h2>Conversation and finalize remain deliberately disabled</h2>
+							</div>
+							<span class="ft-panel__badge">Disabled</span>
+						</header>
+						<p class="ft-panel__copy">{HOST_WORKFLOW_BRIDGE_DISABLED_NOTE}</p>
+						<p class="ft-panel__copy">
+							Request, review, identity, and continuity stay canonical in Simulacrum. Enable the bridge for builds that need live lesser-host mint conversation and finalize verification.
+						</p>
+					</section>
+				{/if}
 
 				{#if currentPage.key === 'souls'}
 						<SoulRequestActionPanel
@@ -264,7 +284,7 @@
 						/>
 				{/if}
 
-				{#if currentPage.key === 'genesis'}
+				{#if HOST_WORKFLOW_BRIDGE_ENABLED && currentPage.key === 'genesis'}
 						<MintConversationPanel
 							agentId={appState.actionContext.activeAgentId}
 							conversationStatus={appState.hostWorkflow.selectedConversation?.status ?? null}
@@ -275,7 +295,7 @@
 						/>
 				{/if}
 
-				{#if currentPage.key === 'approvals'}
+				{#if HOST_WORKFLOW_BRIDGE_ENABLED && currentPage.key === 'approvals'}
 						<FinalizeSigningPanel
 							activeSoulAgentId={appState.actionContext.activeSoulAgentId}
 							agentId={appState.actionContext.activeAgentId}
