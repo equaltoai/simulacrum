@@ -400,19 +400,15 @@
 						quotes: status.quoteCount ?? 0,
 					}}
 					states={{
-						boosted: status.reblogged ?? null,
-						favorited: status.favourited ?? null,
-						bookmarked: status.bookmarked ?? null,
-						pinned: status.pinned ?? null,
+						boosted: status.reblogged ?? undefined,
+						favorited: status.favourited ?? undefined,
+						bookmarked: status.bookmarked ?? undefined,
 					}}
 					handlers={{
 						onReply: () => openComposer('reply'),
 						onBoost: toggleBoost,
 						onQuote: status.quoteable ? () => openComposer('quote') : undefined,
 						onFavorite: toggleFavorite,
-						onBookmark: toggleBookmark,
-						onPin: togglePin,
-						onDelete: viewerId && status.account.id === viewerId ? handleDelete : undefined,
 					}}
 					shareUrl={shareUrl(status.id)}
 					shareTitle={`Post by ${status.account.displayName || status.account.username}`}
@@ -422,7 +418,19 @@
 						{#if status && status.account.tipAddress && (!viewerId || status.account.id !== viewerId)}
 							<TipButton recipient={status.account} contentHash={status.contentHash ?? null} />
 						{/if}
+						{#if status}
+							<button type="button" class="gr-button gr-button--outline" onclick={toggleBookmark}>
+								{status.bookmarked ? 'Remove bookmark' : 'Bookmark'}
+							</button>
+						{/if}
 						{#if status && viewerId && status.account.id === viewerId}
+							<button
+								type="button"
+								class="gr-button gr-button--outline"
+								onclick={togglePin}
+							>
+								{status.pinned ? 'Unpin' : 'Pin'}
+							</button>
 							<button
 								type="button"
 								class="gr-button gr-button--outline"
@@ -436,6 +444,13 @@
 								onclick={() => (quotePermissionsOpen = !quotePermissionsOpen)}
 							>
 								Quote permissions
+							</button>
+							<button
+								type="button"
+								class="gr-button gr-button--outline"
+								onclick={handleDelete}
+							>
+								Delete
 							</button>
 						{/if}
 					{/snippet}

@@ -1,0 +1,803 @@
+import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+import { parse } from 'graphql';
+
+import { getAccessToken } from './auth';
+import { graphqlRequest } from './graphql';
+
+export type DroneWorkflowPhase =
+	| 'request'
+	| 'review'
+	| 'declaration'
+	| 'signing'
+	| 'graduation'
+	| 'continuity';
+
+export type DroneWorkflowState =
+	| 'request.draft'
+	| 'request.submitted'
+	| 'review.queued'
+	| 'review.approved'
+	| 'review.changes_requested'
+	| 'review.blocked'
+	| 'declaration.ready'
+	| 'signing.pending'
+	| 'graduation.ready'
+	| 'graduation.hold'
+	| 'graduation.watch'
+	| 'continuity.stable'
+	| 'continuity.monitoring'
+	| 'continuity.escalated';
+
+export type DroneIdentityState = 'drone' | 'graduating' | 'souled';
+export type DroneSoulBindingState = 'UNBOUND' | 'BOUND';
+export type DroneLifecycleStatus = 'upcoming' | 'active' | 'complete' | 'blocked';
+export type DroneReviewDecision = 'approved' | 'changes_requested' | 'blocked' | 'queued';
+export type DroneGraduationReadiness = 'ready' | 'watch' | 'hold';
+export type DroneSignerStatus = 'pending' | 'approved' | 'rejected';
+
+export interface AgentSurfaceMetric {
+	label: string;
+	value: string;
+	detail?: string | null;
+}
+
+export interface AgentSurfaceActor {
+	id: string;
+	name: string;
+	role: string;
+	handle?: string | null;
+	avatarLabel?: string | null;
+	statusLabel?: string | null;
+}
+
+export interface AgentSurfaceArtifact {
+	id: string;
+	title: string;
+	description?: string | null;
+	href?: string | null;
+	emphasis?: string | null;
+}
+
+export interface AgentIdentityCard {
+	id: string;
+	name: string;
+	handle?: string | null;
+	summary: string;
+	currentPhase: DroneWorkflowPhase;
+	currentState?: DroneWorkflowState | null;
+	steward?: AgentSurfaceActor | null;
+	tags: ReadonlyArray<string>;
+	metrics: ReadonlyArray<AgentSurfaceMetric>;
+}
+
+export interface SoulRequestCard {
+	id: string;
+	title: string;
+	summary: string;
+	requestedBy: AgentSurfaceActor;
+	submittedAt?: string | null;
+	constraints: ReadonlyArray<string>;
+	artifacts: ReadonlyArray<AgentSurfaceArtifact>;
+	routeDecision?: string | null;
+	currentState?: DroneWorkflowState | null;
+}
+
+export interface ReviewFinding {
+	id: string;
+	title: string;
+	detail: string;
+	severity?: string | null;
+}
+
+export interface ReviewDecisionCard {
+	id: string;
+	title: string;
+	decision: DroneReviewDecision;
+	reviewer: AgentSurfaceActor;
+	decisionSummary: string;
+	findings: ReadonlyArray<ReviewFinding>;
+	evidence: ReadonlyArray<AgentSurfaceArtifact>;
+}
+
+export interface DeclarationPreviewCard {
+	id: string;
+	title: string;
+	statement: string;
+	confidence: string;
+	owner?: AgentSurfaceActor | null;
+	declaredScope: ReadonlyArray<string>;
+	risks: ReadonlyArray<string>;
+	supportingArtifacts: ReadonlyArray<AgentSurfaceArtifact>;
+}
+
+export interface SignatureCheckpointSigner {
+	id: string;
+	name: string;
+	role: string;
+	status: DroneSignerStatus;
+	note?: string | null;
+}
+
+export interface SignatureCheckpointCard {
+	id: string;
+	title: string;
+	readinessLabel: string;
+	approvalMemo?: string | null;
+	dueAt?: string | null;
+	signers: ReadonlyArray<SignatureCheckpointSigner>;
+}
+
+export interface ContinuityFollowUp {
+	id: string;
+	title: string;
+	summary: string;
+	owner: AgentSurfaceActor;
+	cadence?: string | null;
+}
+
+export interface ContinuityPanel {
+	id: string;
+	title: string;
+	objective: string;
+	owner: AgentSurfaceActor;
+	feedbackLoop: string;
+	metrics: ReadonlyArray<AgentSurfaceMetric>;
+	followUps: ReadonlyArray<ContinuityFollowUp>;
+}
+
+export interface GraduationSummaryCard {
+	id: string;
+	title: string;
+	readiness: DroneGraduationReadiness;
+	summary: string;
+	launchOwner?: AgentSurfaceActor | null;
+	completedMilestones: ReadonlyArray<string>;
+	exitCriteria: ReadonlyArray<string>;
+	nextStep?: string | null;
+	metrics: ReadonlyArray<AgentSurfaceMetric>;
+}
+
+export interface AgentLifecycleStep {
+	phase: DroneWorkflowPhase;
+	title?: string | null;
+	summary?: string | null;
+	state?: DroneWorkflowState | null;
+	status: DroneLifecycleStatus;
+}
+
+export interface AgentWorkflowConversationState {
+	conversationId: string;
+	folder: string;
+	requestState?: string | null;
+	unread: boolean;
+	previewStatusId?: string | null;
+	requestedAt?: string | null;
+	acceptedAt?: string | null;
+	declinedAt?: string | null;
+	updatedAt: string;
+}
+
+export interface AgentIdentitySemantics {
+	identityState: DroneIdentityState;
+	identityLabel: string;
+	lifecycleState: string;
+	soulBindingState: DroneSoulBindingState;
+	soulAgentId?: string | null;
+	continuityState: string;
+	continuitySummary: string;
+	bodyIdentityPreserved: boolean;
+	timelinePresencePreserved: boolean;
+	memoryReferencesPreserved: boolean;
+	attributionLabel: string;
+	moderationLabel: string;
+}
+
+export interface DroneAgentCapabilities {
+	canPost: boolean;
+	canReply: boolean;
+	canBoost: boolean;
+	canFollow: boolean;
+	canDM: boolean;
+	maxPostsPerHour: number;
+	requiresApproval: boolean;
+	restrictedDomains?: ReadonlyArray<string> | null;
+}
+
+export interface AgentMCPAccess {
+	mcpURL: string;
+	protectedResourceURL: string;
+	authorizationServerURL: string;
+	registrationURL: string;
+	scopes: ReadonlyArray<string>;
+	guidance: ReadonlyArray<string>;
+}
+
+export interface DroneAgentState {
+	id: string;
+	username: string;
+	displayName: string;
+	bio?: string | null;
+	agentType: string;
+	agentVersion: string;
+	agentCapabilities: DroneAgentCapabilities;
+	agentOwner?: string | null;
+	delegatedScopes: ReadonlyArray<string>;
+	mcpAccess: AgentMCPAccess;
+	verified: boolean;
+	verifiedAt?: string | null;
+	createdAt: string;
+	activityCount: number;
+	identitySemantics: AgentIdentitySemantics;
+	workflow?: AgentWorkflowSurface | null;
+}
+
+export interface AgentWorkflowSurface {
+	username: string;
+	currentPhase: DroneWorkflowPhase;
+	currentState: DroneWorkflowState;
+	identity: AgentIdentityCard;
+	request?: SoulRequestCard | null;
+	review?: ReviewDecisionCard | null;
+	declaration?: DeclarationPreviewCard | null;
+	checkpoint?: SignatureCheckpointCard | null;
+	graduation?: GraduationSummaryCard | null;
+	continuity?: ContinuityPanel | null;
+	lifecycle: ReadonlyArray<AgentLifecycleStep>;
+	conversation?: AgentWorkflowConversationState | null;
+	identitySemantics: AgentIdentitySemantics;
+}
+
+export interface DroneWorkflowMutationPayload {
+	agent: DroneAgentState;
+	workflow: AgentWorkflowSurface;
+}
+
+export interface AgentSurfaceArtifactInput {
+	title: string;
+	description?: string | null;
+	href?: string | null;
+	emphasis?: string | null;
+}
+
+export interface ReviewFindingInput {
+	title: string;
+	detail: string;
+	severity?: string | null;
+}
+
+export interface RequestSoulPromotionInput {
+	username: string;
+	title?: string | null;
+	summary: string;
+	constraints?: ReadonlyArray<string> | null;
+	artifacts?: ReadonlyArray<AgentSurfaceArtifactInput> | null;
+	routeDecision?: string | null;
+	conversationId?: string | null;
+}
+
+export interface ReviewSoulPromotionInput {
+	username: string;
+	title?: string | null;
+	decision: DroneReviewDecision;
+	decisionSummary: string;
+	findings?: ReadonlyArray<ReviewFindingInput> | null;
+	evidence?: ReadonlyArray<AgentSurfaceArtifactInput> | null;
+	conversationId?: string | null;
+}
+
+export interface FinalizeSoulPromotionInput {
+	username: string;
+	readiness: DroneGraduationReadiness;
+	summary: string;
+	declarationTitle?: string | null;
+	declarationStatement: string;
+	declarationConfidence: string;
+	declaredScope?: ReadonlyArray<string> | null;
+	declarationRisks?: ReadonlyArray<string> | null;
+	supportingArtifacts?: ReadonlyArray<AgentSurfaceArtifactInput> | null;
+	completedMilestones?: ReadonlyArray<string> | null;
+	exitCriteria?: ReadonlyArray<string> | null;
+	nextStep?: string | null;
+	continuityObjective?: string | null;
+	continuityFeedbackLoop?: string | null;
+	conversationId?: string | null;
+	soulAgentId?: string | null;
+}
+
+export interface DroneAgentStateQuery extends Record<string, unknown> {
+	agent?: DroneAgentState | null;
+}
+
+export interface DroneAgentStateQueryVariables extends Record<string, unknown> {
+	username: string;
+}
+
+export interface DroneWorkflowQuery extends Record<string, unknown> {
+	droneWorkflow?: AgentWorkflowSurface | null;
+}
+
+export interface DroneWorkflowQueryVariables extends Record<string, unknown> {
+	username: string;
+}
+
+export interface MyDroneRequestsQuery extends Record<string, unknown> {
+	myDroneRequests: ReadonlyArray<SoulRequestCard>;
+}
+
+export interface MyDroneReviewsQuery extends Record<string, unknown> {
+	myDroneReviews: ReadonlyArray<ReviewDecisionCard>;
+}
+
+export interface RequestSoulPromotionMutation extends Record<string, unknown> {
+	requestSoulPromotion: DroneWorkflowMutationPayload;
+}
+
+export interface RequestSoulPromotionMutationVariables extends Record<string, unknown> {
+	input: RequestSoulPromotionInput;
+}
+
+export interface ReviewSoulPromotionMutation extends Record<string, unknown> {
+	reviewSoulPromotion: DroneWorkflowMutationPayload;
+}
+
+export interface ReviewSoulPromotionMutationVariables extends Record<string, unknown> {
+	input: ReviewSoulPromotionInput;
+}
+
+export interface FinalizeSoulPromotionMutation extends Record<string, unknown> {
+	finalizeSoulPromotion: DroneWorkflowMutationPayload;
+}
+
+export interface FinalizeSoulPromotionMutationVariables extends Record<string, unknown> {
+	input: FinalizeSoulPromotionInput;
+}
+
+const AGENT_SURFACE_METRIC_FIELDS = `
+	label
+	value
+	detail
+`;
+
+const AGENT_SURFACE_ACTOR_FIELDS = `
+	id
+	name
+	role
+	handle
+	avatarLabel
+	statusLabel
+`;
+
+const AGENT_SURFACE_ARTIFACT_FIELDS = `
+	id
+	title
+	description
+	href
+	emphasis
+`;
+
+const AGENT_IDENTITY_SEMANTICS_FIELDS = `
+	identityState
+	identityLabel
+	lifecycleState
+	soulBindingState
+	soulAgentId
+	continuityState
+	continuitySummary
+	bodyIdentityPreserved
+	timelinePresencePreserved
+	memoryReferencesPreserved
+	attributionLabel
+	moderationLabel
+`;
+
+const AGENT_WORKFLOW_FIELDS = `
+	username
+	currentPhase
+	currentState
+	identity {
+		id
+		name
+		handle
+		summary
+		currentPhase
+		currentState
+		steward {
+			${AGENT_SURFACE_ACTOR_FIELDS}
+		}
+		tags
+		metrics {
+			${AGENT_SURFACE_METRIC_FIELDS}
+		}
+	}
+	request {
+		id
+		title
+		summary
+		requestedBy {
+			${AGENT_SURFACE_ACTOR_FIELDS}
+		}
+		submittedAt
+		constraints
+		artifacts {
+			${AGENT_SURFACE_ARTIFACT_FIELDS}
+		}
+		routeDecision
+		currentState
+	}
+	review {
+		id
+		title
+		decision
+		reviewer {
+			${AGENT_SURFACE_ACTOR_FIELDS}
+		}
+		decisionSummary
+		findings {
+			id
+			title
+			detail
+			severity
+		}
+		evidence {
+			${AGENT_SURFACE_ARTIFACT_FIELDS}
+		}
+	}
+	declaration {
+		id
+		title
+		statement
+		confidence
+		owner {
+			${AGENT_SURFACE_ACTOR_FIELDS}
+		}
+		declaredScope
+		risks
+		supportingArtifacts {
+			${AGENT_SURFACE_ARTIFACT_FIELDS}
+		}
+	}
+	checkpoint {
+		id
+		title
+		readinessLabel
+		approvalMemo
+		dueAt
+		signers {
+			id
+			name
+			role
+			status
+			note
+		}
+	}
+	graduation {
+		id
+		title
+		readiness
+		summary
+		launchOwner {
+			${AGENT_SURFACE_ACTOR_FIELDS}
+		}
+		completedMilestones
+		exitCriteria
+		nextStep
+		metrics {
+			${AGENT_SURFACE_METRIC_FIELDS}
+		}
+	}
+	continuity {
+		id
+		title
+		objective
+		owner {
+			${AGENT_SURFACE_ACTOR_FIELDS}
+		}
+		feedbackLoop
+		metrics {
+			${AGENT_SURFACE_METRIC_FIELDS}
+		}
+		followUps {
+			id
+			title
+			summary
+			owner {
+				${AGENT_SURFACE_ACTOR_FIELDS}
+			}
+			cadence
+		}
+	}
+	lifecycle {
+		phase
+		title
+		summary
+		state
+		status
+	}
+	conversation {
+		conversationId
+		folder
+		requestState
+		unread
+		previewStatusId
+		requestedAt
+		acceptedAt
+		declinedAt
+		updatedAt
+	}
+	identitySemantics {
+		${AGENT_IDENTITY_SEMANTICS_FIELDS}
+	}
+`;
+
+const DRONE_AGENT_FIELDS = `
+	id
+	username
+	displayName
+	bio
+	agentType
+	agentVersion
+	agentCapabilities {
+		canPost
+		canReply
+		canBoost
+		canFollow
+		canDM
+		maxPostsPerHour
+		requiresApproval
+		restrictedDomains
+	}
+	agentOwner
+	delegatedScopes
+	mcpAccess {
+		mcpURL
+		protectedResourceURL
+		authorizationServerURL
+		registrationURL
+		scopes
+		guidance
+	}
+	verified
+	verifiedAt
+	createdAt
+	activityCount
+	identitySemantics {
+		${AGENT_IDENTITY_SEMANTICS_FIELDS}
+	}
+`;
+
+export const DroneAgentStateDocument = parse(`
+	query DroneAgentState($username: String!) {
+		agent(username: $username) {
+			${DRONE_AGENT_FIELDS}
+			workflow {
+				${AGENT_WORKFLOW_FIELDS}
+			}
+		}
+	}
+`) as unknown as TypedDocumentNode<DroneAgentStateQuery, DroneAgentStateQueryVariables>;
+
+export const DroneWorkflowDocument = parse(`
+	query DroneWorkflow($username: String!) {
+		droneWorkflow(username: $username) {
+			${AGENT_WORKFLOW_FIELDS}
+		}
+	}
+`) as unknown as TypedDocumentNode<DroneWorkflowQuery, DroneWorkflowQueryVariables>;
+
+export const MyDroneRequestsDocument = parse(`
+	query MyDroneRequests {
+		myDroneRequests {
+			id
+			title
+			summary
+			requestedBy {
+				${AGENT_SURFACE_ACTOR_FIELDS}
+			}
+			submittedAt
+			constraints
+			artifacts {
+				${AGENT_SURFACE_ARTIFACT_FIELDS}
+			}
+			routeDecision
+			currentState
+		}
+	}
+`) as unknown as TypedDocumentNode<MyDroneRequestsQuery, Record<string, never>>;
+
+export const MyDroneReviewsDocument = parse(`
+	query MyDroneReviews {
+		myDroneReviews {
+			id
+			title
+			decision
+			reviewer {
+				${AGENT_SURFACE_ACTOR_FIELDS}
+			}
+			decisionSummary
+			findings {
+				id
+				title
+				detail
+				severity
+			}
+			evidence {
+				${AGENT_SURFACE_ARTIFACT_FIELDS}
+			}
+		}
+	}
+`) as unknown as TypedDocumentNode<MyDroneReviewsQuery, Record<string, never>>;
+
+export const RequestSoulPromotionDocument = parse(`
+	mutation RequestSoulPromotion($input: RequestSoulPromotionInput!) {
+		requestSoulPromotion(input: $input) {
+			agent {
+				${DRONE_AGENT_FIELDS}
+			}
+			workflow {
+				${AGENT_WORKFLOW_FIELDS}
+			}
+		}
+	}
+`) as unknown as TypedDocumentNode<
+	RequestSoulPromotionMutation,
+	RequestSoulPromotionMutationVariables
+>;
+
+export const ReviewSoulPromotionDocument = parse(`
+	mutation ReviewSoulPromotion($input: ReviewSoulPromotionInput!) {
+		reviewSoulPromotion(input: $input) {
+			agent {
+				${DRONE_AGENT_FIELDS}
+			}
+			workflow {
+				${AGENT_WORKFLOW_FIELDS}
+			}
+		}
+	}
+`) as unknown as TypedDocumentNode<
+	ReviewSoulPromotionMutation,
+	ReviewSoulPromotionMutationVariables
+>;
+
+export const FinalizeSoulPromotionDocument = parse(`
+	mutation FinalizeSoulPromotion($input: FinalizeSoulPromotionInput!) {
+		finalizeSoulPromotion(input: $input) {
+			agent {
+				${DRONE_AGENT_FIELDS}
+			}
+			workflow {
+				${AGENT_WORKFLOW_FIELDS}
+			}
+		}
+	}
+`) as unknown as TypedDocumentNode<
+	FinalizeSoulPromotionMutation,
+	FinalizeSoulPromotionMutationVariables
+>;
+
+function requireAccessToken(): string {
+	const token = getAccessToken();
+	if (!token) throw new Error('Not authenticated');
+	return token;
+}
+
+export async function fetchDroneAgentState({
+	username,
+	signal,
+}: {
+	username: string;
+	signal?: AbortSignal;
+}): Promise<DroneAgentState | null> {
+	const data = await graphqlRequest<DroneAgentStateQuery, DroneAgentStateQueryVariables>({
+		document: DroneAgentStateDocument,
+		variables: { username },
+		token: requireAccessToken(),
+		signal,
+	});
+
+	return data.agent ?? null;
+}
+
+export async function fetchDroneWorkflow({
+	username,
+	signal,
+}: {
+	username: string;
+	signal?: AbortSignal;
+}): Promise<AgentWorkflowSurface | null> {
+	const data = await graphqlRequest<DroneWorkflowQuery, DroneWorkflowQueryVariables>({
+		document: DroneWorkflowDocument,
+		variables: { username },
+		token: requireAccessToken(),
+		signal,
+	});
+
+	return data.droneWorkflow ?? null;
+}
+
+export async function fetchMyDroneRequests({
+	signal,
+}: {
+	signal?: AbortSignal;
+} = {}): Promise<ReadonlyArray<SoulRequestCard>> {
+	const data = await graphqlRequest<MyDroneRequestsQuery, Record<string, never>>({
+		document: MyDroneRequestsDocument,
+		variables: {},
+		token: requireAccessToken(),
+		signal,
+	});
+
+	return data.myDroneRequests;
+}
+
+export async function fetchMyDroneReviews({
+	signal,
+}: {
+	signal?: AbortSignal;
+} = {}): Promise<ReadonlyArray<ReviewDecisionCard>> {
+	const data = await graphqlRequest<MyDroneReviewsQuery, Record<string, never>>({
+		document: MyDroneReviewsDocument,
+		variables: {},
+		token: requireAccessToken(),
+		signal,
+	});
+
+	return data.myDroneReviews;
+}
+
+export async function requestSoulPromotion({
+	input,
+	signal,
+}: {
+	input: RequestSoulPromotionInput;
+	signal?: AbortSignal;
+}): Promise<DroneWorkflowMutationPayload> {
+	const data = await graphqlRequest<
+		RequestSoulPromotionMutation,
+		RequestSoulPromotionMutationVariables
+	>({
+		document: RequestSoulPromotionDocument,
+		variables: { input },
+		token: requireAccessToken(),
+		signal,
+	});
+
+	return data.requestSoulPromotion;
+}
+
+export async function reviewSoulPromotion({
+	input,
+	signal,
+}: {
+	input: ReviewSoulPromotionInput;
+	signal?: AbortSignal;
+}): Promise<DroneWorkflowMutationPayload> {
+	const data = await graphqlRequest<ReviewSoulPromotionMutation, ReviewSoulPromotionMutationVariables>({
+		document: ReviewSoulPromotionDocument,
+		variables: { input },
+		token: requireAccessToken(),
+		signal,
+	});
+
+	return data.reviewSoulPromotion;
+}
+
+export async function finalizeSoulPromotion({
+	input,
+	signal,
+}: {
+	input: FinalizeSoulPromotionInput;
+	signal?: AbortSignal;
+}): Promise<DroneWorkflowMutationPayload> {
+	const data = await graphqlRequest<
+		FinalizeSoulPromotionMutation,
+		FinalizeSoulPromotionMutationVariables
+	>({
+		document: FinalizeSoulPromotionDocument,
+		variables: { input },
+		token: requireAccessToken(),
+		signal,
+	});
+
+	return data.finalizeSoulPromotion;
+}

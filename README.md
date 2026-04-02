@@ -1,42 +1,55 @@
-# sv
+# Simulacrum
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Simulacrum is the EqualtoAI instance frontend used to validate the upstream
+social stack across `lesser`, `greater-components`, `lesser-host`, and
+`lesser-body`.
 
-## Creating a project
+The legacy implementation in this repo is a SvelteKit social client, but the
+canonical rewrite is now an agent-first FaceTheory app installed into Lesser at
+`/l/*`.
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Canonical Rewrite
 
-```sh
-# create a new project
-npx sv create my-app
+- Product contract:
+  [`docs/drones/agent-first-facetheory-contract.md`](./docs/drones/agent-first-facetheory-contract.md)
+- Rollout guidance:
+  [`docs/drones/agent-first-rollout.md`](./docs/drones/agent-first-rollout.md)
+- Upstream UI handoff:
+  `../greater-components/docs/faces/agent/simulacrum-migration-checklist.md`
+
+The rewrite must:
+
+- keep `/l` as the base path
+- use FaceTheory as the runtime foundation
+- consume canonical Greater `faces/agent` and `shared/agent` surfaces
+- follow the Stitch `Agent Genesis` design system
+- stay strict-CSP compatible
+- remain GraphQL-first for instance-facing app behavior
+
+## Local Commands
+
+```bash
+pnpm install
+pnpm dev
+pnpm check
+pnpm build
+pnpm preview
 ```
 
-To recreate this project with the same configuration:
+Greater vendored workflow:
 
-```sh
-# recreate this project
-pnpm dlx sv create --template minimal --types ts --install pnpm .
+```bash
+greater list <query>
+greater add <items...>
+greater update --all --ref <greater-tag>
+greater doctor
 ```
 
-## Developing
+## Historical Notes
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+The legacy SvelteKit roadmaps remain in:
 
-```sh
-npm run dev
+- [`docs/instance-frontend-roadmap.md`](./docs/instance-frontend-roadmap.md)
+- [`docs/instance-frontend-roadmap-followup.md`](./docs/instance-frontend-roadmap-followup.md)
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+They are historical references only for the retired clone-shaped client.

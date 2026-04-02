@@ -62,6 +62,31 @@ export interface Vouch {
 	revokedAt?: string | Date;
 }
 
+export interface AccountField {
+	name: string;
+	value: string;
+	verifiedAt?: string | null;
+}
+
+export interface AgentInfo {
+	id: string;
+	agentType: string;
+	verified: boolean;
+	verifiedAt?: string | Date | null;
+}
+
+export interface AgentAttribution {
+	triggerType?: string;
+	triggerDetails?: string;
+	memoryCitations?: readonly string[];
+	delegatedBy?: string;
+	delegatedByDid?: string;
+	scopes?: readonly string[];
+	constraints?: readonly string[];
+	schemaVersion?: string;
+	modelId?: string;
+}
+
 export interface Account {
 	id: string;
 	username: string;
@@ -80,36 +105,16 @@ export interface Account {
 	locked?: boolean;
 	verified?: boolean;
 	createdAt: string | Date;
-	fields?: Array<{ name: string; value: string; verifiedAt?: string | null }>;
+	fields?: AccountField[];
+	isAgent?: boolean;
+	agentInfo?: AgentInfo;
+	tipAddress?: string | null;
+	tipChainId?: number | null;
 
 	// Lesser-specific fields
-	isAgent?: boolean;
-	agentInfo?: {
-		id: string;
-		agentType: string;
-		verified: boolean;
-		verifiedAt?: string | Date;
-	};
-	tipAddress?: string;
-	tipChainId?: number;
 	trustScore?: number;
 	reputation?: Reputation;
 	vouches?: Vouch[];
-}
-
-/**
- * Lesser-specific: Agent attribution on content
- */
-export interface AgentAttribution {
-	triggerType?: string;
-	triggerDetails?: string;
-	memoryCitations?: ReadonlyArray<string>;
-	delegatedBy?: string;
-	delegatedByDid?: string;
-	scopes?: ReadonlyArray<string>;
-	constraints?: ReadonlyArray<string>;
-	schemaVersion?: string;
-	modelId?: string;
 }
 
 /**
@@ -154,62 +159,15 @@ export interface AIAnalysis {
 	textAnalysis?: {
 		sentiment: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'MIXED';
 		toxicityScore: number;
-		toxicityLabels?: ReadonlyArray<string>;
 		containsPII: boolean;
 		dominantLanguage: string;
-		keyPhrases?: ReadonlyArray<string>;
-		sentimentScores?: {
-			positive: number;
-			negative: number;
-			neutral: number;
-			mixed: number;
-		};
-		entities?: ReadonlyArray<{
-			text: string;
-			type: string;
-			score: number;
-		}>;
-	} | null;
+	};
 	imageAnalysis?: {
 		isNSFW: boolean;
 		nsfwConfidence: number;
 		violenceScore: number;
-		deepfakeScore?: number;
 		weaponsDetected: boolean;
-		detectedText?: ReadonlyArray<string>;
-		textToxicity?: number;
-		moderationLabels?: ReadonlyArray<{
-			name: string;
-			confidence: number;
-			parentName?: string | null;
-		}>;
-		celebrityFaces?: ReadonlyArray<{
-			name: string;
-			confidence: number;
-		}>;
-	} | null;
-	aiDetection?: {
-		aiGeneratedProbability: number;
-		generationModel?: string | null;
-		patternConsistency: number;
-		styleDeviation: number;
-		semanticCoherence: number;
-		suspiciousPatterns: ReadonlyArray<string>;
-	} | null;
-	spamAnalysis?: {
-		spamScore: number;
-		postingVelocity: number;
-		repetitionScore: number;
-		linkDensity: number;
-		followerRatio: number;
-		interactionRate: number;
-		accountAgeDays: number;
-		spamIndicators: ReadonlyArray<{
-			type: string;
-			description: string;
-			severity: number;
-		}>;
-	} | null;
+	};
 }
 
 export interface Status {
@@ -335,6 +293,23 @@ export interface CommunicationNotification {
 	threadId?: string | null;
 }
 
+export type WorkflowEventKind =
+	| 'request_submitted'
+	| 'review_requested'
+	| 'approval_requested'
+	| 'finalize_ready'
+	| 'graduated';
+
+export interface WorkflowEventPayload {
+	kind: WorkflowEventKind;
+	title: string;
+	summary: string;
+	phase?: string;
+	actorLabel?: string;
+	targetLabel?: string;
+	actionLabel?: string;
+}
+
 export type NotificationType =
 	| 'mention'
 	| 'reblog'
@@ -352,7 +327,8 @@ export type NotificationType =
 	| 'trust_update'
 	| 'cost_alert'
 	| 'moderation_action'
-	| 'communication_inbound';
+	| 'communication_inbound'
+	| 'workflow_event';
 
 export interface BaseNotification {
 	id: string;
@@ -361,6 +337,9 @@ export interface BaseNotification {
 	account: Account;
 	read?: boolean;
 	dismissed?: boolean;
+	status?: Status;
+	communication?: CommunicationNotification | null;
+	workflowEvent?: WorkflowEventPayload | null;
 
 	// Metadata for Lesser-specific payloads (derived from status/account changes)
 	metadata?: {
@@ -491,6 +470,11 @@ export interface CommunicationInboundNotification extends BaseNotification {
 	communication: CommunicationNotification;
 }
 
+export interface WorkflowEventNotification extends BaseNotification {
+	type: 'workflow_event';
+	workflowEvent: WorkflowEventPayload;
+}
+
 export type Notification =
 	| MentionNotification
 	| ReblogNotification
@@ -507,7 +491,8 @@ export type Notification =
 	| TrustUpdateNotification
 	| CostAlertNotification
 	| ModerationActionNotification
-	| CommunicationInboundNotification;
+	| CommunicationInboundNotification
+	| WorkflowEventNotification;
 
 export interface NotificationGroup {
 	id: string;

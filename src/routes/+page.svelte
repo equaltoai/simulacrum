@@ -124,7 +124,7 @@
 		{#if isLoading}
 			<div class="page__notice">Loading timeline…</div>
 		{:else}
-			<TimelineVirtualizedReactive {items} viewerId={viewer?.id ?? undefined} />
+			<TimelineVirtualizedReactive {items} />
 		{/if}
 	{/if}
 </section>
