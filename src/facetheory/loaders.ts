@@ -132,8 +132,80 @@ interface AssembleAppStateInput {
 	myReviews: readonly ReviewDecisionCard[];
 	channels: SoulChannels;
 	preferences: SoulContactPreferences | null;
+	publishedSoulProfile: PublishedSoulProfile | null;
 	hostWorkflow: HostWorkflowState;
 	isPreview: boolean;
+}
+
+interface LesserInstanceConfigResponse {
+	configuration?: {
+		trust?: {
+			base_url?: string | null;
+			enabled?: boolean | null;
+		} | null;
+	} | null;
+}
+
+interface PublishedSoulAgentRecord {
+	agent_id: string;
+	domain: string;
+	local_id: string;
+	wallet: string;
+	principal_address?: string;
+	principal_declaration?: string;
+	principal_declared_at?: string;
+	self_description_version?: number;
+	status: string;
+	minted_at?: string;
+	updated_at?: string;
+}
+
+interface PublishedSoulAgentResponse {
+	version: string;
+	agent: PublishedSoulAgentRecord;
+}
+
+interface PublishedSoulCapability {
+	capability: string;
+	scope?: string;
+	constraints?: Record<string, unknown>;
+	claim_level?: string;
+	degrades_to?: string;
+}
+
+interface PublishedSoulCapabilitiesResponse {
+	version: string;
+	capabilities: PublishedSoulCapability[];
+	count: number;
+}
+
+interface PublishedSoulBoundary {
+	agent_id: string;
+	boundary_id: string;
+	category: string;
+	statement: string;
+	rationale?: string;
+	added_in_version?: number;
+	added_at?: string;
+}
+
+interface PublishedSoulBoundariesResponse {
+	version: string;
+	boundaries: PublishedSoulBoundary[];
+	count: number;
+	has_more: boolean;
+}
+
+interface PublishedSoulTransparencyResponse {
+	version: string;
+	transparency?: Record<string, unknown> | null;
+}
+
+interface PublishedSoulProfile {
+	agent: PublishedSoulAgentRecord;
+	capabilities: readonly PublishedSoulCapability[];
+	boundaries: readonly PublishedSoulBoundary[];
+	transparency: Record<string, unknown> | null;
 }
 
 function optional<T>(value: T | null | undefined): T | undefined {
@@ -703,6 +775,7 @@ const PREVIEW_HOST_WORKFLOW: HostWorkflowState = {
 	authNote: HOST_WORKFLOW_BRIDGE_ENABLED
 		? SOUL_WORKFLOW_HOST_AUTH_NOTE
 		: HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+	baseUrl: null,
 	promotion: null,
 	lifecycleEvents: [
 		{
@@ -858,6 +931,7 @@ export function createPreviewAppState({
 		myReviews: [PREVIEW_REVIEW],
 		channels: EMPTY_CHANNELS,
 		preferences: null,
+		publishedSoulProfile: null,
 		hostWorkflow: PREVIEW_HOST_WORKFLOW,
 		isPreview: true,
 	});
@@ -920,6 +994,7 @@ export async function loadClientAppState({
 
 	const selectedAgent = pickActiveAgent(myAgents, agentHint);
 	const activeUsername = selectedAgent?.username ?? null;
+	const lesserHostBaseUrl = await loadLesserHostBaseUrl(signal);
 
 	const [activeAgent, workflow] = activeUsername
 		? await Promise.all([
@@ -931,22 +1006,24 @@ export async function loadClientAppState({
 	const soulAgentId = shouldExposeSoulReachability(activeAgent, workflow)
 		? pickSoulAgentId(mySouls, activeUsername, workflow, activeAgent)
 		: null;
-	const [channelsResponse, preferencesResponse] = soulAgentId
+	const [channelsResponse, preferencesResponse, publishedSoulProfile] = soulAgentId && lesserHostBaseUrl
 		? await Promise.all([
-				loadChannels(soulAgentId, signal),
-				loadPreferences(soulAgentId, signal),
+				loadChannels(lesserHostBaseUrl, soulAgentId, signal),
+				loadPreferences(lesserHostBaseUrl, soulAgentId, signal),
+				loadPublishedSoulProfile(lesserHostBaseUrl, soulAgentId, signal),
 			])
-		: [null, null];
+		: [null, null, null];
 
 	const hostWorkflow = !HOST_WORKFLOW_BRIDGE_ENABLED
-		? emptyHostWorkflow(false, false)
+		? emptyHostWorkflow(false, false, lesserHostBaseUrl)
 		: activeAgent
 			? await loadHostWorkflow({
 					token: hostToken ?? null,
+					baseUrl: lesserHostBaseUrl,
 					agentId: activeAgent.id,
 					signal,
 				})
-			: emptyHostWorkflow(Boolean(hostToken?.trim()), true);
+			: emptyHostWorkflow(Boolean(hostToken?.trim()), true, lesserHostBaseUrl);
 
 	return assembleAppState({
 		page,
@@ -964,6 +1041,7 @@ export async function loadClientAppState({
 		myReviews,
 		channels: channelsResponse?.channels ?? EMPTY_CHANNELS,
 		preferences: preferencesResponse?.contactPreferences ?? channelsResponse?.contactPreferences ?? null,
+		publishedSoulProfile,
 		hostWorkflow: {
 			...hostWorkflow,
 			expectedWallet:
@@ -976,10 +1054,11 @@ export async function loadClientAppState({
 }
 
 async function loadChannels(
+	baseUrl: string,
 	agentId: string,
 	signal?: AbortSignal
 ): Promise<SoulAgentChannelsResponse | null> {
-	const client = createLesserHostSoulClient({ baseUrl: window.location.origin });
+	const client = createLesserHostSoulClient({ baseUrl });
 	try {
 		return await client.getAgentChannels(agentId);
 	} catch {
@@ -988,10 +1067,11 @@ async function loadChannels(
 }
 
 async function loadPreferences(
+	baseUrl: string,
 	agentId: string,
 	signal?: AbortSignal
 ): Promise<SoulAgentChannelPreferencesResponse | null> {
-	const client = createLesserHostSoulClient({ baseUrl: window.location.origin });
+	const client = createLesserHostSoulClient({ baseUrl });
 	try {
 		return await client.getAgentChannelPreferences(agentId);
 	} catch {
@@ -999,27 +1079,109 @@ async function loadPreferences(
 	}
 }
 
+async function loadLesserHostBaseUrl(signal?: AbortSignal): Promise<string | null> {
+	try {
+		const response = await fetch('/api/v2/instance', {
+			headers: { accept: 'application/json' },
+			signal,
+		});
+		if (!response.ok) return null;
+
+		const payload = (await response.json().catch(() => null)) as LesserInstanceConfigResponse | null;
+		const baseUrl = payload?.configuration?.trust?.base_url?.trim();
+		if (!payload?.configuration?.trust?.enabled || !baseUrl) return null;
+		return baseUrl.replace(/\/+$/, '');
+	} catch {
+		return null;
+	}
+}
+
+async function requestPublicSoulJson<T>(
+	baseUrl: string,
+	path: string,
+	signal?: AbortSignal
+): Promise<T> {
+	const response = await fetch(new URL(path, `${baseUrl}/`), {
+		headers: { accept: 'application/json' },
+		signal,
+	});
+	if (!response.ok) {
+		throw new Error(`Public soul request failed (${response.status})`);
+	}
+	return (await response.json()) as T;
+}
+
+async function loadPublishedSoulProfile(
+	baseUrl: string,
+	agentId: string,
+	signal?: AbortSignal
+): Promise<PublishedSoulProfile | null> {
+	const [agentResult, capabilitiesResult, boundariesResult, transparencyResult] =
+		await Promise.allSettled([
+			requestPublicSoulJson<PublishedSoulAgentResponse>(
+				baseUrl,
+				`/api/v1/soul/agents/${encodeURIComponent(agentId)}`,
+				signal
+			),
+			requestPublicSoulJson<PublishedSoulCapabilitiesResponse>(
+				baseUrl,
+				`/api/v1/soul/agents/${encodeURIComponent(agentId)}/capabilities`,
+				signal
+			),
+			requestPublicSoulJson<PublishedSoulBoundariesResponse>(
+				baseUrl,
+				`/api/v1/soul/agents/${encodeURIComponent(agentId)}/boundaries?limit=20`,
+				signal
+			),
+			requestPublicSoulJson<PublishedSoulTransparencyResponse>(
+				baseUrl,
+				`/api/v1/soul/agents/${encodeURIComponent(agentId)}/transparency`,
+				signal
+			),
+		]);
+
+	if (agentResult.status !== 'fulfilled') return null;
+
+	return {
+		agent: agentResult.value.agent,
+		capabilities:
+			capabilitiesResult.status === 'fulfilled' ? capabilitiesResult.value.capabilities ?? [] : [],
+		boundaries:
+			boundariesResult.status === 'fulfilled' ? boundariesResult.value.boundaries ?? [] : [],
+		transparency:
+			transparencyResult.status === 'fulfilled'
+				? (transparencyResult.value.transparency ?? null)
+				: null,
+	};
+}
+
 async function loadHostWorkflow({
 	token,
+	baseUrl,
 	agentId,
 	signal,
 }: {
 	token: string | null;
+	baseUrl: string | null;
 	agentId: string;
 	signal?: AbortSignal;
 }): Promise<HostWorkflowState> {
 	if (!token?.trim()) {
-		return emptyHostWorkflow(false, true);
+		return emptyHostWorkflow(false, true, baseUrl);
+	}
+
+	if (!baseUrl?.trim()) {
+		return emptyHostWorkflow(true, true, null);
 	}
 
 	try {
 		const [promotion, lifecycleResponse, conversationsResponse] = await Promise.all([
-			getAgentPromotion({ token, agentId, signal })
+			getAgentPromotion({ token, agentId, baseUrl, signal })
 				.then((response) => response.promotion)
 				.catch(() => null),
-			listAgentPromotionLifecycleEvents({ token, agentId, signal })
+			listAgentPromotionLifecycleEvents({ token, agentId, baseUrl, signal })
 				.catch(() => ({ events: [] as SoulAgentPromotionLifecycleEvent[] })),
-			listAgentMintConversations({ token, agentId, signal }).catch(() => ({
+			listAgentMintConversations({ token, agentId, baseUrl, signal }).catch(() => ({
 				conversations: [] as SoulMintConversation[],
 			})),
 		]);
@@ -1036,6 +1198,7 @@ async function loadHostWorkflow({
 				? await getAgentMintConversation({
 						token,
 						agentId,
+						baseUrl,
 						conversationId: selectedConversation.conversation_id,
 						signal,
 					}).catch(() => selectedConversation)
@@ -1048,6 +1211,7 @@ async function loadHostWorkflow({
 			bridgeEnabled: true,
 			tokenConfigured: true,
 			authNote: SOUL_WORKFLOW_HOST_AUTH_NOTE,
+			baseUrl,
 			promotion,
 			lifecycleEvents: lifecycleResponse.events ?? [],
 			conversations: conversationsResponse.conversations ?? [],
@@ -1057,15 +1221,20 @@ async function loadHostWorkflow({
 			expectedWallet: promotion?.wallet ?? null,
 		};
 	} catch {
-		return emptyHostWorkflow(true, true);
+		return emptyHostWorkflow(true, true, baseUrl);
 	}
 }
 
-function emptyHostWorkflow(tokenConfigured: boolean, bridgeEnabled: boolean): HostWorkflowState {
+function emptyHostWorkflow(
+	tokenConfigured: boolean,
+	bridgeEnabled: boolean,
+	baseUrl: string | null
+): HostWorkflowState {
 	return {
 		bridgeEnabled,
 		tokenConfigured,
 		authNote: bridgeEnabled ? SOUL_WORKFLOW_HOST_AUTH_NOTE : HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+		baseUrl,
 		promotion: null,
 		lifecycleEvents: [],
 		conversations: [],
@@ -1088,7 +1257,15 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 	const previewRequest = normalizeSoulRequestCard(PREVIEW_REQUEST);
 	const rawReviewDecision = workflow?.review ?? input.myReviews[0] ?? PREVIEW_REVIEW;
 	const reviewDecision = normalizeReviewDecision(rawReviewDecision);
-	const rawDeclaration = workflow?.declaration ?? PREVIEW_WORKFLOW.declaration!;
+	const rawDeclaration =
+		workflow?.declaration ??
+		buildPublishedSoulDeclaration(input.publishedSoulProfile, identity.name) ??
+		buildHostWorkflowDeclaration(
+			input.hostWorkflow.producedDeclarations,
+			input.publishedSoulProfile?.agent.local_id ?? activeUsername,
+			identity.name
+		) ??
+		(input.isPreview ? PREVIEW_WORKFLOW.declaration! : buildUnavailableDeclaration(identity.name, activeUsername));
 	const declaration = normalizeDeclarationCard(rawDeclaration);
 	const rawCheckpoint = workflow?.checkpoint ?? PREVIEW_WORKFLOW.checkpoint!;
 	const checkpoint = normalizeCheckpointCard(rawCheckpoint);
@@ -1100,13 +1277,15 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 	const lifecycle = normalizeLifecycle(rawLifecycle);
 	const transcript = input.hostWorkflow.transcript.length
 		? input.hostWorkflow.transcript
-		: synthesizeTranscript(
+		: input.isPreview
+			? synthesizeTranscript(
 				input.viewer,
 				identity.name,
 				rawRequestQueue[0],
 				rawDeclaration,
 				rawReviewDecision
-			);
+			)
+			: [];
 	const notifications = buildWorkflowNotifications(
 		input.viewer,
 		rawRequestQueue[0] ?? PREVIEW_REQUEST,
@@ -1132,7 +1311,8 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		dedupeById([
 			...(rawRequestQueue[0]?.artifacts ?? []),
 			...(rawDeclaration.supportingArtifacts ?? []),
-		...buildProducedDeclarationArtifacts(input.hostWorkflow.producedDeclarations),
+			...buildPublishedSoulArtifacts(input.publishedSoulProfile),
+			...buildProducedDeclarationArtifacts(input.hostWorkflow.producedDeclarations),
 		])
 	);
 	const navItems = buildNavItems(
@@ -1899,6 +2079,169 @@ function buildAttributions(
 	];
 }
 
+function buildPublishedSoulDeclaration(
+	profile: PublishedSoulProfile | null,
+	agentName: string
+): AgentWorkflowSurface['declaration'] | null {
+	if (!profile?.agent.principal_declaration?.trim()) return null;
+
+	const declaredScope = profile.capabilities.length
+		? profile.capabilities.map((capability) => titleCase(capability.capability.replaceAll('_', ' ')))
+		: profile.agent.self_description_version
+			? [`Published soul record v${profile.agent.self_description_version}`]
+			: ['Published soul record'];
+
+	const risks = profile.boundaries.length
+		? profile.boundaries.map((boundary) => boundary.statement.trim()).filter(Boolean)
+		: [];
+	const transparencyCount = profile.transparency ? Object.keys(profile.transparency).length : 0;
+
+	return {
+		id: `published-declaration-${profile.agent.agent_id}`,
+		title: `${agentName} declaration packet`,
+		statement: profile.agent.principal_declaration.trim(),
+		confidence: profile.agent.self_description_version
+			? `published v${profile.agent.self_description_version}`
+			: 'published',
+		owner: {
+			id: profile.agent.agent_id,
+			name: agentName,
+			role: 'published soul',
+			handle: profile.agent.local_id ? `@${profile.agent.local_id}` : null,
+			avatarLabel: initials(agentName),
+			statusLabel: profile.agent.status,
+		},
+		declaredScope,
+		risks,
+		supportingArtifacts: [
+			{
+				id: `published-capabilities-${profile.agent.agent_id}`,
+				title: 'Capability registry',
+				description: `${profile.capabilities.length} declared capability${profile.capabilities.length === 1 ? '' : 'ies'} published on lesser-host.`,
+				emphasis: 'reference',
+			},
+			{
+				id: `published-boundaries-${profile.agent.agent_id}`,
+				title: 'Signed boundaries',
+				description: `${profile.boundaries.length} published boundary commitment${profile.boundaries.length === 1 ? '' : 's'} attached to the soul.`,
+				emphasis: 'decision',
+			},
+			{
+				id: `published-transparency-${profile.agent.agent_id}`,
+				title: 'Transparency record',
+				description: transparencyCount
+					? `${transparencyCount} transparency field${transparencyCount === 1 ? '' : 's'} published on lesser-host.`
+					: 'No published transparency fields were returned by lesser-host.',
+				emphasis: 'reference',
+			},
+		],
+	};
+}
+
+function buildHostWorkflowDeclaration(
+	producedDeclarations: Record<string, unknown> | null,
+	localId: string | null,
+	agentName: string
+): AgentWorkflowSurface['declaration'] | null {
+	if (!producedDeclarations) return null;
+
+	const selfDescription = asRecord(producedDeclarations.selfDescription);
+	const capabilities = asRecordArray(producedDeclarations.capabilities);
+	const boundaries = asRecordArray(producedDeclarations.boundaries);
+	const transparency = asRecord(producedDeclarations.transparency);
+	const statement =
+		readFirstString(selfDescription, ['summary', 'statement', 'description']) ??
+		readFirstString(producedDeclarations, ['principal_declaration']);
+
+	if (!statement) return null;
+
+	return {
+		id: `host-declaration-${localId ?? agentName.toLowerCase()}`,
+		title:
+			readFirstString(selfDescription, ['title', 'name', 'headline']) ??
+			`${agentName} declaration packet`,
+		statement,
+		confidence: 'conversation-derived',
+		owner: undefined,
+		declaredScope: capabilities.length
+			? capabilities
+					.map((capability, index) =>
+						readFirstString(capability, ['capability', 'label', 'name', 'scope']) ??
+						`Capability ${index + 1}`
+					)
+			: ['Mint conversation draft'],
+		risks: boundaries
+			.map((boundary, index) =>
+				readFirstString(boundary, ['statement', 'rationale', 'summary']) ??
+				`Boundary ${index + 1}`
+			)
+			.filter(Boolean),
+		supportingArtifacts: [
+			{
+				id: `host-self-description-${localId ?? agentName.toLowerCase()}`,
+				title: 'Mint conversation record',
+				description: 'Derived from the persisted lesser-host mint conversation output.',
+				emphasis: 'reference',
+			},
+			...(Object.keys(transparency).length
+				? [
+						{
+							id: `host-transparency-${localId ?? agentName.toLowerCase()}`,
+							title: 'Transparency note',
+							description:
+								readFirstString(transparency, ['note', 'summary', 'statement']) ??
+								`Captured ${Object.keys(transparency).length} transparency field${Object.keys(transparency).length === 1 ? '' : 's'}.`,
+							emphasis: 'reference' as const,
+						},
+					]
+				: []),
+		],
+	};
+}
+
+function buildUnavailableDeclaration(
+	agentName: string,
+	activeUsername: string
+): NonNullable<AgentWorkflowSurface['declaration']> {
+	return {
+		id: `declaration-unavailable-${activeUsername}`,
+		title: `${agentName} declaration packet`,
+		statement:
+			'Declaration details are not available from the current live contracts yet. The identity surface will refresh when Lesser or lesser-host returns a published declaration record.',
+		confidence: 'unavailable',
+		owner: undefined,
+		declaredScope: ['Awaiting live declaration data'],
+		risks: [],
+		supportingArtifacts: [],
+	};
+}
+
+function buildPublishedSoulArtifacts(
+	profile: PublishedSoulProfile | null
+): Array<{ id: string; title: string; description: string; emphasis: 'reference' | 'decision' }> {
+	if (!profile) return [];
+
+	return [
+		{
+			id: `soul-record-${profile.agent.agent_id}`,
+			title: 'Published soul record',
+			description: profile.agent.principal_declared_at
+				? `Principal declaration recorded ${new Date(profile.agent.principal_declared_at).toLocaleString()}.`
+				: 'Published soul record returned from lesser-host.',
+			emphasis: 'reference',
+		},
+		...Object.entries(profile.transparency ?? {}).map(([key, value]) => ({
+			id: `transparency-${profile.agent.agent_id}-${key}`,
+			title: titleCase(key.replaceAll('_', ' ')),
+			description:
+				typeof value === 'string'
+					? value
+					: JSON.stringify(value),
+			emphasis: 'reference' as const,
+		})),
+	];
+}
+
 function buildProducedDeclarationArtifacts(
 	producedDeclarations: Record<string, unknown> | null
 ): Array<{ id: string; title: string; description: string; emphasis: 'decision' }> {
@@ -2066,6 +2409,26 @@ function truncateWallet(value: string): string {
 	const trimmed = value.trim();
 	if (trimmed.length <= 12) return trimmed;
 	return `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+	return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function asRecordArray(value: unknown): ReadonlyArray<Record<string, unknown>> {
+	return Array.isArray(value)
+		? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+		: [];
+}
+
+function readFirstString(record: Record<string, unknown>, keys: readonly string[]): string | null {
+	for (const key of keys) {
+		const value = record[key];
+		if (typeof value === 'string' && value.trim()) {
+			return value.trim();
+		}
+	}
+	return null;
 }
 
 function titleCase(value: string): string {

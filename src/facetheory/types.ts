@@ -44,6 +44,7 @@ export interface HostWorkflowState {
 	bridgeEnabled: boolean;
 	tokenConfigured: boolean;
 	authNote: string;
+	baseUrl: string | null;
 	promotion: SoulAgentPromotion | null;
 	lifecycleEvents: readonly SoulAgentPromotionLifecycleEvent[];
 	conversations: readonly SoulMintConversation[];

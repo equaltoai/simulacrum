@@ -286,6 +286,7 @@
 					<MintConversationPanel
 						agentId={appState.actionContext.activeAgentId}
 						conversationStatus={appState.hostWorkflow.selectedConversation?.status ?? null}
+						hostBaseUrl={appState.hostWorkflow.baseUrl}
 						hostToken={hostToken}
 						initialConversationId={appState.actionContext.activeConversationId}
 						initialTranscript={appState.hostWorkflow.transcript}
@@ -299,6 +300,7 @@
 						agentId={appState.actionContext.activeAgentId}
 						conversationId={appState.actionContext.activeConversationId}
 						expectedWallet={appState.actionContext.expectedWallet}
+						hostBaseUrl={appState.hostWorkflow.baseUrl}
 						hostToken={hostToken}
 						onUpdated={refreshLiveState}
 						username={appState.actionContext.activeUsername}

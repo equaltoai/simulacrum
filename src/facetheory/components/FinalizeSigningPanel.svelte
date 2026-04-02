@@ -12,6 +12,7 @@
 
 	interface Props {
 		hostToken?: string;
+		hostBaseUrl?: string | null;
 		agentId?: string | null;
 		conversationId?: string | null;
 		username?: string | null;
@@ -23,6 +24,7 @@
 
 	let {
 		hostToken = '',
+		hostBaseUrl = null,
 		agentId = null,
 		conversationId = null,
 		username = null,
@@ -38,7 +40,7 @@
 	let lastPublishedVersion = $state<number | null>(null);
 
 	async function signAndFinalize() {
-		if (!hostToken.trim() || !agentId || !conversationId || !username?.trim()) return;
+		if (!hostToken.trim() || !hostBaseUrl?.trim() || !agentId || !conversationId || !username?.trim()) return;
 
 		loading = true;
 		error = null;
@@ -62,6 +64,7 @@
 
 			const initialBegin = await getAgentMintConversationFinalizePreflight({
 				token: hostToken,
+				baseUrl: hostBaseUrl,
 				agentId,
 				conversationId,
 				input: {
@@ -72,6 +75,7 @@
 			const boundarySignatures = await collectBoundarySignatures(provider, wallet, initialBegin);
 			const begin = await getAgentMintConversationFinalizePreflight({
 				token: hostToken,
+				baseUrl: hostBaseUrl,
 				agentId,
 				conversationId,
 				input: {
@@ -86,6 +90,7 @@
 
 			const hostResult = await finalizeAgentMintConversation({
 				token: hostToken,
+				baseUrl: hostBaseUrl,
 				agentId,
 				conversationId,
 				input: {
@@ -241,7 +246,7 @@
 	<div class="ft-panel__actions">
 		<button
 			class="ft-button ft-button--primary"
-			disabled={!hostToken.trim() || !agentId || !conversationId || !username || loading}
+			disabled={!hostToken.trim() || !hostBaseUrl?.trim() || !agentId || !conversationId || !username || loading}
 			onclick={signAndFinalize}
 			type="button"
 		>

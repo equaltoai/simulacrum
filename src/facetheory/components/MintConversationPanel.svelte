@@ -7,6 +7,7 @@
 
 	interface Props {
 		hostToken?: string;
+		hostBaseUrl?: string | null;
 		agentId?: string | null;
 		initialConversationId?: string | null;
 		initialTranscript?: readonly MintTranscriptMessage[];
@@ -21,6 +22,7 @@
 
 	let {
 		hostToken = '',
+		hostBaseUrl = null,
 		agentId = null,
 		initialConversationId = null,
 		initialTranscript = [],
@@ -91,7 +93,7 @@
 	}
 
 	async function submitTurn() {
-		if (!hostToken.trim() || !agentId || !message.trim()) return;
+		if (!hostToken.trim() || !hostBaseUrl?.trim() || !agentId || !message.trim()) return;
 
 		loading = true;
 		error = null;
@@ -113,6 +115,7 @@
 		try {
 			const stream = startAgentMintConversationStream({
 				token: hostToken,
+				baseUrl: hostBaseUrl,
 				agentId,
 				input: {
 					conversation_id: conversationId ?? undefined,
@@ -178,7 +181,7 @@
 	}
 
 	async function markConversationComplete() {
-		if (!hostToken.trim() || !agentId || !conversationId) return;
+		if (!hostToken.trim() || !hostBaseUrl?.trim() || !agentId || !conversationId) return;
 
 		loading = true;
 		error = null;
@@ -187,6 +190,7 @@
 		try {
 			await completeAgentMintConversation({
 				token: hostToken,
+				baseUrl: hostBaseUrl,
 				agentId,
 				conversationId,
 			});
@@ -234,7 +238,7 @@
 		<span>Next turn</span>
 		<textarea
 			bind:value={message}
-			disabled={!hostToken.trim() || !agentId || loading}
+			disabled={!hostToken.trim() || !hostBaseUrl?.trim() || !agentId || loading}
 			placeholder="Describe the declaration, continuity, or boundary you want the mint conversation to explore."
 			rows="4"
 		></textarea>
@@ -243,7 +247,7 @@
 	<div class="ft-panel__actions">
 		<button
 			class="ft-button ft-button--primary"
-			disabled={!hostToken.trim() || !agentId || !message.trim() || loading}
+			disabled={!hostToken.trim() || !hostBaseUrl?.trim() || !agentId || !message.trim() || loading}
 			onclick={submitTurn}
 			type="button"
 		>
@@ -251,7 +255,7 @@
 		</button>
 		<button
 			class="ft-button"
-			disabled={!hostToken.trim() || !agentId || !conversationId || loading}
+			disabled={!hostToken.trim() || !hostBaseUrl?.trim() || !agentId || !conversationId || loading}
 			onclick={markConversationComplete}
 			type="button"
 		>
