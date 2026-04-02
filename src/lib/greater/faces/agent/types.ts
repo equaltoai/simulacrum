@@ -159,9 +159,20 @@ export interface NexusDashboardData extends AgentFaceBaseData {
 
 export interface IdentityNexusData extends AgentFaceBaseData {
 	identity: AgentIdentityCardData;
-	declaration: DeclarationPreviewCardData;
+	declaration?: DeclarationPreviewCardData;
+	declarationNotice?: {
+		title: string;
+		message: string;
+	};
 	channels: SoulChannels;
 	preferences: SoulContactPreferences | null;
+	showReachability?: boolean;
+	boundSoulAgentId?: string;
+	channelsUpdatedAt?: string;
+	reachabilityNotice?: {
+		title: string;
+		message: string;
+	};
 	lifecycle?: readonly AgentLifecycleStep[];
 	continuity?: ContinuityPanelData;
 	timeline?: readonly AgentFaceTimelineMoment[];

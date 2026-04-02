@@ -44,10 +44,38 @@
 		<div class="identity-nexus">
 			<div class="identity-nexus__hero-grid">
 				<AgentIdentityCard identity={data.identity} />
-				<DeclarationPreviewCard declaration={data.declaration} />
+				{#if data.declaration}
+					<DeclarationPreviewCard declaration={data.declaration} />
+				{:else if data.declarationNotice}
+					<section class="identity-nexus__panel identity-nexus__panel--notice">
+						<header class="identity-nexus__panel-header">
+							<p>Declaration authority</p>
+							<h2>{data.declarationNotice.title}</h2>
+						</header>
+						<p class="identity-nexus__notice-copy">{data.declarationNotice.message}</p>
+					</section>
+				{/if}
 			</div>
-			<ChannelsDisplay channels={data.channels} title="Reachability ledger" />
-			<BestWayToContact channels={data.channels} preferences={data.preferences} />
+
+			{#if data.reachabilityNotice}
+				<section class="identity-nexus__panel identity-nexus__panel--notice">
+					<header class="identity-nexus__panel-header">
+						<p>Reachability authority</p>
+						<h2>{data.reachabilityNotice.title}</h2>
+					</header>
+					<p class="identity-nexus__notice-copy">{data.reachabilityNotice.message}</p>
+				</section>
+			{/if}
+
+			{#if data.showReachability}
+				<ChannelsDisplay
+					agentId={data.boundSoulAgentId}
+					channels={data.channels}
+					title="Reachability ledger"
+					updatedAt={data.channelsUpdatedAt}
+				/>
+				<BestWayToContact channels={data.channels} preferences={data.preferences} />
+			{/if}
 
 			{#if data.attributions?.length}
 				<section class="identity-nexus__panel">
@@ -181,6 +209,10 @@
 		border: 1px solid color-mix(in srgb, var(--gr-semantic-border-subtle) 68%, white 32%);
 	}
 
+	.identity-nexus__panel--notice {
+		align-content: start;
+	}
+
 	.identity-nexus__panel-header p,
 	.identity-nexus__panel-header h2,
 	.identity-nexus__artifact h3,
@@ -208,6 +240,12 @@
 	.identity-nexus__panel-header h2 {
 		margin-top: 0.25rem;
 		font-size: 1.1rem;
+	}
+
+	.identity-nexus__notice-copy {
+		margin: 0;
+		line-height: 1.6;
+		color: var(--gr-semantic-foreground-secondary);
 	}
 
 	.identity-nexus__evidence {

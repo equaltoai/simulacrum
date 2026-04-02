@@ -120,19 +120,29 @@ interface SoulInventoryRecord {
 	} | null;
 }
 
+interface AuthorityNotice {
+	title: string;
+	message: string;
+}
+
 interface AssembleAppStateInput {
 	page: AppPageDescriptor;
 	agentHint?: string | null;
 	viewer: ViewerInfo;
 	myAgents: readonly AgentRosterRecord[];
 	mySouls: readonly SoulInventoryRecord[];
+	boundSoul: SoulInventoryRecord | null;
 	activeAgent: DroneAgentState | null;
 	workflow: AgentWorkflowSurface | null;
 	myRequests: readonly SoulRequestCard[];
 	myReviews: readonly ReviewDecisionCard[];
 	channels: SoulChannels;
+	channelsUpdatedAt?: string | null;
 	preferences: SoulContactPreferences | null;
+	showReachability: boolean;
+	reachabilityNotice?: AuthorityNotice | null;
 	publishedSoulProfile: PublishedSoulProfile | null;
+	publishedSoulError?: string | null;
 	hostWorkflow: HostWorkflowState;
 	isPreview: boolean;
 }
@@ -163,20 +173,6 @@ interface PublishedSoulAgentRecord {
 interface PublishedSoulAgentResponse {
 	version: string;
 	agent: PublishedSoulAgentRecord;
-}
-
-interface PublishedSoulSearchResult {
-	agent_id: string;
-	domain: string;
-	local_id: string;
-}
-
-interface PublishedSoulSearchResponse {
-	version: string;
-	results: readonly PublishedSoulSearchResult[];
-	count: number;
-	has_more: boolean;
-	next_cursor?: string;
 }
 
 interface PublishedSoulCapability {
@@ -937,18 +933,23 @@ export function createPreviewAppState({
 						bio: previewAgent.bio,
 					}
 				: agent
-		),
-		mySouls: PREVIEW_MY_SOULS,
-		activeAgent: previewAgent,
-		workflow: previewWorkflow,
-		myRequests: [PREVIEW_REQUEST],
-		myReviews: [PREVIEW_REVIEW],
-		channels: EMPTY_CHANNELS,
-		preferences: null,
-		publishedSoulProfile: null,
-		hostWorkflow: PREVIEW_HOST_WORKFLOW,
-		isPreview: true,
-	});
+			),
+			mySouls: PREVIEW_MY_SOULS,
+			boundSoul: null,
+			activeAgent: previewAgent,
+			workflow: previewWorkflow,
+			myRequests: [PREVIEW_REQUEST],
+			myReviews: [PREVIEW_REVIEW],
+			channels: EMPTY_CHANNELS,
+			channelsUpdatedAt: null,
+			preferences: null,
+			showReachability: true,
+			reachabilityNotice: null,
+			publishedSoulProfile: null,
+			publishedSoulError: null,
+			hostWorkflow: PREVIEW_HOST_WORKFLOW,
+			isPreview: true,
+		});
 }
 
 export async function loadClientAppState({
@@ -1008,40 +1009,103 @@ export async function loadClientAppState({
 
 	const selectedAgent = pickActiveAgent(myAgents, agentHint);
 	const activeUsername = selectedAgent?.username ?? null;
+	const boundSoul = activeUsername ? findBoundSoul(mySouls, activeUsername) : null;
+	const boundSoulAgentId = boundSoul?.agent.agentId ?? null;
 	const lesserHostBaseUrl = await loadLesserHostBaseUrl(signal);
 
 	const [activeAgent, workflow] = activeUsername
 		? await Promise.all([
 				fetchDroneAgentState({ username: activeUsername, signal }),
-				fetchDroneWorkflow({ username: activeUsername, signal }),
-			])
-		: [null, null];
+					fetchDroneWorkflow({ username: activeUsername, signal }),
+				])
+			: [null, null];
 
-	const soulAgentId = lesserHostBaseUrl
-		? await resolveSoulAgentId({
-				baseUrl: lesserHostBaseUrl,
-				mySouls,
-				activeUsername,
-				workflow,
-				activeAgent,
-				signal,
-			})
-		: null;
-	const [channelsResponse, preferencesResponse, publishedSoulProfile] = soulAgentId && lesserHostBaseUrl
-		? await Promise.all([
-				loadChannels(lesserHostBaseUrl, soulAgentId, signal),
-				loadPreferences(lesserHostBaseUrl, soulAgentId, signal),
-				loadPublishedSoulProfile(lesserHostBaseUrl, soulAgentId, signal),
-			])
-		: [null, null, null];
+	const shouldShowReachability = shouldExposeSoulReachability(activeAgent, workflow);
+	let channelsResponse: SoulAgentChannelsResponse | null = null;
+	let preferencesResponse: SoulAgentChannelPreferencesResponse | null = null;
+	let publishedSoulProfile: PublishedSoulProfile | null = null;
+	let channelsUpdatedAt: string | null = null;
+	let reachabilityNotice: AuthorityNotice | null = null;
+	let publishedSoulError: string | null = null;
+
+	if (boundSoulAgentId && lesserHostBaseUrl) {
+		const [channelsResult, preferencesResult, publishedSoulResult] = await Promise.allSettled([
+			loadChannels(lesserHostBaseUrl, boundSoulAgentId, signal),
+			loadPreferences(lesserHostBaseUrl, boundSoulAgentId, signal),
+			loadPublishedSoulProfile(lesserHostBaseUrl, boundSoulAgentId, signal),
+		]);
+
+		if (channelsResult.status === 'fulfilled') {
+			channelsResponse = channelsResult.value;
+			channelsUpdatedAt = channelsResult.value.updatedAt ?? null;
+		}
+
+		if (preferencesResult.status === 'fulfilled') {
+			preferencesResponse = preferencesResult.value;
+		}
+
+		if (publishedSoulResult.status === 'fulfilled') {
+			publishedSoulProfile = publishedSoulResult.value;
+		} else {
+			publishedSoulError = describeAuthorityFailure(
+				'published soul lookup',
+				boundSoulAgentId,
+				publishedSoulResult.reason
+			);
+		}
+
+		if (shouldShowReachability) {
+			if (channelsResult.status !== 'fulfilled') {
+				reachabilityNotice = {
+					title: 'Reachability lookup failed',
+					message: describeAuthorityFailure(
+						'reachability lookup',
+						boundSoulAgentId,
+						channelsResult.reason
+					),
+				};
+			} else if (preferencesResult.status !== 'fulfilled') {
+				reachabilityNotice = {
+					title: 'Contact preferences unavailable',
+					message: describeAuthorityFailure(
+						'contact preferences lookup',
+						boundSoulAgentId,
+						preferencesResult.reason
+					),
+				};
+			}
+		}
+	} else if (boundSoulAgentId && !lesserHostBaseUrl) {
+		publishedSoulError =
+			'Simulacrum could not resolve the managed lesser-host base URL from Lesser, so it cannot load the bound soul declaration or reachability records.';
+		if (shouldShowReachability) {
+			reachabilityNotice = {
+				title: 'Reachability authority unavailable',
+				message: publishedSoulError,
+			};
+		}
+	} else if (shouldShowReachability) {
+		reachabilityNotice = boundSoulAgentId
+			? {
+					title: 'Reachability authority unavailable',
+					message:
+						'Simulacrum could not resolve the managed lesser-host base URL from Lesser, so it cannot load the bound soul reachability ledger.',
+				}
+			: {
+					title: 'No bound soul returned by Lesser',
+					message: activeUsername
+						? `Lesser did not return a bound soul record for @${activeUsername}, so Simulacrum cannot resolve lesser-host reachability for this body.`
+						: 'Lesser did not return an active bound soul for the current body.',
+				};
+	}
 
 	const hostWorkflow = !HOST_WORKFLOW_BRIDGE_ENABLED
 		? emptyHostWorkflow(false, false, lesserHostBaseUrl)
-		: activeAgent
+		: boundSoulAgentId
 			? await loadHostWorkflow({
 					token: hostToken ?? null,
 					baseUrl: lesserHostBaseUrl,
-					agentId: activeAgent.id,
+					agentId: boundSoulAgentId,
 					signal,
 				})
 			: emptyHostWorkflow(Boolean(hostToken?.trim()), true, lesserHostBaseUrl);
@@ -1056,18 +1120,23 @@ export async function loadClientAppState({
 		},
 		myAgents,
 		mySouls,
+		boundSoul,
 		activeAgent,
 		workflow,
 		myRequests,
 		myReviews,
 		channels: channelsResponse?.channels ?? EMPTY_CHANNELS,
+		channelsUpdatedAt,
 		preferences: preferencesResponse?.contactPreferences ?? channelsResponse?.contactPreferences ?? null,
+		showReachability: shouldShowReachability && channelsResponse !== null,
+		reachabilityNotice,
 		publishedSoulProfile,
+		publishedSoulError,
 		hostWorkflow: {
 			...hostWorkflow,
 			expectedWallet:
 				hostWorkflow.expectedWallet ??
-				findExpectedWallet(mySouls, activeUsername, workflow, activeAgent) ??
+				findExpectedWallet(boundSoul) ??
 				null,
 		},
 		isPreview: false,
@@ -1078,26 +1147,18 @@ async function loadChannels(
 	baseUrl: string,
 	agentId: string,
 	signal?: AbortSignal
-): Promise<SoulAgentChannelsResponse | null> {
+): Promise<SoulAgentChannelsResponse> {
 	const client = createLesserHostSoulClient({ baseUrl });
-	try {
-		return await client.getAgentChannels(agentId);
-	} catch {
-		return null;
-	}
+	return await client.getAgentChannels(agentId);
 }
 
 async function loadPreferences(
 	baseUrl: string,
 	agentId: string,
 	signal?: AbortSignal
-): Promise<SoulAgentChannelPreferencesResponse | null> {
+): Promise<SoulAgentChannelPreferencesResponse> {
 	const client = createLesserHostSoulClient({ baseUrl });
-	try {
-		return await client.getAgentChannelPreferences(agentId);
-	} catch {
-		return null;
-	}
+	return await client.getAgentChannelPreferences(agentId);
 }
 
 async function loadLesserHostBaseUrl(signal?: AbortSignal): Promise<string | null> {
@@ -1161,7 +1222,7 @@ async function loadPublishedSoulProfile(
 			),
 		]);
 
-	if (agentResult.status !== 'fulfilled') return null;
+	if (agentResult.status !== 'fulfilled') throw agentResult.reason;
 
 	return {
 		agent: agentResult.value.agent,
@@ -1176,46 +1237,12 @@ async function loadPublishedSoulProfile(
 	};
 }
 
-async function resolveSoulAgentId({
-	baseUrl,
-	mySouls,
-	activeUsername,
-	workflow,
-	activeAgent,
-	signal,
-}: {
-	baseUrl: string;
-	mySouls: readonly SoulInventoryRecord[];
-	activeUsername: string | null;
-	workflow: AgentWorkflowSurface | null;
-	activeAgent: DroneAgentState | null;
-	signal?: AbortSignal;
-}): Promise<string | null> {
-	const directMatch = pickSoulAgentId(mySouls, activeUsername, workflow, activeAgent);
-	if (directMatch) return directMatch;
-
-	const normalizedUsername = activeUsername?.trim().toLowerCase();
-	if (!normalizedUsername) return null;
-
-	const domain =
-		typeof window !== 'undefined' && window.location.hostname
-			? window.location.hostname
-			: null;
-	if (!domain) return null;
-
-	try {
-		const response = await requestPublicSoulJson<PublishedSoulSearchResponse>(
-			baseUrl,
-			`/api/v1/soul/search?domain=${encodeURIComponent(domain)}&limit=100`,
-			signal
-		);
-		return (
-			response.results.find((result) => result.local_id.trim().toLowerCase() === normalizedUsername)
-				?.agent_id ?? null
-		);
-	} catch {
-		return null;
-	}
+function describeAuthorityFailure(scope: string, agentId: string, error: unknown): string {
+	const detail =
+		error instanceof Error && error.message.trim()
+			? error.message.trim()
+			: 'request failed before a usable response was returned.';
+	return `lesser-host ${scope} failed for soul ${agentId}: ${detail}`;
 }
 
 async function loadHostWorkflow({
@@ -1320,16 +1347,33 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 	const previewRequest = normalizeSoulRequestCard(PREVIEW_REQUEST);
 	const rawReviewDecision = workflow?.review ?? input.myReviews[0] ?? PREVIEW_REVIEW;
 	const reviewDecision = normalizeReviewDecision(rawReviewDecision);
+	const publishedDeclaration = buildPublishedSoulDeclaration(input.publishedSoulProfile, identity.name);
+	const hostConversationDeclaration = buildHostWorkflowDeclaration(
+		input.hostWorkflow.producedDeclarations,
+		input.publishedSoulProfile?.agent.local_id ?? input.boundSoul?.agent.localId ?? activeUsername,
+		identity.name
+	);
 	const rawDeclaration =
+		publishedDeclaration ??
+		hostConversationDeclaration ??
 		workflow?.declaration ??
-		buildPublishedSoulDeclaration(input.publishedSoulProfile, identity.name) ??
-		buildHostWorkflowDeclaration(
-			input.hostWorkflow.producedDeclarations,
-			input.publishedSoulProfile?.agent.local_id ?? activeUsername,
-			identity.name
-		) ??
 		(input.isPreview ? PREVIEW_WORKFLOW.declaration! : buildUnavailableDeclaration(identity.name, activeUsername));
 	const declaration = normalizeDeclarationCard(rawDeclaration);
+	const identityDeclaration =
+		input.isPreview ? PREVIEW_WORKFLOW.declaration! : publishedDeclaration ?? hostConversationDeclaration;
+	const identityDeclarationCard = identityDeclaration
+		? normalizeDeclarationCard(identityDeclaration)
+		: undefined;
+	const declarationNotice = input.isPreview
+		? null
+		: identityDeclarationCard
+			? null
+			: buildIdentityDeclarationNotice({
+					activeUsername,
+					boundSoul: input.boundSoul,
+					publishedSoulError: input.publishedSoulError ?? null,
+					hostWorkflow: input.hostWorkflow,
+				});
 	const rawCheckpoint = workflow?.checkpoint ?? PREVIEW_WORKFLOW.checkpoint!;
 	const checkpoint = normalizeCheckpointCard(rawCheckpoint);
 	const rawGraduation = workflow?.graduation ?? PREVIEW_WORKFLOW.graduation!;
@@ -1368,8 +1412,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 	const timeline = buildContinuityTimeline(rawContinuity, rawLifecycle, input.hostWorkflow);
 	const attributions = buildAttributions(activeAgent, workflow);
 	const expectedWallet =
-		input.hostWorkflow.expectedWallet ??
-		findExpectedWallet(input.mySouls, activeUsername, workflow, activeAgent);
+		input.hostWorkflow.expectedWallet ?? findExpectedWallet(input.boundSoul);
 	const evidence = normalizeArtifacts(
 		dedupeById([
 			...(rawRequestQueue[0]?.artifacts ?? []),
@@ -1543,9 +1586,14 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 				'Expose continuity, reachability, and attribution together so it is obvious what changed at graduation and what remained the same body.',
 		},
 		identity,
-		declaration,
+		declaration: identityDeclarationCard,
+		declarationNotice: declarationNotice ?? undefined,
 		channels: input.channels,
 		preferences: input.preferences,
+		showReachability: input.showReachability,
+		boundSoulAgentId: input.boundSoul?.agent.agentId ?? undefined,
+		channelsUpdatedAt: input.channelsUpdatedAt ?? undefined,
+		reachabilityNotice: input.reachabilityNotice ?? undefined,
 		lifecycle,
 		continuity,
 		timeline,
@@ -1609,10 +1657,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 	const actionContext: AppActionContext = {
 		activeUsername,
 		activeAgentId: activeAgent?.id ?? null,
-		activeSoulAgentId:
-			workflow?.identitySemantics.soulAgentId ??
-			activeAgent?.identitySemantics.soulAgentId ??
-			pickSoulAgentId(input.mySouls, activeUsername, workflow, activeAgent),
+		activeSoulAgentId: input.boundSoul?.agent.agentId ?? null,
 		activeConversationId:
 			input.hostWorkflow.selectedConversation?.conversation_id ??
 			workflow?.conversation?.conversationId ??
@@ -1659,44 +1704,62 @@ function pickActiveAgent(
 	);
 }
 
-function pickSoulAgentId(
+function findBoundSoul(
 	mySouls: readonly SoulInventoryRecord[],
-	activeUsername: string | null,
-	workflow: AgentWorkflowSurface | null,
-	activeAgent: DroneAgentState | null
-): string | null {
-	const semanticSoulId =
-		workflow?.identitySemantics.soulAgentId ?? activeAgent?.identitySemantics.soulAgentId ?? null;
-	if (semanticSoulId?.trim()) return semanticSoulId.trim();
+	activeUsername: string | null
+): SoulInventoryRecord | null {
+	const normalizedUsername = activeUsername?.trim().toLowerCase();
+	if (!normalizedUsername) return null;
 
-	const boundSoul = mySouls.find((item) => item.binding?.agentUsername === activeUsername);
-	if (boundSoul?.agent.agentId) return boundSoul.agent.agentId;
-
-	const localIdSoul = mySouls.find(
-		(item) => item.agent.localId.trim().toLowerCase() === activeUsername?.trim().toLowerCase()
+	return (
+		mySouls.find(
+			(item) =>
+				item.bindingState === 'BOUND' &&
+				item.binding?.agentUsername.trim().toLowerCase() === normalizedUsername
+		) ?? null
 	);
-	if (localIdSoul?.agent.agentId) return localIdSoul.agent.agentId;
-
-	return null;
 }
 
-function findExpectedWallet(
-	mySouls: readonly SoulInventoryRecord[],
-	activeUsername: string | null,
-	workflow: AgentWorkflowSurface | null,
-	activeAgent: DroneAgentState | null
-): string | null {
-	const boundSoul = mySouls.find((item) => item.binding?.agentUsername === activeUsername);
-	if (boundSoul?.agent.wallet?.trim()) return boundSoul.agent.wallet.trim();
-	const localIdSoul = mySouls.find(
-		(item) => item.agent.localId.trim().toLowerCase() === activeUsername?.trim().toLowerCase()
-	);
-	if (localIdSoul?.agent.wallet?.trim()) return localIdSoul.agent.wallet.trim();
-	if (workflow?.identitySemantics.soulAgentId) {
-		const matchingSoul = mySouls.find((item) => item.agent.agentId === workflow.identitySemantics.soulAgentId);
-		if (matchingSoul?.agent.wallet?.trim()) return matchingSoul.agent.wallet.trim();
+function findExpectedWallet(boundSoul: SoulInventoryRecord | null): string | null {
+	return boundSoul?.agent.wallet?.trim() || null;
+}
+
+function buildIdentityDeclarationNotice({
+	activeUsername,
+	boundSoul,
+	publishedSoulError,
+	hostWorkflow,
+}: {
+	activeUsername: string;
+	boundSoul: SoulInventoryRecord | null;
+	publishedSoulError: string | null;
+	hostWorkflow: HostWorkflowState;
+}): AuthorityNotice {
+	if (!boundSoul) {
+		return {
+			title: 'No bound soul returned by Lesser',
+			message: `Lesser did not return a bound soul record for @${activeUsername}, so Simulacrum cannot resolve a lesser-host declaration for this body.`,
+		};
 	}
-	return activeAgent?.identitySemantics.soulAgentId ? null : null;
+
+	if (publishedSoulError) {
+		return {
+			title: 'Published declaration lookup failed',
+			message: publishedSoulError,
+		};
+	}
+
+	if (hostWorkflow.tokenConfigured) {
+		return {
+			title: 'No declaration persisted on lesser-host',
+			message: `lesser-host returned no published declaration for soul ${boundSoul.agent.agentId}, and the connected mint conversation does not currently expose a persisted declaration payload.`,
+		};
+	}
+
+	return {
+		title: 'No published declaration returned by lesser-host',
+		message: `Soul ${boundSoul.agent.agentId} does not currently expose a published declaration record. Connect a lesser-host control-plane token to inspect the private mint conversation state if that declaration is still in review.`,
+	};
 }
 
 function buildIdentityCard(
