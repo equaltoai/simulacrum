@@ -165,6 +165,20 @@ interface PublishedSoulAgentResponse {
 	agent: PublishedSoulAgentRecord;
 }
 
+interface PublishedSoulSearchResult {
+	agent_id: string;
+	domain: string;
+	local_id: string;
+}
+
+interface PublishedSoulSearchResponse {
+	version: string;
+	results: readonly PublishedSoulSearchResult[];
+	count: number;
+	has_more: boolean;
+	next_cursor?: string;
+}
+
 interface PublishedSoulCapability {
 	capability: string;
 	scope?: string;
@@ -1003,8 +1017,15 @@ export async function loadClientAppState({
 			])
 		: [null, null];
 
-	const soulAgentId = shouldExposeSoulReachability(activeAgent, workflow)
-		? pickSoulAgentId(mySouls, activeUsername, workflow, activeAgent)
+	const soulAgentId = lesserHostBaseUrl
+		? await resolveSoulAgentId({
+				baseUrl: lesserHostBaseUrl,
+				mySouls,
+				activeUsername,
+				workflow,
+				activeAgent,
+				signal,
+			})
 		: null;
 	const [channelsResponse, preferencesResponse, publishedSoulProfile] = soulAgentId && lesserHostBaseUrl
 		? await Promise.all([
@@ -1153,6 +1174,48 @@ async function loadPublishedSoulProfile(
 				? (transparencyResult.value.transparency ?? null)
 				: null,
 	};
+}
+
+async function resolveSoulAgentId({
+	baseUrl,
+	mySouls,
+	activeUsername,
+	workflow,
+	activeAgent,
+	signal,
+}: {
+	baseUrl: string;
+	mySouls: readonly SoulInventoryRecord[];
+	activeUsername: string | null;
+	workflow: AgentWorkflowSurface | null;
+	activeAgent: DroneAgentState | null;
+	signal?: AbortSignal;
+}): Promise<string | null> {
+	const directMatch = pickSoulAgentId(mySouls, activeUsername, workflow, activeAgent);
+	if (directMatch) return directMatch;
+
+	const normalizedUsername = activeUsername?.trim().toLowerCase();
+	if (!normalizedUsername) return null;
+
+	const domain =
+		typeof window !== 'undefined' && window.location.hostname
+			? window.location.hostname
+			: null;
+	if (!domain) return null;
+
+	try {
+		const response = await requestPublicSoulJson<PublishedSoulSearchResponse>(
+			baseUrl,
+			`/api/v1/soul/search?domain=${encodeURIComponent(domain)}&limit=100`,
+			signal
+		);
+		return (
+			response.results.find((result) => result.local_id.trim().toLowerCase() === normalizedUsername)
+				?.agent_id ?? null
+		);
+	} catch {
+		return null;
+	}
 }
 
 async function loadHostWorkflow({
@@ -1609,6 +1672,11 @@ function pickSoulAgentId(
 	const boundSoul = mySouls.find((item) => item.binding?.agentUsername === activeUsername);
 	if (boundSoul?.agent.agentId) return boundSoul.agent.agentId;
 
+	const localIdSoul = mySouls.find(
+		(item) => item.agent.localId.trim().toLowerCase() === activeUsername?.trim().toLowerCase()
+	);
+	if (localIdSoul?.agent.agentId) return localIdSoul.agent.agentId;
+
 	return null;
 }
 
@@ -1620,6 +1688,10 @@ function findExpectedWallet(
 ): string | null {
 	const boundSoul = mySouls.find((item) => item.binding?.agentUsername === activeUsername);
 	if (boundSoul?.agent.wallet?.trim()) return boundSoul.agent.wallet.trim();
+	const localIdSoul = mySouls.find(
+		(item) => item.agent.localId.trim().toLowerCase() === activeUsername?.trim().toLowerCase()
+	);
+	if (localIdSoul?.agent.wallet?.trim()) return localIdSoul.agent.wallet.trim();
 	if (workflow?.identitySemantics.soulAgentId) {
 		const matchingSoul = mySouls.find((item) => item.agent.agentId === workflow.identitySemantics.soulAgentId);
 		if (matchingSoul?.agent.wallet?.trim()) return matchingSoul.agent.wallet.trim();
