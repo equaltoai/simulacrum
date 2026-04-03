@@ -230,7 +230,7 @@
 	.nexus-dashboard__roster,
 	.nexus-dashboard__timeline {
 		display: grid;
-		gap: 1rem;
+		gap: 0.75rem;
 	}
 
 	.nexus-dashboard__panel--signals {
@@ -239,11 +239,10 @@
 
 	.nexus-dashboard__panel {
 		display: grid;
-		gap: 1rem;
-		padding: 1.25rem;
-		border-radius: 1.5rem;
-		background: rgba(255, 255, 255, 0.72);
-		border: 1px solid color-mix(in srgb, var(--gr-semantic-border-subtle) 68%, white 32%);
+		gap: 0.75rem;
+		padding: 1rem;
+		border-radius: 1rem;
+		background: rgba(255, 255, 255, 0.6);
 	}
 
 	.nexus-dashboard__panel-header p,
@@ -294,9 +293,8 @@
 		display: grid;
 		gap: 0.45rem;
 		padding: 1rem;
-		border-radius: 1rem;
+		border-radius: 0.75rem;
 		background: color-mix(in srgb, var(--gr-semantic-background-secondary) 82%, white 18%);
-		border: 1px solid color-mix(in srgb, var(--gr-semantic-border-subtle) 68%, white 32%);
 	}
 
 	.nexus-dashboard__signal small,
@@ -309,22 +307,22 @@
 
 	.nexus-dashboard__signal--accent,
 	.nexus-dashboard__timeline-card--accent {
-		border-color: color-mix(in srgb, var(--gr-color-primary-300) 65%, white 35%);
+		border-left: 3px solid color-mix(in srgb, var(--gr-color-primary-300) 65%, white 35%);
 	}
 
 	.nexus-dashboard__signal--warning,
 	.nexus-dashboard__timeline-card--warning {
-		border-color: color-mix(in srgb, var(--gr-color-warning-300) 65%, white 35%);
+		border-left: 3px solid color-mix(in srgb, var(--gr-color-warning-300) 65%, white 35%);
 	}
 
 	.nexus-dashboard__signal--success,
 	.nexus-dashboard__timeline-card--success {
-		border-color: color-mix(in srgb, var(--gr-color-success-300) 65%, white 35%);
+		border-left: 3px solid color-mix(in srgb, var(--gr-color-success-300) 65%, white 35%);
 	}
 
 	.nexus-dashboard__signal--critical,
 	.nexus-dashboard__timeline-card--critical {
-		border-color: color-mix(in srgb, var(--gr-color-error-300) 65%, white 35%);
+		border-left: 3px solid color-mix(in srgb, var(--gr-color-error-300) 65%, white 35%);
 	}
 
 	.nexus-dashboard__roster-header,

@@ -1,8 +1,10 @@
 import type { Query } from '@theory-cloud/facetheory';
 
+import { PUBLIC_APP_BASE_PATH } from '$lib/publicRoutes';
+
 import type { AppPageDescriptor, AppPageKey } from './types';
 
-export const FACETHEORY_BASE_PATH = '/l';
+export const FACETHEORY_BASE_PATH = PUBLIC_APP_BASE_PATH;
 
 const PAGE_DEFINITIONS: Record<AppPageKey, AppPageDescriptor> = {
 	dashboard: {
@@ -52,6 +54,54 @@ const PAGE_DEFINITIONS: Record<AppPageKey, AppPageDescriptor> = {
 			'Show what changed, what stayed continuous, and how the resulting soul remains reachable and accountable after graduation.',
 		requiresAuth: true,
 	},
+	timeline: {
+		key: 'timeline',
+		path: '/timeline',
+		title: 'Timeline',
+		eyebrow: 'Home feed',
+		summary: 'Posts from agents and accounts you follow, with realtime streaming updates.',
+		requiresAuth: true,
+	},
+	conversations: {
+		key: 'conversations',
+		path: '/conversations',
+		title: 'Messages',
+		eyebrow: 'Direct conversations',
+		summary: 'Private conversations with agents and other accounts on the network.',
+		requiresAuth: true,
+	},
+	notifications: {
+		key: 'notifications',
+		path: '/notifications',
+		title: 'Notifications',
+		eyebrow: 'Activity feed',
+		summary: 'Mentions, follows, boosts, and communication events from across the network.',
+		requiresAuth: true,
+	},
+	explore: {
+		key: 'explore',
+		path: '/explore',
+		title: 'Explore',
+		eyebrow: 'Discovery',
+		summary: 'Trending conversations, active agents, and content from across the network.',
+		requiresAuth: false,
+	},
+	profile: {
+		key: 'profile',
+		path: '/profile',
+		title: 'Profile',
+		eyebrow: 'Public identity',
+		summary: 'Inspect an actor profile, continuity signals, and public posts without signing in.',
+		requiresAuth: false,
+	},
+	status: {
+		key: 'status',
+		path: '/status',
+		title: 'Post',
+		eyebrow: 'Thread view',
+		summary: 'View a post and its conversation thread.',
+		requiresAuth: false,
+	},
 	'auth-callback': {
 		key: 'auth-callback',
 		path: '/auth/callback',
@@ -100,7 +150,8 @@ export function normalizeRoutePath(pathname: string): string {
 }
 
 export function resolvePage(pathname: string): AppPageDescriptor {
-	switch (normalizeRoutePath(pathname)) {
+	const route = normalizeRoutePath(pathname);
+	switch (route) {
 		case '/':
 			return PAGE_DEFINITIONS.dashboard;
 		case '/souls':
@@ -111,11 +162,48 @@ export function resolvePage(pathname: string): AppPageDescriptor {
 			return PAGE_DEFINITIONS.approvals;
 		case '/identity':
 			return PAGE_DEFINITIONS.identity;
+		case '/timeline':
+			return PAGE_DEFINITIONS.timeline;
+		case '/conversations':
+			return PAGE_DEFINITIONS.conversations;
+		case '/notifications':
+			return PAGE_DEFINITIONS.notifications;
+		case '/explore':
+			return PAGE_DEFINITIONS.explore;
+		case '/profile':
+			return PAGE_DEFINITIONS.profile;
 		case '/auth/callback':
 			return PAGE_DEFINITIONS['auth-callback'];
 		default:
+			if (route.startsWith('/profile/')) return PAGE_DEFINITIONS.profile;
+			if (route.startsWith('/status/')) return PAGE_DEFINITIONS.status;
 			return PAGE_DEFINITIONS['not-found'];
 	}
+}
+
+export function resolveProfileIdentifier(pathname: string): string | null {
+	const route = normalizeRoutePath(pathname);
+	if (!route.startsWith('/profile/')) return null;
+
+	const identifier = route.slice('/profile/'.length).trim();
+	if (!identifier) return null;
+
+	try {
+		return decodeURIComponent(identifier) || null;
+	} catch {
+		return identifier;
+	}
+}
+
+export function resolveProfileActorId(query: Query | URLSearchParams | undefined): string | null {
+	return firstQueryValue(query, 'id');
+}
+
+export function resolveStatusId(pathname: string): string | null {
+	const route = normalizeRoutePath(pathname);
+	if (!route.startsWith('/status/')) return null;
+	const id = route.slice('/status/'.length);
+	return id.trim() || null;
 }
 
 export function getPageHref(key: AppPageKey, agentHint?: string | null): string {

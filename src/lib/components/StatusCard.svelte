@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { formatDateTime } from '$lib/greater/utils';
+	import { buildPublicProfileHref, buildPublicStatusHref } from '$lib/publicRoutes';
 	import ContentRenderer from './ContentRenderer.svelte';
 	import ActionBar from './ActionBar.svelte';
 	import { ReplyIcon, RepeatIcon } from '$lib/greater/icons';
@@ -64,9 +65,15 @@
 	const actualStatus = $derived(status.reblog || status);
 	const dateTime = $derived(formatDateTime(actualStatus.createdAt));
 	const replyAccount = $derived(actualStatus.inReplyToAccount);
+	const profileHref = $derived(
+		buildPublicProfileHref({
+			actorId: account.id,
+			acct: account.acct,
+			username: account.username,
+		})
+	);
 	const replyTargetUrl = $derived(
-		actualStatus.inReplyToStatus?.url ||
-			(actualStatus.inReplyToId ? `#/status/${actualStatus.inReplyToId}` : undefined)
+		actualStatus.inReplyToId ? buildPublicStatusHref(actualStatus.inReplyToId) : undefined
 	);
 
 	function handleCardClick(event: MouseEvent | KeyboardEvent) {
@@ -173,15 +180,21 @@
 
 	<div class="status-header">
 		<a
-			href={account.url}
+			href={profileHref}
 			class="avatar-link"
 			aria-label={`View ${account.displayName || account.username}'s profile`}
 		>
-			<img src={account.avatar} alt="" class="avatar" loading="lazy" width="48" height="48" />
+			{#if account.avatar}
+				<img src={account.avatar} alt="" class="avatar" loading="lazy" width="48" height="48" />
+			{:else}
+				<div class="avatar avatar--placeholder">
+					{(account.displayName || account.username || '?')[0]?.toUpperCase()}
+				</div>
+			{/if}
 		</a>
 
 		<div class="account-info">
-			<a href={account.url} class="display-name">
+			<a href={profileHref} class="display-name">
 				{account.displayName || account.username}
 				{#if account.bot}
 					<span class="bot-badge" aria-label="Bot account">BOT</span>
@@ -201,6 +214,12 @@
 			spoilerText={actualStatus.spoilerText}
 			mentions={actualStatus.mentions}
 			tags={actualStatus.tags}
+			resolveMentionHref={(mention) =>
+				buildPublicProfileHref({
+					actorId: mention.id,
+					acct: mention.acct,
+					username: mention.username,
+				})}
 		/>
 	</div>
 

@@ -5,6 +5,8 @@
 		src?: string | null;
 		alt?: string;
 		class?: string;
+		width?: number | string;
+		height?: number | string;
 		loading?: HTMLImageElement['loading'];
 		decoding?: HTMLImageElement['decoding'];
 	}
@@ -13,6 +15,8 @@
 		src,
 		alt = '',
 		class: className = '',
+		width,
+		height,
 		loading = 'lazy',
 		decoding = 'async',
 	}: Props = $props();
@@ -30,6 +34,8 @@
 	src={resolvedSrc}
 	{alt}
 	class={className}
+	{width}
+	{height}
 	{loading}
 	{decoding}
 	onerror={handleError}

@@ -8,6 +8,12 @@
 		NexusDashboard,
 		SoulRequestCenter,
 	} from '$lib/greater/faces/agent';
+	import TimelinePage from '$lib/greater/faces/agent/TimelinePage.svelte';
+	import ConversationsPage from '$lib/greater/faces/agent/ConversationsPage.svelte';
+	import NotificationsPage from '$lib/greater/faces/agent/NotificationsPage.svelte';
+	import ExplorePage from '$lib/greater/faces/agent/ExplorePage.svelte';
+	import ProfilePage from '$lib/greater/faces/agent/ProfilePage.svelte';
+	import StatusPage from '$lib/greater/faces/agent/StatusPage.svelte';
 	import {
 		authSession,
 		clearAuthSession,
@@ -26,7 +32,13 @@
 		HOST_WORKFLOW_BRIDGE_ENABLED,
 	} from './flags';
 	import { createPreviewAppState, loadClientAppState } from './loaders';
-	import { resolveWindowAgentHint, resolveWindowPage } from './routing';
+	import {
+		resolveProfileActorId,
+		resolveProfileIdentifier,
+		resolveWindowAgentHint,
+		resolveWindowPage,
+		resolveStatusId,
+	} from './routing';
 	import type { AppPageDescriptor, ClientAppState } from './types';
 
 	const HOST_TOKEN_STORAGE_KEY = 'simulacrum:lesser_host_workflow_token';
@@ -34,12 +46,24 @@
 	interface Props {
 		initialPage: AppPageDescriptor;
 		initialAgentHint?: string | null;
+		initialStatusId?: string | null;
+		initialProfileIdentifier?: string | null;
+		initialProfileActorId?: string | null;
 	}
 
-	let { initialPage, initialAgentHint = null }: Props = $props();
+	let {
+		initialPage,
+		initialAgentHint = null,
+		initialStatusId = null,
+		initialProfileIdentifier = null,
+		initialProfileActorId = null,
+	}: Props = $props();
 
 	const initialPageValue = untrack(() => initialPage);
 	const initialAgentHintValue = untrack(() => initialAgentHint);
+	const initialStatusIdValue = untrack(() => initialStatusId);
+	const initialProfileIdentifierValue = untrack(() => initialProfileIdentifier);
+	const initialProfileActorIdValue = untrack(() => initialProfileActorId);
 	const initialState = createPreviewAppState({
 		page: initialPageValue,
 		agentHint: initialAgentHintValue,
@@ -53,8 +77,25 @@
 	let busy = $state(false);
 	let authError = $state<string | null>(null);
 	let loadError = $state<string | null>(null);
+	let currentStatusId = $state<string | null>(initialStatusIdValue);
+	let currentProfileIdentifier = $state<string | null>(initialProfileIdentifierValue);
+	let currentProfileActorId = $state<string | null>(initialProfileActorIdValue);
 
 	const isAuthenticated = $derived(Boolean(session?.accessToken));
+	const showAuthPreviewNotice = $derived(!isAuthenticated && currentPage.requiresAuth !== false);
+
+	const socialBaseData = $derived({
+		hero: {
+			eyebrow: currentPage.eyebrow,
+			title: currentPage.title,
+			summary: currentPage.summary,
+		},
+		brand: appState.faces.dashboard.brand,
+		navItems: appState.faces.dashboard.navItems,
+		actions: [],
+		statusChips: [],
+		metrics: [],
+	});
 
 	$effect(() => {
 		if (!isAuthenticated) {
@@ -144,6 +185,9 @@
 	onMount(() => {
 		currentPage = resolveWindowPage();
 		currentAgentHint = resolveWindowAgentHint();
+		currentStatusId = resolveStatusId(window.location.pathname);
+		currentProfileIdentifier = resolveProfileIdentifier(window.location.pathname);
+		currentProfileActorId = resolveProfileActorId(new URLSearchParams(window.location.search));
 		hostToken = readStoredHostToken();
 		initAuthFromStorage();
 
@@ -164,13 +208,7 @@
 
 <div class="ft-shell">
 	<header class="ft-shell__topbar">
-		<div>
-			<p class="ft-shell__eyebrow">Simulacrum / FaceTheory</p>
-			<h1>{currentPage.title}</h1>
-			<p class="ft-shell__summary">
-				{currentPage.summary}
-			</p>
-		</div>
+		<p class="ft-shell__eyebrow">Simulacrum / FaceTheory</p>
 
 		<div class="ft-shell__actions">
 			{#if isAuthenticated}
@@ -207,7 +245,7 @@
 			{/if}
 		</section>
 	{:else}
-		{#if !isAuthenticated}
+		{#if showAuthPreviewNotice}
 			<section class="ft-panel ft-shell__notice">
 				<header class="ft-panel__header">
 					<div>
@@ -244,6 +282,22 @@
 				<GraduationApprovalThread data={appState.faces.approvals} />
 			{:else if currentPage.key === 'identity'}
 				<IdentityNexus data={appState.faces.identity} />
+			{:else if currentPage.key === 'timeline'}
+				<TimelinePage data={socialBaseData} />
+			{:else if currentPage.key === 'conversations'}
+				<ConversationsPage data={socialBaseData} />
+			{:else if currentPage.key === 'notifications'}
+				<NotificationsPage data={socialBaseData} />
+			{:else if currentPage.key === 'explore'}
+				<ExplorePage data={socialBaseData} />
+			{:else if currentPage.key === 'profile'}
+				<ProfilePage
+					data={socialBaseData}
+					profileIdentifier={currentProfileIdentifier}
+					profileId={currentProfileActorId}
+				/>
+			{:else if currentPage.key === 'status' && currentStatusId}
+				<StatusPage data={socialBaseData} statusId={currentStatusId} />
 			{/if}
 		</div>
 

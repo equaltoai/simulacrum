@@ -62,31 +62,6 @@ export interface Vouch {
 	revokedAt?: string | Date;
 }
 
-export interface AccountField {
-	name: string;
-	value: string;
-	verifiedAt?: string | null;
-}
-
-export interface AgentInfo {
-	id: string;
-	agentType: string;
-	verified: boolean;
-	verifiedAt?: string | Date | null;
-}
-
-export interface AgentAttribution {
-	triggerType?: string;
-	triggerDetails?: string;
-	memoryCitations?: readonly string[];
-	delegatedBy?: string;
-	delegatedByDid?: string;
-	scopes?: readonly string[];
-	constraints?: readonly string[];
-	schemaVersion?: string;
-	modelId?: string;
-}
-
 export interface Account {
 	id: string;
 	username: string;
@@ -105,11 +80,20 @@ export interface Account {
 	locked?: boolean;
 	verified?: boolean;
 	createdAt: string | Date;
-	fields?: AccountField[];
+	fields?: Array<{
+		name: string;
+		value: string;
+		verifiedAt?: string | Date;
+	}>;
 	isAgent?: boolean;
-	agentInfo?: AgentInfo;
-	tipAddress?: string | null;
-	tipChainId?: number | null;
+	agentInfo?: {
+		id: string;
+		agentType: string;
+		verified: boolean;
+		verifiedAt?: string | Date;
+	};
+	tipAddress?: string;
+	tipChainId?: number;
 
 	// Lesser-specific fields
 	trustScore?: number;
@@ -174,7 +158,6 @@ export interface Status {
 	id: string;
 	uri: string;
 	url: string;
-	contentHash?: string;
 	account: Account;
 	content: string;
 	createdAt: string | Date;
@@ -209,7 +192,6 @@ export interface Status {
 	estimatedCost?: number;
 	moderationScore?: number;
 	communityNotes?: CommunityNote[];
-	agentAttribution?: AgentAttribution;
 	quoteUrl?: string;
 	quoteable?: boolean;
 	quotePermissions?: QuotePermission;
@@ -251,7 +233,6 @@ export interface Poll {
 	expiresAt?: string | Date;
 	expired: boolean;
 	multiple: boolean;
-	hideTotals?: boolean;
 	votesCount: number;
 	votersCount?: number;
 	voted?: boolean;
@@ -260,54 +241,6 @@ export interface Poll {
 		title: string;
 		votesCount: number;
 	}>;
-}
-
-export interface CommunicationFrom {
-	address: string;
-	displayName?: string | null;
-	soulAgentId?: string | null;
-}
-
-export interface CommunicationTo {
-	address: string;
-}
-
-export interface CommunicationAttachment {
-	id: string;
-	filename: string;
-	contentType: string;
-	sizeBytes: number;
-	sha256: string;
-}
-
-export interface CommunicationNotification {
-	channel: string;
-	from: CommunicationFrom;
-	to?: CommunicationTo | null;
-	attachments: CommunicationAttachment[];
-	subject?: string | null;
-	body?: string | null;
-	receivedAt: string;
-	messageId: string;
-	inReplyTo?: string | null;
-	threadId?: string | null;
-}
-
-export type WorkflowEventKind =
-	| 'request_submitted'
-	| 'review_requested'
-	| 'approval_requested'
-	| 'finalize_ready'
-	| 'graduated';
-
-export interface WorkflowEventPayload {
-	kind: WorkflowEventKind;
-	title: string;
-	summary: string;
-	phase?: string;
-	actorLabel?: string;
-	targetLabel?: string;
-	actionLabel?: string;
 }
 
 export type NotificationType =
@@ -326,9 +259,7 @@ export type NotificationType =
 	| 'community_note'
 	| 'trust_update'
 	| 'cost_alert'
-	| 'moderation_action'
-	| 'communication_inbound'
-	| 'workflow_event';
+	| 'moderation_action';
 
 export interface BaseNotification {
 	id: string;
@@ -337,9 +268,6 @@ export interface BaseNotification {
 	account: Account;
 	read?: boolean;
 	dismissed?: boolean;
-	status?: Status;
-	communication?: CommunicationNotification | null;
-	workflowEvent?: WorkflowEventPayload | null;
 
 	// Metadata for Lesser-specific payloads (derived from status/account changes)
 	metadata?: {
@@ -465,16 +393,6 @@ export interface ModerationActionNotification extends BaseNotification {
 	reason: string;
 }
 
-export interface CommunicationInboundNotification extends BaseNotification {
-	type: 'communication_inbound';
-	communication: CommunicationNotification;
-}
-
-export interface WorkflowEventNotification extends BaseNotification {
-	type: 'workflow_event';
-	workflowEvent: WorkflowEventPayload;
-}
-
 export type Notification =
 	| MentionNotification
 	| ReblogNotification
@@ -490,9 +408,7 @@ export type Notification =
 	| CommunityNoteNotification
 	| TrustUpdateNotification
 	| CostAlertNotification
-	| ModerationActionNotification
-	| CommunicationInboundNotification
-	| WorkflowEventNotification;
+	| ModerationActionNotification;
 
 export interface NotificationGroup {
 	id: string;

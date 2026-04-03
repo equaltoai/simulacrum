@@ -197,16 +197,21 @@
 	.identity-nexus__ledger,
 	.identity-nexus__timeline {
 		display: grid;
-		gap: 1rem;
+		gap: 0.75rem;
+	}
+
+	.identity-nexus {
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.identity-nexus__panel {
 		display: grid;
-		gap: 1rem;
-		padding: 1.25rem;
-		border-radius: 1.5rem;
-		background: rgba(255, 255, 255, 0.72);
-		border: 1px solid color-mix(in srgb, var(--gr-semantic-border-subtle) 68%, white 32%);
+		gap: 0.75rem;
+		padding: 1rem;
+		border-radius: 1rem;
+		background: rgba(255, 255, 255, 0.6);
+		min-width: 0;
 	}
 
 	.identity-nexus__panel--notice {
@@ -252,7 +257,11 @@
 		grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
 	}
 
-	.identity-nexus__hero-grid,
+	.identity-nexus__hero-grid {
+		grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+		align-items: start;
+	}
+
 	.identity-nexus__ledger,
 	.identity-nexus__timeline {
 		grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
@@ -276,9 +285,9 @@
 		display: grid;
 		gap: 0.45rem;
 		padding: 1rem;
-		border-radius: 1rem;
+		border-radius: 0.75rem;
 		background: color-mix(in srgb, var(--gr-semantic-background-secondary) 82%, white 18%);
-		border: 1px solid color-mix(in srgb, var(--gr-semantic-border-subtle) 68%, white 32%);
+		min-width: 0;
 	}
 
 	.identity-nexus__ledger-card p,
@@ -290,22 +299,22 @@
 
 	.identity-nexus__ledger-card--accent,
 	.identity-nexus__timeline-card--accent {
-		border-color: color-mix(in srgb, var(--gr-color-primary-300) 65%, white 35%);
+		border-left: 3px solid color-mix(in srgb, var(--gr-color-primary-300) 65%, white 35%);
 	}
 
 	.identity-nexus__ledger-card--success,
 	.identity-nexus__timeline-card--success {
-		border-color: color-mix(in srgb, var(--gr-color-success-300) 65%, white 35%);
+		border-left: 3px solid color-mix(in srgb, var(--gr-color-success-300) 65%, white 35%);
 	}
 
 	.identity-nexus__ledger-card--warning,
 	.identity-nexus__timeline-card--warning {
-		border-color: color-mix(in srgb, var(--gr-color-warning-300) 65%, white 35%);
+		border-left: 3px solid color-mix(in srgb, var(--gr-color-warning-300) 65%, white 35%);
 	}
 
 	.identity-nexus__ledger-card--critical,
 	.identity-nexus__timeline-card--critical {
-		border-color: color-mix(in srgb, var(--gr-color-error-300) 65%, white 35%);
+		border-left: 3px solid color-mix(in srgb, var(--gr-color-error-300) 65%, white 35%);
 	}
 
 	.identity-nexus__ledger-header,

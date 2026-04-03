@@ -33,6 +33,7 @@ export interface AgentFaceBrand {
 export interface AgentFaceNavItem {
 	id: string;
 	label: string;
+	icon?: string;
 	href?: string;
 	active?: boolean;
 	badge?: string;

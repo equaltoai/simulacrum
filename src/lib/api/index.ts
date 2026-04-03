@@ -637,6 +637,17 @@ function requireAccessToken(): string {
 	return token;
 }
 
+function timelineToken(type: TimelineType): string | null {
+	switch (type) {
+		case 'HOME':
+		case 'LIST':
+		case 'DIRECT':
+			return requireAccessToken();
+		default:
+			return getAccessToken();
+	}
+}
+
 function restErrorMessage(error: unknown, fallback: string): string {
 	if (error instanceof RestRequestError && error.body && typeof error.body === 'object') {
 		const body = error.body as {
@@ -689,7 +700,7 @@ async function fetchTimeline({
 	items: Status[];
 	pageInfo: { endCursor: string | null; hasNextPage: boolean };
 }> {
-	const token = requireAccessToken();
+	const token = timelineToken(type);
 
 	const variables: TimelineQueryVariables = {
 		type,
@@ -1798,7 +1809,7 @@ export async function fetchActorByUsername({
 	username: string;
 	signal?: AbortSignal;
 }): Promise<Account> {
-	const token = requireAccessToken();
+	const token = getAccessToken();
 
 	const variables: ActorByUsernameQueryVariables = { username };
 
@@ -1840,7 +1851,7 @@ export async function fetchObjectById({
 	id: string;
 	signal?: AbortSignal;
 }): Promise<Status | null> {
-	const token = requireAccessToken();
+	const token = getAccessToken();
 
 	const variables: ObjectByIdQueryVariables = { id };
 
@@ -1864,7 +1875,7 @@ export async function fetchThreadContext({
 	noteId: string;
 	signal?: AbortSignal;
 }): Promise<{ rootNote: Status; ancestors: Status[]; descendants: Status[] } | null> {
-	const token = requireAccessToken();
+	const token = getAccessToken();
 
 	const data = await graphqlRequest<
 		{
@@ -2433,7 +2444,7 @@ export async function fetchActorProfile({
 		throw new Error('fetchActorProfile requires an id or username');
 	}
 
-	const token = requireAccessToken();
+	const token = getAccessToken();
 
 	const data = await graphqlRequest<
 		{ actor?: Parameters<typeof toAccount>[0] | null },

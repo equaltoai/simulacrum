@@ -25,7 +25,7 @@ import type {
 	ActivityPubTag,
 	GenericStatus,
 	GenericTimelineItem,
-} from './generics/index.js';
+} from '../generics/index.js';
 import { SvelteDate, SvelteMap, SvelteSet } from 'svelte/reactivity';
 
 export interface LesserTimelineConfig {
