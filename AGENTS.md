@@ -36,6 +36,7 @@ Sibling repositories (typically checked out next to this repo):
 Notes:
 - When referencing sibling repos, **ignore** `.pai/` and `.theory/` directories.
 - This repo exists to **validate** the upstream stack; when gaps are found, prefer fixing upstream over local hacks.
+- If a defect is in vendored `greater-components` code or contracts, **open/pass it back upstream** to `equaltoai/greater-components` instead of patching the vendored files locally in Simulacrum unless the user explicitly asks for a temporary local override.
 - The canonical rewrite contract lives in
   `docs/drones/agent-first-facetheory-contract.md`.
 
@@ -99,6 +100,7 @@ Greater Components (vendored) management:
 - `greater diff [items...]`
 - `greater update --all --ref <greater-tag>`
 - `greater doctor`
+- When `greater` updates surface regressions in managed files, treat them as upstream `greater-components` issues first. Do not quietly repair managed vendor files in this repo as the default response.
 
 ## Deployment (dev stage)
 

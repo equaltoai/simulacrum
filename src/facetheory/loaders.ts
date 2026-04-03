@@ -74,7 +74,7 @@ import type {
 } from '$lib/components/messaging';
 import type { SoulChannels, SoulContactPreferences } from '$lib/components/soul';
 
-import { getPageHref } from './routing';
+import { buildConversationComposeHref, getPageHref } from './routing';
 import type {
 	AppActionContext,
 	AppPageDescriptor,
@@ -488,7 +488,8 @@ function shouldExposeSoulReachability(
 	activeAgent: DroneAgentState | null,
 	workflow: AgentWorkflowSurface | null
 ): boolean {
-	const semantics = workflow?.identitySemantics ?? activeAgent?.identitySemantics ?? PREVIEW_AGENT.identitySemantics;
+	const semantics = workflow?.identitySemantics ?? activeAgent?.identitySemantics;
+	if (!semantics) return false;
 	return semantics.identityState === 'souled' || Boolean(activeAgent?.agentCapabilities.canDM);
 }
 
@@ -924,61 +925,27 @@ export function createPreviewAppState({
 	page: AppPageDescriptor;
 	agentHint?: string | null;
 }): ClientAppState {
-	const hinted = agentHint?.trim();
-	const previewAgent =
-		hinted && hinted !== PREVIEW_AGENT.username
-			? {
-					...PREVIEW_AGENT,
-					id: `preview-agent-${hinted}`,
-					username: hinted,
-					displayName: `${titleCase(hinted)} Signal`,
-					bio: `Preview agent-first shell for ${titleCase(hinted)} while live Simulacrum data is unavailable.`,
-				}
-			: PREVIEW_AGENT;
-
-	const previewWorkflow = {
-		...PREVIEW_WORKFLOW,
-		username: previewAgent.username,
-		identity: {
-			...PREVIEW_WORKFLOW.identity,
-			id: previewAgent.id,
-			name: previewAgent.displayName,
-			handle: `@${previewAgent.username}`,
-			summary: previewAgent.bio ?? PREVIEW_WORKFLOW.identity.summary,
-		},
-	};
-
 	return assembleAppState({
 		page,
-		agentHint: previewAgent.username,
-		viewer: PREVIEW_VIEWER,
-		myAgents: PREVIEW_MY_AGENTS.map((agent) =>
-			agent.username === PREVIEW_AGENT.username
-				? {
-						...agent,
-						id: previewAgent.id,
-						username: previewAgent.username,
-						displayName: previewAgent.displayName,
-						bio: previewAgent.bio,
-					}
-				: agent
-			),
-			mySouls: PREVIEW_MY_SOULS,
-			boundSoul: null,
-			activeAgent: previewAgent,
-			workflow: previewWorkflow,
-			myRequests: [PREVIEW_REQUEST],
-			myReviews: [PREVIEW_REVIEW],
-			channels: EMPTY_CHANNELS,
-			channelsUpdatedAt: null,
-			preferences: null,
-			showReachability: true,
-			reachabilityNotice: null,
-			publishedSoulProfile: null,
-			publishedSoulError: null,
-			hostWorkflow: PREVIEW_HOST_WORKFLOW,
-			isPreview: true,
-		});
+		agentHint: agentHint?.trim() ?? null,
+		viewer: { id: '', name: '', handle: '' },
+		myAgents: [],
+		mySouls: [],
+		boundSoul: null,
+		activeAgent: null,
+		workflow: null,
+		myRequests: [],
+		myReviews: [],
+		channels: EMPTY_CHANNELS,
+		channelsUpdatedAt: null,
+		preferences: null,
+		showReachability: false,
+		reachabilityNotice: null,
+		publishedSoulProfile: null,
+		publishedSoulError: null,
+		hostWorkflow: emptyHostWorkflow(false, false, null),
+		isPreview: true,
+	});
 }
 
 export async function loadClientAppState({
@@ -1410,9 +1377,8 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 	const identity = normalizeIdentityCard(rawIdentity);
 	const rawRequestQueue = dedupeById([workflow?.request ?? null, ...input.myRequests]);
 	const requestQueue = rawRequestQueue.map((request) => normalizeSoulRequestCard(request));
-	const previewRequest = normalizeSoulRequestCard(PREVIEW_REQUEST);
-	const rawReviewDecision = workflow?.review ?? input.myReviews[0] ?? PREVIEW_REVIEW;
-	const reviewDecision = normalizeReviewDecision(rawReviewDecision);
+	const rawReviewDecision = workflow?.review ?? input.myReviews[0] ?? null;
+	const reviewDecision = rawReviewDecision ? normalizeReviewDecision(rawReviewDecision) : undefined;
 	const publishedDeclaration = buildPublishedSoulDeclaration(input.publishedSoulProfile, identity.name);
 	const hostConversationDeclaration = buildHostWorkflowDeclaration(
 		input.hostWorkflow.producedDeclarations,
@@ -1423,10 +1389,9 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		publishedDeclaration ??
 		hostConversationDeclaration ??
 		workflow?.declaration ??
-		(input.isPreview ? PREVIEW_WORKFLOW.declaration! : buildUnavailableDeclaration(identity.name, activeUsername));
-	const declaration = normalizeDeclarationCard(rawDeclaration);
-	const identityDeclaration =
-		input.isPreview ? PREVIEW_WORKFLOW.declaration! : publishedDeclaration ?? hostConversationDeclaration;
+		(input.isPreview ? null : buildUnavailableDeclaration(identity.name, activeUsername));
+	const declaration = rawDeclaration ? normalizeDeclarationCard(rawDeclaration) : undefined;
+	const identityDeclaration = publishedDeclaration ?? hostConversationDeclaration;
 	const identityDeclarationCard = identityDeclaration
 		? normalizeDeclarationCard(identityDeclaration)
 		: undefined;
@@ -1440,28 +1405,20 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 					publishedSoulError: input.publishedSoulError ?? null,
 					hostWorkflow: input.hostWorkflow,
 				});
-	const rawCheckpoint = workflow?.checkpoint ?? PREVIEW_WORKFLOW.checkpoint!;
-	const checkpoint = normalizeCheckpointCard(rawCheckpoint);
-	const rawGraduation = workflow?.graduation ?? PREVIEW_WORKFLOW.graduation!;
-	const graduation = normalizeGraduationCard(rawGraduation);
-	const rawContinuity = workflow?.continuity ?? PREVIEW_WORKFLOW.continuity!;
-	const continuity = normalizeContinuityPanel(rawContinuity);
-	const rawLifecycle = workflow?.lifecycle?.length ? workflow.lifecycle : PREVIEW_WORKFLOW.lifecycle;
-	const lifecycle = normalizeLifecycle(rawLifecycle);
+	const rawCheckpoint = workflow?.checkpoint ?? null;
+	const checkpoint = rawCheckpoint ? normalizeCheckpointCard(rawCheckpoint) : undefined;
+	const rawGraduation = workflow?.graduation ?? null;
+	const graduation = rawGraduation ? normalizeGraduationCard(rawGraduation) : undefined;
+	const rawContinuity = workflow?.continuity ?? null;
+	const continuity = rawContinuity ? normalizeContinuityPanel(rawContinuity) : undefined;
+	const rawLifecycle = workflow?.lifecycle?.length ? workflow.lifecycle : [];
+	const lifecycle = rawLifecycle.length ? normalizeLifecycle(rawLifecycle) : [];
 	const transcript = input.hostWorkflow.transcript.length
 		? input.hostWorkflow.transcript
-		: input.isPreview
-			? synthesizeTranscript(
-				input.viewer,
-				identity.name,
-				rawRequestQueue[0],
-				rawDeclaration,
-				rawReviewDecision
-			)
-			: [];
+		: [];
 	const notifications = buildWorkflowNotifications(
 		input.viewer,
-		rawRequestQueue[0] ?? PREVIEW_REQUEST,
+		rawRequestQueue[0] ?? null,
 		rawReviewDecision,
 		rawGraduation,
 		workflow,
@@ -1482,7 +1439,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 	const evidence = normalizeArtifacts(
 		dedupeById([
 			...(rawRequestQueue[0]?.artifacts ?? []),
-			...(rawDeclaration.supportingArtifacts ?? []),
+			...(rawDeclaration?.supportingArtifacts ?? []),
 			...buildPublishedSoulArtifacts(input.publishedSoulProfile),
 			...buildProducedDeclarationArtifacts(input.hostWorkflow.producedDeclarations),
 		])
@@ -1492,7 +1449,8 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		activeUsername,
 		rawRequestQueue.length,
 		input.hostWorkflow.conversations.length,
-		input.mySouls.length
+		input.mySouls.length,
+		!input.isPreview
 	);
 	const statusChips = buildStatusChips(workflow, activeAgent, input.hostWorkflow);
 	const metrics = buildMetrics(
@@ -1502,7 +1460,12 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		input.myReviews.length,
 		input.hostWorkflow.conversations.length
 	);
-	const actions = buildActions(input.page, activeUsername);
+	const actions = buildActions(
+		input.page,
+		activeUsername,
+		activeAgent?.id ?? null,
+		Boolean(activeAgent?.agentCapabilities.canDM)
+	);
 	const shared = {
 		brand: {
 			name: 'Simulacrum',
@@ -1531,8 +1494,8 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		},
 		filters: buildRequestFilters(rawRequestQueue),
 		notifications,
-		requestQueue: requestQueue.length ? requestQueue : [previewRequest],
-		focusRequest: requestQueue[0] ?? previewRequest,
+		requestQueue,
+		focusRequest: requestQueue[0],
 		reviewDecision,
 		callouts: [
 			{
@@ -1569,8 +1532,8 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 				'The conversation, declaration packet, and signer checkpoint stay on one route so the issuance flow reads as a first-class agent surface.',
 		},
 		identity,
-		requestQueue: requestQueue.length ? requestQueue : [previewRequest],
-		activeRequest: requestQueue[0] ?? previewRequest,
+		requestQueue,
+		activeRequest: requestQueue[0],
 		reviewDecision,
 		declaration,
 		checkpoint,
@@ -1624,15 +1587,17 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		continuityMoments: timeline,
 		workflowNotifications: notifications,
 		callouts: [
-			{
-				id: 'dashboard-note-continuity',
-				title: 'Same-body graduation',
-				summary:
-					activeAgent?.identitySemantics.continuitySummary ??
-					workflow?.identitySemantics.continuitySummary ??
-					PREVIEW_AGENT.identitySemantics.continuitySummary,
-				tone: 'success',
-			},
+			...(activeAgent?.identitySemantics.continuitySummary ?? workflow?.identitySemantics.continuitySummary
+				? [{
+						id: 'dashboard-note-continuity',
+						title: 'Same-body graduation',
+						summary:
+							activeAgent?.identitySemantics.continuitySummary ??
+							workflow?.identitySemantics.continuitySummary ??
+							'',
+						tone: 'success' as const,
+					}]
+				: []),
 			{
 				id: 'dashboard-note-agent-first',
 				title: 'Agent-first information architecture',
@@ -1660,6 +1625,9 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		boundSoulAgentId: input.boundSoul?.agent.agentId ?? undefined,
 		channelsUpdatedAt: input.channelsUpdatedAt ?? undefined,
 		reachabilityNotice: input.reachabilityNotice ?? undefined,
+		mcpAccess: activeAgent?.mcpAccess ?? undefined,
+		agentUsername: activeUsername,
+		roster: buildRoster(input.myAgents, activeUsername),
 		lifecycle,
 		continuity,
 		timeline,
@@ -1675,14 +1643,16 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 						: 'Runtime comms stay disabled until graduation makes the body a published soul.',
 				tone: activeAgent?.agentCapabilities.canDM ? 'success' : 'warning',
 			},
-			{
-				id: 'identity-note-attribution',
-				title: workflow?.identitySemantics.attributionLabel ?? PREVIEW_AGENT.identitySemantics.attributionLabel,
-				summary:
-					workflow?.identitySemantics.moderationLabel ??
-					PREVIEW_AGENT.identitySemantics.moderationLabel,
-				tone: 'accent',
-			},
+			...(workflow?.identitySemantics.attributionLabel || activeAgent?.identitySemantics.attributionLabel
+				? [{
+						id: 'identity-note-attribution',
+						title: workflow?.identitySemantics.attributionLabel ?? activeAgent?.identitySemantics.attributionLabel ?? '',
+						summary:
+							workflow?.identitySemantics.moderationLabel ??
+							activeAgent?.identitySemantics.moderationLabel ?? '',
+						tone: 'accent' as const,
+					}]
+				: []),
 		],
 	};
 
@@ -1874,10 +1844,15 @@ function buildIdentityCard(
 	}
 
 	return {
-		...PREVIEW_WORKFLOW.identity,
-		id: `preview-${activeUsername}`,
+		id: `placeholder-${activeUsername}`,
 		name: titleCase(activeUsername),
 		handle: `@${activeUsername}`,
+		summary: '',
+		currentPhase: 'request',
+		currentState: 'request.submitted',
+		steward: undefined,
+		tags: [],
+		metrics: [],
 	};
 }
 
@@ -1885,10 +1860,11 @@ function buildRoster(
 	myAgents: readonly AgentRosterRecord[],
 	activeUsername: string | null
 ): NexusDashboardData['roster'] {
-	return myAgents.slice(0, 4).map((agent) => ({
+	return myAgents.map((agent) => ({
 		id: agent.id,
 		name: agent.displayName,
 		handle: `@${agent.username}`,
+		href: `/l/identity/${encodeURIComponent(agent.username)}`,
 		summary: agent.bio ?? 'Agent roster entry',
 		currentPhase: agent.username === activeUsername ? 'signing' : 'continuity',
 		currentState: agent.username === activeUsername ? 'signing.pending' : 'continuity.stable',
@@ -1910,8 +1886,21 @@ function buildNavItems(
 	activeUsername: string | null,
 	requestCount: number,
 	conversationCount: number,
-	soulCount: number
+	soulCount: number,
+	isAuthenticated: boolean
 ): readonly AgentFaceNavItem[] {
+	if (!isAuthenticated) {
+		return [
+			{
+				id: 'nav-explore',
+				label: 'Explore',
+				icon: 'explore',
+				href: getPageHref('explore', activeUsername),
+				active: page.key === 'explore',
+			},
+		];
+	}
+
 	return [
 		{
 			id: 'nav-dashboard',
@@ -1988,7 +1977,12 @@ function buildNavItems(
 	];
 }
 
-function buildActions(page: AppPageDescriptor, activeUsername: string | null): readonly AgentFaceAction[] {
+function buildActions(
+	page: AppPageDescriptor,
+	activeUsername: string | null,
+	activeActorId: string | null,
+	canDirectMessage: boolean
+): readonly AgentFaceAction[] {
 	const nextPrimary = (() => {
 		switch (page.key) {
 			case 'dashboard':
@@ -2006,15 +2000,19 @@ function buildActions(page: AppPageDescriptor, activeUsername: string | null): r
 		}
 	})();
 
-	return [
-		nextPrimary,
-		{
-			label: 'Pinned agent',
-			href: getPageHref(page.key === 'not-found' ? 'dashboard' : page.key, activeUsername),
-			tone: 'ghost',
-			detail: activeUsername ? `?agent=${activeUsername}` : 'first available agent',
-		},
-	];
+	if (page.key === 'identity' && activeActorId && canDirectMessage) {
+		return [
+			{
+				label: 'Direct Message',
+				href: buildConversationComposeHref(activeActorId),
+				tone: 'primary',
+				detail: 'Open the live DM lane for this agent.',
+			},
+			{ ...nextPrimary, tone: 'secondary' },
+		];
+	}
+
+	return [nextPrimary];
 }
 
 function buildStatusChips(
@@ -2022,18 +2020,20 @@ function buildStatusChips(
 	activeAgent: DroneAgentState | null,
 	hostWorkflow: HostWorkflowState
 ): readonly AgentFaceStatusChip[] {
-	const semantics = workflow?.identitySemantics ?? activeAgent?.identitySemantics ?? PREVIEW_AGENT.identitySemantics;
+	const semantics = workflow?.identitySemantics ?? activeAgent?.identitySemantics;
 	return [
-		{
-			label: semantics.identityLabel,
-			detail: semantics.lifecycleState,
-			tone: semantics.identityState === 'souled' ? 'success' : 'accent',
-		},
-		{
-			label: semantics.attributionLabel,
-			detail: semantics.continuityState,
-			tone: semantics.bodyIdentityPreserved ? 'success' : 'warning',
-		},
+		...(semantics ? [
+			{
+				label: semantics.identityLabel,
+				detail: semantics.lifecycleState,
+				tone: (semantics.identityState === 'souled' ? 'success' : 'accent') as AgentFaceStatusChip['tone'],
+			},
+			{
+				label: semantics.attributionLabel,
+				detail: semantics.continuityState,
+				tone: (semantics.bodyIdentityPreserved ? 'success' : 'warning') as AgentFaceStatusChip['tone'],
+			},
+		] : []),
 		{
 			label: hostWorkflow.bridgeEnabled
 				? hostWorkflow.tokenConfigured
@@ -2109,9 +2109,9 @@ function buildRequestFilters(requestQueue: readonly SoulRequestCard[]): SoulRequ
 
 function buildWorkflowNotifications(
 	viewer: ViewerInfo,
-	request: SoulRequestCard,
-	review: ReviewDecisionCard,
-	graduation: NonNullable<AgentWorkflowSurface['graduation']>,
+	request: SoulRequestCard | null,
+	review: ReviewDecisionCard | null,
+	graduation: NonNullable<AgentWorkflowSurface['graduation']> | null | undefined,
 	workflow: AgentWorkflowSurface | null,
 	hostWorkflow: HostWorkflowState
 ): readonly WorkflowEventNotification[] {
@@ -2131,63 +2131,74 @@ function buildWorkflowNotifications(
 		);
 	}
 
-	return [
-		createWorkflowNotification({
+	const notifications: WorkflowEventNotification[] = [];
+	let index = 0;
+
+	if (request) {
+		notifications.push(createWorkflowNotification({
 			id: 'notification-request',
-			createdAt: request.submittedAt ? String(request.submittedAt) : PREVIEW_TIMESTAMP,
+			createdAt: request.submittedAt ? String(request.submittedAt) : new Date().toISOString(),
 			account: workflowNotificationAccount(request.requestedBy),
 			kind: 'request_submitted',
 			title: request.title,
 			summary: request.summary,
 			phase: 'request',
 			actionLabel: 'Open request',
-			index: 0,
-		}),
-		createWorkflowNotification({
+			index: index++,
+		}));
+	}
+
+	if (review) {
+		notifications.push(createWorkflowNotification({
 			id: 'notification-review',
-			createdAt: PREVIEW_TIMESTAMP,
+			createdAt: new Date().toISOString(),
 			account: workflowNotificationAccount(review.reviewer),
 			kind: review.decision === 'approved' ? 'approval_requested' : 'review_requested',
 			title: review.title,
 			summary: review.decisionSummary,
 			phase: workflow?.currentPhase ?? 'review',
 			actionLabel: 'Open approval thread',
-			index: 1,
-		}),
-		createWorkflowNotification({
+			index: index++,
+		}));
+	}
+
+	if (graduation) {
+		notifications.push(createWorkflowNotification({
 			id: 'notification-finalize',
-			createdAt: PREVIEW_TIMESTAMP,
+			createdAt: new Date().toISOString(),
 			account: workflowNotificationAccount(viewer),
 			kind: graduation.readiness === 'ready' ? 'graduated' : 'finalize_ready',
 			title: graduation.title,
 			summary: graduation.summary,
 			phase: workflow?.currentPhase ?? 'graduation',
 			actionLabel: graduation.nextStep ?? 'Finalize',
-			index: 2,
-		}),
-	];
+			index: index++,
+		}));
+	}
+
+	return notifications;
 }
 
 function buildThreadSummary(
-	review: ReviewDecisionCard,
-	graduation: NonNullable<AgentWorkflowSurface['graduation']>,
-	checkpoint: NonNullable<AgentWorkflowSurface['checkpoint']>,
+	review: ReviewDecisionCard | null,
+	graduation: NonNullable<AgentWorkflowSurface['graduation']> | null | undefined,
+	checkpoint: NonNullable<AgentWorkflowSurface['checkpoint']> | null | undefined,
 	workflow: AgentWorkflowSurface | null
 ): MessagingWorkflowConversationSummary {
 	return {
 		kind: 'approval',
 		title: 'Graduation approval',
 		state:
-			review.decision === 'blocked'
+			review?.decision === 'blocked'
 				? 'rejected'
-				: review.decision === 'changes_requested'
+				: review?.decision === 'changes_requested'
 					? 'changes_requested'
-					: graduation.readiness === 'ready'
+					: graduation?.readiness === 'ready'
 						? 'approved'
 						: 'open',
 		phase: workflow?.currentPhase,
-		dueLabel: checkpoint.dueAt ? `Due ${new Date(checkpoint.dueAt).toLocaleDateString('en-US')}` : undefined,
-		summary: checkpoint.approvalMemo ?? graduation.summary,
+		dueLabel: checkpoint?.dueAt ? `Due ${new Date(checkpoint.dueAt).toLocaleDateString('en-US')}` : undefined,
+		summary: checkpoint?.approvalMemo ?? graduation?.summary,
 	};
 }
 
@@ -2196,7 +2207,7 @@ function buildThreadMessages(
 	identity: AgentWorkflowSurface['identity'],
 	transcript: readonly MintTranscriptMessage[],
 	threadSummary: MessagingWorkflowConversationSummary,
-	review: ReviewDecisionCard
+	review: ReviewDecisionCard | null
 ): readonly DirectMessage[] {
 	if (transcript.length) {
 		return transcript.map((message, index) => ({
@@ -2207,10 +2218,10 @@ function buildThreadMessages(
 					? messageParticipant(identity.id, identity.name, identity.handle)
 					: messageParticipant(viewer.id, viewer.name, viewer.handle),
 			content: message.content,
-			createdAt: message.createdAt ?? PREVIEW_TIMESTAMP,
+			createdAt: message.createdAt ?? new Date().toISOString(),
 			read: true,
 			workflowMoments:
-				index === 0
+				index === 0 && review
 					? [
 							{
 								id: `${message.id}-moment`,
@@ -2235,20 +2246,22 @@ function buildThreadMessages(
 		}));
 	}
 
+	if (!review) return [];
+
 	return [
 		{
 			id: 'approval-message-reviewer',
 			conversationId: 'approval-thread',
 			sender: messageParticipant(review.reviewer.id, review.reviewer.name, review.reviewer.handle),
 			content: review.decisionSummary,
-			createdAt: PREVIEW_TIMESTAMP,
+			createdAt: new Date().toISOString(),
 			read: true,
 		},
 	];
 }
 
 function buildContinuityTimeline(
-	continuity: NonNullable<AgentWorkflowSurface['continuity']>,
+	continuity: AgentWorkflowSurface['continuity'] | null | undefined,
 	lifecycle: AgentWorkflowSurface['lifecycle'],
 	hostWorkflow: HostWorkflowState
 ): readonly AgentFaceTimelineMoment[] {
@@ -2284,7 +2297,8 @@ function buildAttributions(
 	activeAgent: DroneAgentState | null,
 	workflow: AgentWorkflowSurface | null
 ): readonly AgentFaceAttributionRecord[] {
-	const semantics = workflow?.identitySemantics ?? activeAgent?.identitySemantics ?? PREVIEW_AGENT.identitySemantics;
+	const semantics = workflow?.identitySemantics ?? activeAgent?.identitySemantics;
+	if (!semantics) return [];
 	return [
 		{
 			id: 'attribution-body',
@@ -2292,7 +2306,7 @@ function buildAttributions(
 			summary: semantics.continuitySummary,
 			sourceLabel: semantics.identityState === 'souled' ? 'graduating body' : 'drone body',
 			targetLabel: semantics.identityState === 'souled' ? 'published soul' : 'soul request lane',
-			timestampLabel: activeAgent?.verifiedAt ?? activeAgent?.createdAt ?? PREVIEW_TIMESTAMP,
+			timestampLabel: activeAgent?.verifiedAt ?? activeAgent?.createdAt ?? undefined,
 			tone: semantics.bodyIdentityPreserved ? 'success' : 'warning',
 		},
 		{
@@ -2303,7 +2317,6 @@ function buildAttributions(
 				: 'Memory continuity needs a follow-up attestation.',
 			sourceLabel: 'Simulacrum timeline',
 			targetLabel: semantics.identityLabel,
-			timestampLabel: PREVIEW_TIMESTAMP,
 			tone: semantics.memoryReferencesPreserved ? 'success' : 'warning',
 		},
 		{
@@ -2312,7 +2325,6 @@ function buildAttributions(
 			summary: 'Moderation and identity semantics remain explicit for both human and LLM consumers.',
 			sourceLabel: 'runtime policy',
 			targetLabel: semantics.identityLabel,
-			timestampLabel: PREVIEW_TIMESTAMP,
 			tone: 'accent',
 		},
 	];

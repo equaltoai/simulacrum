@@ -79,6 +79,14 @@
 		return activeCredential?.accessToken?.trim() || '<advanced-access-token>';
 	}
 
+	function jsonString(value: string): string {
+		return JSON.stringify(value);
+	}
+
+	function tomlString(value: string): string {
+		return JSON.stringify(value);
+	}
+
 	function statusLabel(status: PanelStatus): string {
 		switch (status) {
 			case 'loading':
@@ -357,7 +365,7 @@
 	});
 
 	const claudeAiSnippet = $derived.by(() => {
-		const discovery = oauthDiscoveryUrl || 'https://api.example.com/.well-known/oauth-protected-resource';
+		const discovery = oauthDiscoveryUrl || 'https://api.example.com/.well-known/oauth-protected-resource/mcp/agent';
 		return [
 			'Preset: Claude.ai',
 			`OAuth Discovery URL: ${discovery}`,
@@ -369,44 +377,48 @@
 
 	const claudeCodeMcpJson = $derived.by(() => {
 		const url = mcpEndpoint || 'https://api.example.com/mcp/agent';
-		const resolvedClientId = resolveClientId('claude_code');
-		const config: Record<string, unknown> = {
-			type: 'http',
-			url,
-		};
+		return JSON.stringify(
+			{
+				mcpServers: {
+					[serverName]: {
+						type: 'http',
+						url,
+					},
+				},
+			},
+			null,
+			2
+		);
+	});
 
-		if (resolvedClientId) {
-			const oauth: Record<string, unknown> = {
-				clientId: resolvedClientId,
-				callbackPort: 8787,
-			};
-			if (latestConnector?.clientPreset === 'claude_code' && latestConnector.clientSecret) {
-				oauth.clientSecret = latestConnector.clientSecret;
-			}
-			config.oauth = oauth;
-		} else {
-			config.oauth = {
-				clientId: '<register a Claude Code connector above>',
-				callbackPort: 8787,
-			};
-		}
+	const codexConfigToml = $derived.by(() => {
+		const url = mcpEndpoint || 'https://api.example.com/mcp/agent';
+		const scopes = oauthDiscoverySummary.scopes.length
+			? oauthDiscoverySummary.scopes
+			: ['read', 'write'];
 
-		return JSON.stringify({ mcpServers: { [serverName]: config } }, null, 2);
+		return [
+			`[mcp_servers.${jsonString(serverName)}]`,
+			`url = ${tomlString(url)}`,
+			`oauth_resource = ${tomlString(url)}`,
+			`scopes = [${scopes.map((scope) => tomlString(scope)).join(', ')}]`,
+		].join('\n');
 	});
 
 	const claudeCodeSnippet = $derived.by(() => {
-		const discovery = oauthDiscoveryUrl || 'https://api.example.com/.well-known/oauth-protected-resource';
+		const discovery = oauthDiscoveryUrl || 'https://api.example.com/.well-known/oauth-protected-resource/mcp/agent';
 		return [
 			'Preset: Claude Code',
-			`OAuth Discovery URL: ${discovery}`,
-			'Redirect URI: http://localhost:8787/callback',
+			`MCP URL: ${mcpEndpoint || 'https://api.example.com/mcp/agent'}`,
+			`OAuth Protected Resource: ${discovery}`,
 			`Client ID: ${claudeCodeClientId}`,
 			`Client Secret: ${claudeCodeClientSecret}`,
+			'Do not put the client secret into .mcp.json.',
 		].join('\n');
 	});
 
 	const headlessSnippet = $derived.by(() => {
-		const discovery = oauthDiscoveryUrl || 'https://api.example.com/.well-known/oauth-protected-resource';
+		const discovery = oauthDiscoveryUrl || 'https://api.example.com/.well-known/oauth-protected-resource/mcp/agent';
 		return [
 			'Grant type: client_credentials',
 			`OAuth Discovery URL: ${discovery}`,
@@ -538,7 +550,7 @@
 				<span class={statusBadgeClass(discoveryOverviewStatus)}>{statusLabel(discoveryOverviewStatus)}</span>
 			</div>
 			<p class="page__meta">
-				Public checks against <code>/.well-known/oauth-protected-resource</code> and
+				Public checks against the actor-scoped OAuth protected-resource document and
 				<code>/.well-known/mcp.json</code>.
 			</p>
 			<div class="mcp-panel__status-copy">
@@ -652,8 +664,22 @@
 		</div>
 		<pre class="settings-token__value settings-token__value--code">{claudeCodeMcpJson}</pre>
 		<p class="page__meta">
-			Register a Claude Code connector above, then paste this into your project’s <code>.mcp.json</code> file.
-			Claude Code will open a browser window to complete OAuth authorization on first use.
+			Paste this into your project’s <code>.mcp.json</code> file. Claude Code will discover OAuth from the MCP
+			resource itself and open a browser window on first use. Do not embed a client secret here.
+		</p>
+	</article>
+
+	<article class="mcp-panel__config-block">
+		<div class="settings-token__row">
+			<strong>Codex — <code>config.toml</code> config</strong>
+			<button type="button" class="gr-button gr-button--outline" onclick={() => copy(codexConfigToml)}>
+				Copy TOML
+			</button>
+		</div>
+		<pre class="settings-token__value settings-token__value--code">{codexConfigToml}</pre>
+		<p class="page__meta">
+			Merge this into <code>~/.codex/config.toml</code>, then run <code>codex mcp login {serverName}</code>.
+			The <code>oauth_resource</code> line is required so Codex sends the MCP resource URL during OAuth.
 		</p>
 	</article>
 
@@ -680,7 +706,8 @@
 			</div>
 			<pre class="settings-token__value">{claudeCodeSnippet}</pre>
 			<p class="page__meta">
-				Individual field values if you prefer to configure a custom MCP client manually.
+				Individual field values if you need to register a dedicated OAuth client manually. This is separate from
+				the minimal <code>.mcp.json</code> above.
 			</p>
 		</article>
 

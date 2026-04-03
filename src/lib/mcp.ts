@@ -414,12 +414,15 @@ export function resolveMcpTransport(origin: string, actor?: string): McpTranspor
 
 	const mcpPath = actor ? `/mcp/${encodeURIComponent(actor)}` : '/mcp';
 	const endpoint = new URL(mcpPath, `${apiOrigin}/`).toString();
+	const oauthDiscoveryPath = actor
+		? `/.well-known/oauth-protected-resource${mcpPath}`
+		: '/.well-known/oauth-protected-resource';
 
 	return {
 		apiOrigin,
 		endpoint,
 		discoveryUrl: new URL('/.well-known/mcp.json', `${apiOrigin}/`).toString(),
-		oauthDiscoveryUrl: new URL('/.well-known/oauth-protected-resource', `${apiOrigin}/`).toString(),
+		oauthDiscoveryUrl: new URL(oauthDiscoveryPath, `${apiOrigin}/`).toString(),
 		resource: endpoint,
 	};
 }

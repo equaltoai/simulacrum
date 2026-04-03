@@ -140,22 +140,35 @@ export interface SoulRequestCenterData extends AgentFaceBaseData {
 export interface GraduationApprovalThreadData extends AgentFaceBaseData {
 	threadSummary: MessagingWorkflowConversationSummary;
 	messages: readonly DirectMessage[];
-	declaration: DeclarationPreviewCardData;
-	checkpoint: SignatureCheckpointCardData;
-	graduation: GraduationSummaryCardData;
+	declaration?: DeclarationPreviewCardData;
+	checkpoint?: SignatureCheckpointCardData;
+	graduation?: GraduationSummaryCardData;
 	currentUserId?: string;
 	callouts?: readonly AgentFaceCallout[];
 }
 
+export interface AgentFaceRosterEntry extends AgentIdentityCardData {
+	href?: string;
+}
+
 export interface NexusDashboardData extends AgentFaceBaseData {
 	identity: AgentIdentityCardData;
-	graduation: GraduationSummaryCardData;
-	continuity: ContinuityPanelData;
+	graduation?: GraduationSummaryCardData;
+	continuity?: ContinuityPanelData;
 	lifecycle?: readonly AgentLifecycleStep[];
-	roster?: readonly AgentIdentityCardData[];
+	roster?: readonly AgentFaceRosterEntry[];
 	continuityMoments?: readonly AgentFaceTimelineMoment[];
 	workflowNotifications?: readonly WorkflowEventNotification[];
 	callouts?: readonly AgentFaceCallout[];
+}
+
+export interface AgentFaceMcpAccess {
+	mcpURL: string;
+	protectedResourceURL: string;
+	authorizationServerURL: string;
+	registrationURL: string;
+	scopes: readonly string[];
+	guidance: readonly string[];
 }
 
 export interface IdentityNexusData extends AgentFaceBaseData {
@@ -174,6 +187,9 @@ export interface IdentityNexusData extends AgentFaceBaseData {
 		title: string;
 		message: string;
 	};
+	mcpAccess?: AgentFaceMcpAccess;
+	agentUsername?: string;
+	roster?: readonly AgentFaceRosterEntry[];
 	lifecycle?: readonly AgentLifecycleStep[];
 	continuity?: ContinuityPanelData;
 	timeline?: readonly AgentFaceTimelineMoment[];

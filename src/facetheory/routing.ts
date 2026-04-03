@@ -175,6 +175,8 @@ export function resolvePage(pathname: string): AppPageDescriptor {
 		case '/auth/callback':
 			return PAGE_DEFINITIONS['auth-callback'];
 		default:
+			if (route.startsWith('/conversations/compose/')) return PAGE_DEFINITIONS.conversations;
+			if (route.startsWith('/identity/')) return PAGE_DEFINITIONS.identity;
 			if (route.startsWith('/profile/')) return PAGE_DEFINITIONS.profile;
 			if (route.startsWith('/status/')) return PAGE_DEFINITIONS.status;
 			return PAGE_DEFINITIONS['not-found'];
@@ -206,14 +208,31 @@ export function resolveStatusId(pathname: string): string | null {
 	return id.trim() || null;
 }
 
+export function resolveConversationComposeActorId(pathname: string): string | null {
+	const route = normalizeRoutePath(pathname);
+	if (!route.startsWith('/conversations/compose/')) return null;
+
+	const encoded = route.slice('/conversations/compose/'.length).trim();
+	if (!encoded) return null;
+
+	try {
+		return decodeURIComponent(encoded) || null;
+	} catch {
+		return encoded;
+	}
+}
+
 export function getPageHref(key: AppPageKey, agentHint?: string | null): string {
 	const page = PAGE_DEFINITIONS[key];
-	const url = new URL(`${FACETHEORY_BASE_PATH}${page.path}`, 'https://simulacrum.invalid');
 	const trimmedAgent = agentHint?.trim();
-	if (trimmedAgent) {
-		url.searchParams.set('agent', trimmedAgent);
+	if (trimmedAgent && key === 'identity') {
+		return `${FACETHEORY_BASE_PATH}/identity/${encodeURIComponent(trimmedAgent)}`;
 	}
-	return `${url.pathname}${url.search}`;
+	return `${FACETHEORY_BASE_PATH}${page.path}`;
+}
+
+export function buildConversationComposeHref(actorId: string): string {
+	return `${FACETHEORY_BASE_PATH}/conversations/compose/${encodeURIComponent(actorId)}`;
 }
 
 export function resolveWindowPage(): AppPageDescriptor {
@@ -223,7 +242,20 @@ export function resolveWindowPage(): AppPageDescriptor {
 	return resolvePage(window.location.pathname);
 }
 
+export function resolveIdentityAgentHint(pathname: string): string | null {
+	const route = normalizeRoutePath(pathname);
+	if (!route.startsWith('/identity/')) return null;
+	const segment = route.slice('/identity/'.length).trim();
+	if (!segment) return null;
+	try {
+		return decodeURIComponent(segment) || null;
+	} catch {
+		return segment;
+	}
+}
+
 export function resolveWindowAgentHint(): string | null {
 	if (typeof window === 'undefined') return null;
-	return firstQueryValue(new URLSearchParams(window.location.search), 'agent');
+	const fromPath = resolveIdentityAgentHint(window.location.pathname);
+	return fromPath;
 }

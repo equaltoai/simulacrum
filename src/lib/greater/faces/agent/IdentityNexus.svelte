@@ -3,9 +3,9 @@
 		AgentIdentityCard,
 		ContinuityPanel,
 		DeclarationPreviewCard,
-		SoulLifecycleRail,
 		formatAgentWorkflowLabel,
 	} from '$lib/components/agent';
+	import { resolveMcpTransport } from '$lib/mcp';
 	import { BestWayToContact, ChannelsDisplay } from '$lib/components/soul';
 	import AgentFaceFrame from './internal/AgentFaceFrame.svelte';
 	import type { AgentFaceTimelineMoment, IdentityNexusData } from './types.js';
@@ -16,6 +16,66 @@
 	}
 
 	let { data, class: className = '' }: Props = $props();
+
+	let copiedField = $state<string | null>(null);
+	function copyToClipboard(value: string, field: string) {
+		if (typeof navigator !== 'undefined' && navigator.clipboard) {
+			navigator.clipboard.writeText(value).then(() => {
+				copiedField = field;
+				setTimeout(() => { copiedField = null; }, 1500);
+			});
+		}
+	}
+
+	function tomlString(value: string): string {
+		return JSON.stringify(value);
+	}
+
+	const normalizedTransport = $derived.by(() => {
+		if (!data.mcpAccess || !data.agentUsername) return null;
+
+		try {
+			return resolveMcpTransport(new URL(data.mcpAccess.mcpURL).origin, data.agentUsername);
+		} catch {
+			return null;
+		}
+	});
+
+	const displayedMcpURL = $derived.by(
+		() => normalizedTransport?.endpoint ?? data.mcpAccess?.mcpURL ?? ''
+	);
+	const displayedProtectedResourceURL = $derived.by(
+		() => normalizedTransport?.oauthDiscoveryUrl ?? data.mcpAccess?.protectedResourceURL ?? ''
+	);
+
+	const mcpConfigSnippet = $derived.by(() => {
+		if (!data.agentUsername || !displayedMcpURL) return null;
+		return JSON.stringify(
+			{
+				mcpServers: {
+					[data.agentUsername]: {
+						type: 'http',
+						url: displayedMcpURL,
+					},
+				},
+			},
+			null,
+			2
+		);
+	});
+
+	const codexConfigSnippet = $derived.by(() => {
+		if (!data.agentUsername || !displayedMcpURL) return null;
+		const scopes = data.mcpAccess?.scopes?.length ? data.mcpAccess.scopes : ['read', 'write'];
+
+		return [
+			`[mcp_servers.${tomlString(data.agentUsername)}]`,
+			`url = ${tomlString(displayedMcpURL)}`,
+			`oauth_resource = ${tomlString(displayedMcpURL)}`,
+			`scopes = [${scopes.map((scope) => tomlString(scope)).join(', ')}]`,
+		].join('\n');
+	});
+
 	const continuityTimeline = $derived.by((): readonly AgentFaceTimelineMoment[] =>
 		data.timeline?.length
 			? data.timeline
@@ -75,6 +135,97 @@
 					updatedAt={data.channelsUpdatedAt}
 				/>
 				<BestWayToContact channels={data.channels} preferences={data.preferences} />
+			{/if}
+
+			{#if data.mcpAccess}
+				<section class="identity-nexus__panel">
+					<header class="identity-nexus__panel-header">
+						<p>Agent access</p>
+						<h2>MCP Configuration</h2>
+					</header>
+					<div class="identity-nexus__mcp-details">
+						<div class="identity-nexus__mcp-fields">
+							<div class="identity-nexus__mcp-field">
+								<span class="identity-nexus__mcp-label">MCP Endpoint</span>
+								<div class="identity-nexus__mcp-value">
+									<code>{displayedMcpURL}</code>
+									<button type="button" class="identity-nexus__mcp-copy" onclick={() => copyToClipboard(displayedMcpURL, 'mcpURL')}>
+										{copiedField === 'mcpURL' ? 'Copied' : 'Copy'}
+									</button>
+								</div>
+							</div>
+							<div class="identity-nexus__mcp-field">
+								<span class="identity-nexus__mcp-label">Authorization Server</span>
+								<div class="identity-nexus__mcp-value">
+									<code>{data.mcpAccess.authorizationServerURL}</code>
+									<button type="button" class="identity-nexus__mcp-copy" onclick={() => copyToClipboard(data.mcpAccess!.authorizationServerURL, 'authURL')}>
+										{copiedField === 'authURL' ? 'Copied' : 'Copy'}
+									</button>
+								</div>
+							</div>
+							<div class="identity-nexus__mcp-field">
+								<span class="identity-nexus__mcp-label">Registration Endpoint</span>
+								<div class="identity-nexus__mcp-value">
+									<code>{data.mcpAccess.registrationURL}</code>
+									<button type="button" class="identity-nexus__mcp-copy" onclick={() => copyToClipboard(data.mcpAccess!.registrationURL, 'regURL')}>
+										{copiedField === 'regURL' ? 'Copied' : 'Copy'}
+									</button>
+								</div>
+							</div>
+							<div class="identity-nexus__mcp-field">
+								<span class="identity-nexus__mcp-label">Protected Resource</span>
+								<div class="identity-nexus__mcp-value">
+									<code>{displayedProtectedResourceURL}</code>
+									<button type="button" class="identity-nexus__mcp-copy" onclick={() => copyToClipboard(displayedProtectedResourceURL, 'resURL')}>
+										{copiedField === 'resURL' ? 'Copied' : 'Copy'}
+									</button>
+								</div>
+							</div>
+							{#if data.mcpAccess.scopes.length}
+								<div class="identity-nexus__mcp-field">
+									<span class="identity-nexus__mcp-label">Scopes</span>
+									<div class="identity-nexus__mcp-scopes">
+										{#each data.mcpAccess.scopes as scope}
+											<span class="identity-nexus__mcp-scope">{scope}</span>
+										{/each}
+									</div>
+								</div>
+							{/if}
+						</div>
+
+						{#if data.mcpAccess.guidance.length}
+							<div class="identity-nexus__mcp-guidance">
+								{#each data.mcpAccess.guidance as note}
+									<p>{note}</p>
+								{/each}
+							</div>
+						{/if}
+
+						{#if mcpConfigSnippet}
+							<div class="identity-nexus__mcp-config">
+								<div class="identity-nexus__mcp-config-header">
+									<span class="identity-nexus__mcp-label">Claude Code <code>.mcp.json</code></span>
+									<button type="button" class="identity-nexus__mcp-copy" onclick={() => copyToClipboard(mcpConfigSnippet!, 'config')}>
+										{copiedField === 'config' ? 'Copied' : 'Copy config'}
+									</button>
+								</div>
+								<pre class="identity-nexus__mcp-pre">{mcpConfigSnippet}</pre>
+							</div>
+						{/if}
+
+						{#if codexConfigSnippet}
+							<div class="identity-nexus__mcp-config">
+								<div class="identity-nexus__mcp-config-header">
+									<span class="identity-nexus__mcp-label">Codex <code>config.toml</code></span>
+									<button type="button" class="identity-nexus__mcp-copy" onclick={() => copyToClipboard(codexConfigSnippet!, 'codex-config')}>
+										{copiedField === 'codex-config' ? 'Copied' : 'Copy config'}
+									</button>
+								</div>
+								<pre class="identity-nexus__mcp-pre">{codexConfigSnippet}</pre>
+							</div>
+						{/if}
+					</div>
+				</section>
 			{/if}
 
 			{#if data.attributions?.length}
@@ -160,32 +311,28 @@
 	{/snippet}
 
 	{#snippet side()}
-		{#if data.lifecycle?.length}
-			<SoulLifecycleRail steps={data.lifecycle} currentPhase={data.identity.currentPhase} />
+		{#if data.roster?.length}
+			<nav class="identity-nexus__roster">
+				<header class="identity-nexus__panel-header">
+					<p>Agent identities</p>
+					<h2>All agents</h2>
+				</header>
+				{#each data.roster as agent (agent.id)}
+					<a
+						class="identity-nexus__roster-link"
+						class:identity-nexus__roster-link--active={agent.handle === `@${data.agentUsername}`}
+						href={agent.href ?? `/l/identity/${encodeURIComponent(agent.handle?.replace(/^@/, '') ?? agent.id)}`}
+					>
+						<span class="identity-nexus__roster-name">{agent.name}</span>
+						{#if agent.handle}
+							<span class="identity-nexus__roster-handle">{agent.handle}</span>
+						{/if}
+					</a>
+				{/each}
+			</nav>
 		{/if}
 		{#if data.continuity}
 			<ContinuityPanel panel={data.continuity} />
-		{/if}
-		{#if data.callouts?.length}
-			<section class="identity-nexus__panel">
-				<header class="identity-nexus__panel-header">
-					<p>Profile notes</p>
-					<h2>Continuity context</h2>
-				</header>
-				<div class="identity-nexus__evidence">
-					{#each data.callouts as callout (callout.id)}
-						<article
-							class={`identity-nexus__artifact identity-nexus__artifact--${callout.tone ?? 'neutral'}`}
-						>
-							<h3>{callout.title}</h3>
-							<p>{callout.summary}</p>
-							{#if callout.meta}
-								<small>{callout.meta}</small>
-							{/if}
-						</article>
-					{/each}
-				</div>
-			</section>
 		{/if}
 	{/snippet}
 </AgentFaceFrame>
@@ -337,5 +484,164 @@
 		background: rgba(255, 255, 255, 0.82);
 		font-size: 0.74rem;
 		font-weight: 700;
+	}
+
+	/* ── Roster sidebar ── */
+	.identity-nexus__roster {
+		display: grid;
+		gap: 0.25rem;
+		padding: 1rem;
+		border-radius: 1rem;
+		background: rgba(255, 255, 255, 0.6);
+	}
+
+	.identity-nexus__roster .identity-nexus__panel-header {
+		margin-bottom: 0.25rem;
+	}
+
+	.identity-nexus__roster-link {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.65rem;
+		border-radius: 0.5rem;
+		text-decoration: none;
+		color: inherit;
+		transition: background 0.15s ease;
+	}
+
+	.identity-nexus__roster-link:hover {
+		background: color-mix(in srgb, var(--gr-semantic-background-secondary) 68%, white 32%);
+	}
+
+	.identity-nexus__roster-link--active {
+		background: color-mix(in srgb, var(--gr-semantic-background-secondary) 82%, white 18%);
+		font-weight: 600;
+	}
+
+	.identity-nexus__roster-name {
+		font-size: 0.88rem;
+	}
+
+	.identity-nexus__roster-handle {
+		font-size: 0.78rem;
+		color: var(--gr-semantic-foreground-tertiary);
+	}
+
+	/* ── MCP Details ── */
+	.identity-nexus__mcp-details {
+		display: grid;
+		gap: 1rem;
+	}
+
+	.identity-nexus__mcp-fields {
+		display: grid;
+		gap: 0.75rem;
+	}
+
+	.identity-nexus__mcp-field {
+		display: grid;
+		gap: 0.25rem;
+	}
+
+	.identity-nexus__mcp-label {
+		font-size: 0.78rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		color: var(--gr-semantic-foreground-secondary);
+	}
+
+	.identity-nexus__mcp-value {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: 0.5rem;
+		background: color-mix(in srgb, var(--gr-semantic-background-secondary) 82%, white 18%);
+		overflow: hidden;
+	}
+
+	.identity-nexus__mcp-value code {
+		flex: 1;
+		font-size: 0.82rem;
+		word-break: break-all;
+		color: var(--gr-semantic-foreground-primary);
+	}
+
+	.identity-nexus__mcp-copy {
+		flex-shrink: 0;
+		padding: 0.25rem 0.6rem;
+		border-radius: 0.4rem;
+		border: 1px solid color-mix(in srgb, var(--gr-semantic-border-subtle) 65%, white 35%);
+		background: rgba(255, 255, 255, 0.82);
+		font: inherit;
+		font-size: 0.74rem;
+		font-weight: 600;
+		cursor: pointer;
+		color: var(--gr-semantic-foreground-secondary);
+	}
+
+	.identity-nexus__mcp-copy:hover {
+		background: rgba(255, 255, 255, 1);
+	}
+
+	.identity-nexus__mcp-scopes {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+
+	.identity-nexus__mcp-scope {
+		padding: 0.25rem 0.6rem;
+		border-radius: 999px;
+		background: rgba(255, 255, 255, 0.82);
+		font-size: 0.78rem;
+		font-weight: 600;
+	}
+
+	.identity-nexus__mcp-guidance {
+		padding: 0.75rem 1rem;
+		border-radius: 0.75rem;
+		border-left: 3px solid color-mix(in srgb, var(--gr-color-warning-300) 65%, white 35%);
+		background: color-mix(in srgb, var(--gr-semantic-background-secondary) 82%, white 18%);
+	}
+
+	.identity-nexus__mcp-guidance p {
+		margin: 0;
+		line-height: 1.5;
+		color: var(--gr-semantic-foreground-secondary);
+	}
+
+	.identity-nexus__mcp-config {
+		display: grid;
+		gap: 0.5rem;
+	}
+
+	.identity-nexus__mcp-config-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.identity-nexus__mcp-config-header .identity-nexus__mcp-label {
+		font-size: 0.78rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		color: var(--gr-semantic-foreground-secondary);
+	}
+
+	.identity-nexus__mcp-config-header code {
+		font-size: 0.78rem;
+	}
+
+	.identity-nexus__mcp-pre {
+		margin: 0;
+		padding: 0.75rem 1rem;
+		border-radius: 0.75rem;
+		background: color-mix(in srgb, var(--gr-semantic-background-secondary) 90%, black 10%);
+		font-size: 0.78rem;
+		line-height: 1.55;
+		overflow-x: auto;
+		white-space: pre;
 	}
 </style>

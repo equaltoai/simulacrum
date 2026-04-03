@@ -16,18 +16,22 @@
 	}
 
 	let { data, class: className = '' }: Props = $props();
+	const hasCheckpoint = $derived(Boolean(data.checkpoint));
+	const hasGraduation = $derived(Boolean(data.graduation));
+	const hasDeclaration = $derived(Boolean(data.declaration));
 	const approvedSignerCount = $derived(
-		data.checkpoint.signers.filter((signer) => signer.status === 'approved').length
+		data.checkpoint?.signers.filter((signer) => signer.status === 'approved').length ?? 0
 	);
 	const pendingSignerCount = $derived(
-		data.checkpoint.signers.filter((signer) => signer.status === 'pending').length
+		data.checkpoint?.signers.filter((signer) => signer.status === 'pending').length ?? 0
 	);
 	const rejectedSignerCount = $derived(
-		data.checkpoint.signers.filter((signer) => signer.status === 'rejected').length
+		data.checkpoint?.signers.filter((signer) => signer.status === 'rejected').length ?? 0
 	);
 	const threadSignals = $derived.by(() => {
+		type GraduationReadiness = NonNullable<GraduationApprovalThreadData['graduation']>['readiness'];
 		const readinessTone = (
-			value: GraduationApprovalThreadData['graduation']['readiness']
+			value: GraduationReadiness
 		): AgentSurfaceTone => {
 			switch (value) {
 				case 'ready':
@@ -40,7 +44,7 @@
 			}
 		};
 
-		return [
+		const signals: { id: string; label: string; value: string; detail: string; tone: AgentSurfaceTone }[] = [
 			{
 				id: 'thread-state',
 				label: 'Thread state',
@@ -48,12 +52,15 @@
 				detail: data.threadSummary.dueLabel ?? 'Open for signer review',
 				tone:
 					data.threadSummary.state === 'approved'
-						? ('success' as const)
+						? 'success'
 						: data.threadSummary.state === 'rejected'
-							? ('critical' as const)
-							: ('warning' as const),
+							? 'critical'
+							: 'warning',
 			},
-			{
+		];
+
+		if (data.checkpoint) {
+			signals.push({
 				id: 'signer-readiness',
 				label: 'Signer readiness',
 				value: `${approvedSignerCount}/${data.checkpoint.signers.length} approved`,
@@ -62,22 +69,27 @@
 					: `${pendingSignerCount} pending approval`,
 				tone:
 					rejectedSignerCount > 0
-						? ('critical' as const)
+						? 'critical'
 						: pendingSignerCount > 0
-							? ('warning' as const)
-							: ('success' as const),
-			},
-			{
+							? 'warning'
+							: 'success',
+			});
+		}
+
+		if (data.graduation) {
+			signals.push({
 				id: 'launch-step',
 				label: 'Launch step',
 				value: formatAgentWorkflowLabel(data.graduation.readiness),
 				detail:
 					data.graduation.nextStep ??
-					data.checkpoint.approvalMemo ??
+					data.checkpoint?.approvalMemo ??
 					'Awaiting the next launch action',
 				tone: readinessTone(data.graduation.readiness),
-			},
-		];
+			});
+		}
+
+		return signals;
 	});
 </script>
 
@@ -117,29 +129,33 @@
 				<ConversationWorkflowSummary summary={data.threadSummary} />
 
 				<div class="graduation-thread__briefs">
-					<article class="graduation-thread__brief">
-						<p class="graduation-thread__brief-label">Declaration packet</p>
-						<h3>{data.declaration.title}</h3>
-						<p>{data.declaration.statement}</p>
-						<div class="graduation-thread__chips">
-							{#each data.declaration.declaredScope.slice(0, 4) as scope, scopeIndex (`${scope}-${scopeIndex}`)}
-								<span>{scope}</span>
-							{/each}
-						</div>
-					</article>
+					{#if hasDeclaration && data.declaration}
+						<article class="graduation-thread__brief">
+							<p class="graduation-thread__brief-label">Declaration packet</p>
+							<h3>{data.declaration.title}</h3>
+							<p>{data.declaration.statement}</p>
+							<div class="graduation-thread__chips">
+								{#each data.declaration.declaredScope.slice(0, 4) as scope, scopeIndex (`${scope}-${scopeIndex}`)}
+									<span>{scope}</span>
+								{/each}
+							</div>
+						</article>
+					{/if}
 
-					<article class="graduation-thread__brief">
-						<p class="graduation-thread__brief-label">Signer readiness</p>
-						<h3>{approvedSignerCount}/{data.checkpoint.signers.length} approved</h3>
-						<ul class="graduation-thread__signer-list">
-							{#each data.checkpoint.signers as signer (signer.id)}
-								<li>
-									<strong>{signer.name}</strong>
-									<span>{formatAgentWorkflowLabel(signer.status)} · {signer.role}</span>
-								</li>
-							{/each}
-						</ul>
-					</article>
+					{#if hasCheckpoint && data.checkpoint}
+						<article class="graduation-thread__brief">
+							<p class="graduation-thread__brief-label">Signer readiness</p>
+							<h3>{approvedSignerCount}/{data.checkpoint.signers.length} approved</h3>
+							<ul class="graduation-thread__signer-list">
+								{#each data.checkpoint.signers as signer (signer.id)}
+									<li>
+										<strong>{signer.name}</strong>
+										<span>{formatAgentWorkflowLabel(signer.status)} · {signer.role}</span>
+									</li>
+								{/each}
+							</ul>
+						</article>
+					{/if}
 				</div>
 
 				<div class="graduation-thread__messages">
@@ -149,21 +165,29 @@
 				</div>
 			</section>
 
-			<section class="graduation-thread__panel">
-				<header class="graduation-thread__panel-header">
-					<p>Declaration packet</p>
-					<h2>Signer checklist and approval memo</h2>
-				</header>
-				<div class="graduation-thread__artifacts">
-					<DeclarationPreviewCard declaration={data.declaration} />
-					<SignatureCheckpointCard checkpoint={data.checkpoint} />
-				</div>
-			</section>
+			{#if hasDeclaration || hasCheckpoint}
+				<section class="graduation-thread__panel">
+					<header class="graduation-thread__panel-header">
+						<p>Declaration packet</p>
+						<h2>Signer checklist and approval memo</h2>
+					</header>
+					<div class="graduation-thread__artifacts">
+						{#if data.declaration}
+							<DeclarationPreviewCard declaration={data.declaration} />
+						{/if}
+						{#if data.checkpoint}
+							<SignatureCheckpointCard checkpoint={data.checkpoint} />
+						{/if}
+					</div>
+				</section>
+			{/if}
 		</div>
 	{/snippet}
 
 	{#snippet side()}
-		<GraduationSummaryCard summary={data.graduation} />
+		{#if data.graduation}
+			<GraduationSummaryCard summary={data.graduation} />
+		{/if}
 		{#if data.callouts?.length}
 			<section class="graduation-thread__panel">
 				<header class="graduation-thread__panel-header">
