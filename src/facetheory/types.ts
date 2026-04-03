@@ -19,6 +19,12 @@ export type AppPageKey =
 	| 'genesis'
 	| 'approvals'
 	| 'identity'
+	| 'timeline'
+	| 'conversations'
+	| 'notifications'
+	| 'explore'
+	| 'profile'
+	| 'status'
 	| 'auth-callback'
 	| 'not-found';
 

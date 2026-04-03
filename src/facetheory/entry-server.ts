@@ -10,7 +10,14 @@ import {
 import { createSvelteFace } from '@theory-cloud/facetheory/svelte';
 
 import App from './App.svelte';
-import { resolvePage, stripBasePath, firstQueryValue } from './routing';
+import {
+	firstQueryValue,
+	resolvePage,
+	resolveProfileActorId,
+	resolveProfileIdentifier,
+	resolveStatusId,
+	stripBasePath,
+} from './routing';
 
 const CLIENT_ENTRY = 'src/facetheory/entry-client.ts';
 const CLIENT_ASSET_BASE = '/l/_assets/';
@@ -30,12 +37,18 @@ function createFaceForRoute(route: string) {
 		load: async (ctx) => ({
 			initialPage: resolvePage(ctx.request.path),
 			initialAgentHint: firstQueryValue(ctx.request.query, 'agent'),
+			initialStatusId: resolveStatusId(ctx.request.path),
+			initialProfileIdentifier: resolveProfileIdentifier(ctx.request.path),
+			initialProfileActorId: resolveProfileActorId(ctx.request.query),
 		}),
 		render: async (_ctx, data) => ({
 			component: App,
 			props: data as {
 				initialPage: ReturnType<typeof resolvePage>;
 				initialAgentHint: string | null;
+				initialStatusId: string | null;
+				initialProfileIdentifier: string | null;
+				initialProfileActorId: string | null;
 			},
 		}),
 		renderOptions: async (_ctx, data) => {
@@ -60,6 +73,13 @@ function createFaceForRoute(route: string) {
 					{
 						type: 'meta',
 						attrs: { name: 'description', content: page.summary },
+					},
+					{
+						type: 'link',
+						attrs: {
+							rel: 'stylesheet',
+							href: 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,300,0,0',
+						},
 					},
 					...assets.headTags,
 					{

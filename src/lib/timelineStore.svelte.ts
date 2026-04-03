@@ -3,7 +3,7 @@
  * Provides reactive state management for timeline data
  */
 
-import type { Status } from '$lib/types';
+import type { Status } from './types';
 import type { TransportManager } from './transport';
 import { SvelteDate, SvelteMap, SvelteURL } from 'svelte/reactivity';
 

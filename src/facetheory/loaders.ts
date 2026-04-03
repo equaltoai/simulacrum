@@ -1,4 +1,10 @@
 import {
+	beginSoulRegistration,
+	setSoulAvatarBaseUrl,
+	registerSoulAgents,
+	markRegistrationComplete,
+} from '$lib/greater/adapters/soul/avatarResolver.svelte';
+import {
 	createLesserHostSoulClient,
 	type SoulAgentChannelPreferencesResponse,
 	type SoulAgentChannelsResponse,
@@ -11,6 +17,7 @@ import {
 	fetchMyDroneReviews,
 	fetchMySouls,
 	fetchViewer,
+	updateProfile,
 	type AgentWorkflowSurface,
 	type DroneAgentState,
 	type ReviewDecisionCard,
@@ -84,6 +91,7 @@ interface ViewerInfo {
 	id: string;
 	name: string;
 	handle: string;
+	avatar?: string | null;
 }
 
 interface AgentRosterRecord {
@@ -160,10 +168,31 @@ interface PublishedSoulAgentRecord {
 	agent_id: string;
 	domain: string;
 	local_id: string;
+	ens_name?: string;
 	wallet: string;
+	token_id?: string;
+	meta_uri?: string;
+	avatar?: {
+		token_uri?: string;
+		image?: string;
+		current_style_id?: number;
+		current_style_name?: string;
+		current_renderer_address?: string;
+		styles?: Array<{
+			style_id: number;
+			style_name?: string;
+			renderer_address?: string;
+			image?: string;
+			selected?: boolean;
+		}>;
+	};
 	principal_address?: string;
+	principal_signature?: string;
 	principal_declaration?: string;
 	principal_declared_at?: string;
+	lifecycle_reason?: string;
+	successor_agent_id?: string;
+	predecessor_agent_id?: string;
 	self_description_version?: number;
 	status: string;
 	minted_at?: string;
@@ -963,184 +992,221 @@ export async function loadClientAppState({
 	hostToken?: string | null;
 	signal?: AbortSignal;
 }): Promise<ClientAppState> {
-	const [viewer, myAgentsRaw, mySoulsRaw, myRequests, myReviews] = await Promise.all([
-		fetchViewer({ signal }),
-		fetchMyAgents({ signal }),
-		fetchMySouls({ signal }),
-		fetchMyDroneRequests({ signal }),
-		fetchMyDroneReviews({ signal }),
-	]);
+	beginSoulRegistration();
+	let registrationCompleted = false;
 
-	const myAgents = myAgentsRaw.map<AgentRosterRecord>((agent) => ({
-		id: agent.id,
-		username: agent.username,
-		displayName: agent.displayName,
-		bio: agent.bio,
-		activityCount: agent.activityCount,
-		verified: agent.verified,
-		requiresApproval: agent.agentCapabilities.requiresApproval,
-		canDM: agent.agentCapabilities.canDM,
-	}));
+	try {
+		const [viewer, myAgentsRaw, mySoulsRaw, myRequests, myReviews] = await Promise.all([
+			fetchViewer({ signal }),
+			fetchMyAgents({ signal }),
+			fetchMySouls({ signal }),
+			fetchMyDroneRequests({ signal }),
+			fetchMyDroneReviews({ signal }),
+		]);
 
-	const mySouls = mySoulsRaw.map<SoulInventoryRecord>((item) => ({
-		bindingState: item.bindingState,
-		availableForIncorporation: item.availableForIncorporation,
-		agent: {
-			agentId: item.agent.agentId,
-			domain: item.agent.domain,
-			localId: item.agent.localId,
-			ensName: item.agent.ensName,
-			wallet: item.agent.wallet,
-			principalAddress: item.agent.principalAddress,
-			status: item.agent.status,
-			lifecycleStatus: item.agent.lifecycleStatus,
-			selfDescriptionVersion: item.agent.selfDescriptionVersion,
-			capabilities: item.agent.capabilities,
-			mintedAt: item.agent.mintedAt,
-			updatedAt: item.agent.updatedAt,
-		},
-		binding: item.binding
-			? {
-					agentUsername: item.binding.agentUsername,
-					boundAt: item.binding.boundAt,
-				}
-			: null,
-	}));
+		const myAgents = myAgentsRaw.map<AgentRosterRecord>((agent) => ({
+			id: agent.id,
+			username: agent.username,
+			displayName: agent.displayName,
+			bio: agent.bio,
+			activityCount: agent.activityCount,
+			verified: agent.verified,
+			requiresApproval: agent.agentCapabilities.requiresApproval,
+			canDM: agent.agentCapabilities.canDM,
+		}));
 
-	const selectedAgent = pickActiveAgent(myAgents, agentHint);
-	const activeUsername = selectedAgent?.username ?? null;
-	const boundSoul = activeUsername ? findBoundSoul(mySouls, activeUsername) : null;
-	const boundSoulAgentId = boundSoul?.agent.agentId ?? null;
-	const lesserHostBaseUrl = await loadLesserHostBaseUrl(signal);
+		const mySouls = mySoulsRaw.map<SoulInventoryRecord>((item) => ({
+			bindingState: item.bindingState,
+			availableForIncorporation: item.availableForIncorporation,
+			agent: {
+				agentId: item.agent.agentId,
+				domain: item.agent.domain,
+				localId: item.agent.localId,
+				ensName: item.agent.ensName,
+				wallet: item.agent.wallet,
+				principalAddress: item.agent.principalAddress,
+				status: item.agent.status,
+				lifecycleStatus: item.agent.lifecycleStatus,
+				selfDescriptionVersion: item.agent.selfDescriptionVersion,
+				capabilities: item.agent.capabilities,
+				mintedAt: item.agent.mintedAt,
+				updatedAt: item.agent.updatedAt,
+			},
+			binding: item.binding
+				? {
+						agentUsername: item.binding.agentUsername,
+						boundAt: item.binding.boundAt,
+					}
+				: null,
+		}));
 
-	const [activeAgent, workflow] = activeUsername
-		? await Promise.all([
-				fetchDroneAgentState({ username: activeUsername, signal }),
+		const selectedAgent = pickActiveAgent(myAgents, agentHint);
+		const activeUsername = selectedAgent?.username ?? null;
+		const boundSoul = activeUsername ? findBoundSoul(mySouls, activeUsername) : null;
+		const boundSoulAgentId = boundSoul?.agent.agentId ?? null;
+		const lesserHostBaseUrl = await loadLesserHostBaseUrl(signal);
+
+		// Register all soul agents for avatar resolution by both localId and binding username.
+		setSoulAvatarBaseUrl(lesserHostBaseUrl);
+		for (const soul of mySouls) {
+			if (soul.agent.localId) {
+				registerSoulAgents([{ username: soul.agent.localId, agentId: soul.agent.agentId }]);
+			}
+			if (soul.binding?.agentUsername && soul.binding.agentUsername !== soul.agent.localId) {
+				registerSoulAgents([
+					{ username: soul.binding.agentUsername, agentId: soul.agent.agentId },
+				]);
+			}
+		}
+		markRegistrationComplete();
+		registrationCompleted = true;
+
+		const [activeAgent, workflow] = activeUsername
+			? await Promise.all([
+					fetchDroneAgentState({ username: activeUsername, signal }),
 					fetchDroneWorkflow({ username: activeUsername, signal }),
 				])
 			: [null, null];
 
-	const shouldShowReachability = shouldExposeSoulReachability(activeAgent, workflow);
-	let channelsResponse: SoulAgentChannelsResponse | null = null;
-	let preferencesResponse: SoulAgentChannelPreferencesResponse | null = null;
-	let publishedSoulProfile: PublishedSoulProfile | null = null;
-	let channelsUpdatedAt: string | null = null;
-	let reachabilityNotice: AuthorityNotice | null = null;
-	let publishedSoulError: string | null = null;
+		const shouldShowReachability = shouldExposeSoulReachability(activeAgent, workflow);
+		let channelsResponse: SoulAgentChannelsResponse | null = null;
+		let preferencesResponse: SoulAgentChannelPreferencesResponse | null = null;
+		let publishedSoulProfile: PublishedSoulProfile | null = null;
+		let channelsUpdatedAt: string | null = null;
+		let reachabilityNotice: AuthorityNotice | null = null;
+		let publishedSoulError: string | null = null;
 
-	if (boundSoulAgentId && lesserHostBaseUrl) {
-		const [channelsResult, preferencesResult, publishedSoulResult] = await Promise.allSettled([
-			loadChannels(lesserHostBaseUrl, boundSoulAgentId, signal),
-			loadPreferences(lesserHostBaseUrl, boundSoulAgentId, signal),
-			loadPublishedSoulProfile(lesserHostBaseUrl, boundSoulAgentId, signal),
-		]);
+		if (boundSoulAgentId && lesserHostBaseUrl) {
+			const [channelsResult, preferencesResult, publishedSoulResult] =
+				await Promise.allSettled([
+					loadChannels(lesserHostBaseUrl, boundSoulAgentId, signal),
+					loadPreferences(lesserHostBaseUrl, boundSoulAgentId, signal),
+					loadPublishedSoulProfile(lesserHostBaseUrl, boundSoulAgentId, signal),
+				]);
 
-		if (channelsResult.status === 'fulfilled') {
-			channelsResponse = channelsResult.value;
-			channelsUpdatedAt = channelsResult.value.updatedAt ?? null;
-		}
+			if (channelsResult.status === 'fulfilled') {
+				channelsResponse = channelsResult.value;
+				channelsUpdatedAt = channelsResult.value.updatedAt ?? null;
+			}
 
-		if (preferencesResult.status === 'fulfilled') {
-			preferencesResponse = preferencesResult.value;
-		}
+			if (preferencesResult.status === 'fulfilled') {
+				preferencesResponse = preferencesResult.value;
+			}
 
-		if (publishedSoulResult.status === 'fulfilled') {
-			publishedSoulProfile = publishedSoulResult.value;
-		} else {
-			publishedSoulError = describeAuthorityFailure(
-				'published soul lookup',
-				boundSoulAgentId,
-				publishedSoulResult.reason
-			);
-		}
+			if (publishedSoulResult.status === 'fulfilled') {
+				publishedSoulProfile = publishedSoulResult.value;
+			} else {
+				publishedSoulError = describeAuthorityFailure(
+					'published soul lookup',
+					boundSoulAgentId,
+					publishedSoulResult.reason
+				);
+			}
 
-		if (shouldShowReachability) {
-			if (channelsResult.status !== 'fulfilled') {
+			if (shouldShowReachability) {
+				if (channelsResult.status !== 'fulfilled') {
+					reachabilityNotice = {
+						title: 'Reachability lookup failed',
+						message: describeAuthorityFailure(
+							'reachability lookup',
+							boundSoulAgentId,
+							channelsResult.reason
+						),
+					};
+				} else if (preferencesResult.status !== 'fulfilled') {
+					reachabilityNotice = {
+						title: 'Contact preferences unavailable',
+						message: describeAuthorityFailure(
+							'contact preferences lookup',
+							boundSoulAgentId,
+							preferencesResult.reason
+						),
+					};
+				}
+			}
+		} else if (boundSoulAgentId && !lesserHostBaseUrl) {
+			publishedSoulError =
+				'Simulacrum could not resolve the managed lesser-host base URL from Lesser, so it cannot load the bound soul declaration or reachability records.';
+			if (shouldShowReachability) {
 				reachabilityNotice = {
-					title: 'Reachability lookup failed',
-					message: describeAuthorityFailure(
-						'reachability lookup',
-						boundSoulAgentId,
-						channelsResult.reason
-					),
-				};
-			} else if (preferencesResult.status !== 'fulfilled') {
-				reachabilityNotice = {
-					title: 'Contact preferences unavailable',
-					message: describeAuthorityFailure(
-						'contact preferences lookup',
-						boundSoulAgentId,
-						preferencesResult.reason
-					),
+					title: 'Reachability authority unavailable',
+					message: publishedSoulError,
 				};
 			}
+		} else if (shouldShowReachability) {
+			reachabilityNotice = boundSoulAgentId
+				? {
+						title: 'Reachability authority unavailable',
+						message:
+							'Simulacrum could not resolve the managed lesser-host base URL from Lesser, so it cannot load the bound soul reachability ledger.',
+					}
+				: {
+						title: 'No bound soul returned by Lesser',
+						message: activeUsername
+							? `Lesser did not return a bound soul record for @${activeUsername}, so Simulacrum cannot resolve lesser-host reachability for this body.`
+							: 'Lesser did not return an active bound soul for the current body.',
+					};
 		}
-	} else if (boundSoulAgentId && !lesserHostBaseUrl) {
-		publishedSoulError =
-			'Simulacrum could not resolve the managed lesser-host base URL from Lesser, so it cannot load the bound soul declaration or reachability records.';
-		if (shouldShowReachability) {
-			reachabilityNotice = {
-				title: 'Reachability authority unavailable',
-				message: publishedSoulError,
-			};
+
+		// Resolve on-chain avatar from lesser-host and persist as account avatar.
+		const structuredAvatar = publishedSoulProfile?.agent.avatar?.image?.trim();
+		if (structuredAvatar && !viewer.avatar?.trim()) {
+			try {
+				await updateProfile({ input: { avatar: structuredAvatar }, signal });
+			} catch {
+				// Non-critical — continue without avatar
+			}
 		}
-	} else if (shouldShowReachability) {
-		reachabilityNotice = boundSoulAgentId
-			? {
-					title: 'Reachability authority unavailable',
-					message:
-						'Simulacrum could not resolve the managed lesser-host base URL from Lesser, so it cannot load the bound soul reachability ledger.',
-				}
-			: {
-					title: 'No bound soul returned by Lesser',
-					message: activeUsername
-						? `Lesser did not return a bound soul record for @${activeUsername}, so Simulacrum cannot resolve lesser-host reachability for this body.`
-						: 'Lesser did not return an active bound soul for the current body.',
-				};
-	}
 
-	const hostWorkflow = !HOST_WORKFLOW_BRIDGE_ENABLED
-		? emptyHostWorkflow(false, false, lesserHostBaseUrl)
-		: boundSoulAgentId
-			? await loadHostWorkflow({
-					token: hostToken ?? null,
-					baseUrl: lesserHostBaseUrl,
-					agentId: boundSoulAgentId,
-					signal,
-				})
-			: emptyHostWorkflow(Boolean(hostToken?.trim()), true, lesserHostBaseUrl);
+		const hostWorkflow = !HOST_WORKFLOW_BRIDGE_ENABLED
+			? emptyHostWorkflow(false, false, lesserHostBaseUrl)
+			: boundSoulAgentId
+				? await loadHostWorkflow({
+						token: hostToken ?? null,
+						baseUrl: lesserHostBaseUrl,
+						agentId: boundSoulAgentId,
+						signal,
+					})
+				: emptyHostWorkflow(Boolean(hostToken?.trim()), true, lesserHostBaseUrl);
 
-	return assembleAppState({
-		page,
-		agentHint: activeUsername ?? agentHint ?? null,
-		viewer: {
-			id: viewer.id,
-			name: viewer.displayName || viewer.username,
-			handle: viewer.acct || `@${viewer.username}`,
-		},
-		myAgents,
-		mySouls,
-		boundSoul,
-		activeAgent,
-		workflow,
-		myRequests,
-		myReviews,
-		channels: channelsResponse?.channels ?? EMPTY_CHANNELS,
-		channelsUpdatedAt,
-		preferences: preferencesResponse?.contactPreferences ?? channelsResponse?.contactPreferences ?? null,
-		showReachability: shouldShowReachability && channelsResponse !== null,
-		reachabilityNotice,
-		publishedSoulProfile,
-		publishedSoulError,
-		hostWorkflow: {
-			...hostWorkflow,
-			expectedWallet:
-				hostWorkflow.expectedWallet ??
-				findExpectedWallet(boundSoul) ??
+		return assembleAppState({
+			page,
+			agentHint: activeUsername ?? agentHint ?? null,
+			viewer: {
+				id: viewer.id,
+				name: viewer.displayName || viewer.username,
+				handle: viewer.acct || `@${viewer.username}`,
+				avatar: viewer.avatar,
+			},
+			myAgents,
+			mySouls,
+			boundSoul,
+			activeAgent,
+			workflow,
+			myRequests,
+			myReviews,
+			channels: channelsResponse?.channels ?? EMPTY_CHANNELS,
+			channelsUpdatedAt,
+			preferences:
+				preferencesResponse?.contactPreferences ??
+				channelsResponse?.contactPreferences ??
 				null,
-		},
-		isPreview: false,
-	});
+			showReachability: shouldShowReachability && channelsResponse !== null,
+			reachabilityNotice,
+			publishedSoulProfile,
+			publishedSoulError,
+			hostWorkflow: {
+				...hostWorkflow,
+				expectedWallet: hostWorkflow.expectedWallet ?? findExpectedWallet(boundSoul) ?? null,
+			},
+			isPreview: false,
+		});
+	} catch (error) {
+		if (!registrationCompleted) {
+			markRegistrationComplete();
+		}
+		throw error;
+	}
 }
 
 async function loadChannels(
@@ -1850,12 +1916,14 @@ function buildNavItems(
 		{
 			id: 'nav-dashboard',
 			label: 'Dashboard',
+			icon: 'space_dashboard',
 			href: getPageHref('dashboard', activeUsername),
 			active: page.key === 'dashboard',
 		},
 		{
 			id: 'nav-souls',
 			label: 'Soul Requests',
+			icon: 'smart_toy',
 			href: getPageHref('souls', activeUsername),
 			active: page.key === 'souls',
 			badge: requestCount ? String(requestCount) : undefined,
@@ -1863,6 +1931,7 @@ function buildNavItems(
 		{
 			id: 'nav-genesis',
 			label: 'Genesis',
+			icon: 'auto_awesome',
 			href: getPageHref('genesis', activeUsername),
 			active: page.key === 'genesis',
 			badge: conversationCount ? String(conversationCount) : undefined,
@@ -1870,6 +1939,7 @@ function buildNavItems(
 		{
 			id: 'nav-approvals',
 			label: 'Approvals',
+			icon: 'verified',
 			href: getPageHref('approvals', activeUsername),
 			active: page.key === 'approvals',
 			badge: conversationCount ? 'sign' : undefined,
@@ -1877,9 +1947,43 @@ function buildNavItems(
 		{
 			id: 'nav-identity',
 			label: 'Identity',
+			icon: 'fingerprint',
 			href: getPageHref('identity', activeUsername),
 			active: page.key === 'identity',
 			badge: soulCount ? String(soulCount) : undefined,
+		},
+		{
+			id: 'nav-divider',
+			label: '',
+			icon: '',
+		},
+		{
+			id: 'nav-timeline',
+			label: 'Timeline',
+			icon: 'home',
+			href: getPageHref('timeline', activeUsername),
+			active: page.key === 'timeline',
+		},
+		{
+			id: 'nav-conversations',
+			label: 'Messages',
+			icon: 'chat',
+			href: getPageHref('conversations', activeUsername),
+			active: page.key === 'conversations',
+		},
+		{
+			id: 'nav-notifications',
+			label: 'Notifications',
+			icon: 'notifications',
+			href: getPageHref('notifications', activeUsername),
+			active: page.key === 'notifications',
+		},
+		{
+			id: 'nav-explore',
+			label: 'Explore',
+			icon: 'explore',
+			href: getPageHref('explore', activeUsername),
+			active: page.key === 'explore',
 		},
 	];
 }
@@ -2356,6 +2460,11 @@ function buildPublishedSoulArtifacts(
 ): Array<{ id: string; title: string; description: string; emphasis: 'reference' | 'decision' }> {
 	if (!profile) return [];
 
+	const avatarStyles = (profile.agent.avatar?.styles ?? []).filter(
+		(style) => style.style_name?.trim() || style.image?.trim()
+	);
+	const currentAvatarStyle = profile.agent.avatar?.current_style_name?.trim();
+
 	return [
 		{
 			id: `soul-record-${profile.agent.agent_id}`,
@@ -2365,6 +2474,18 @@ function buildPublishedSoulArtifacts(
 				: 'Published soul record returned from lesser-host.',
 			emphasis: 'reference',
 		},
+		...(avatarStyles.length || currentAvatarStyle
+			? [
+					{
+						id: `avatar-styles-${profile.agent.agent_id}`,
+						title: 'On-chain avatar styles',
+						description: currentAvatarStyle
+							? `Current on-chain style: ${currentAvatarStyle}. ${avatarStyles.length} structured avatar variant${avatarStyles.length === 1 ? '' : 's'} returned for the client.`
+							: `${avatarStyles.length} structured avatar variant${avatarStyles.length === 1 ? '' : 's'} returned for the client.`,
+						emphasis: 'reference' as const,
+					},
+				]
+			: []),
 		...Object.entries(profile.transparency ?? {}).map(([key, value]) => ({
 			id: `transparency-${profile.agent.agent_id}-${key}`,
 			title: titleCase(key.replaceAll('_', ' ')),

@@ -5,7 +5,7 @@
  * for use with TimelineVirtualizedReactive.
  */
 
-import type { Status, Account, MediaAttachment, Card } from '$lib/types';
+import type { Status, Account, MediaAttachment, Card } from './types';
 import type { LesserGraphQLAdapter } from '$lib/greater/adapters';
 import { SvelteDate } from 'svelte/reactivity';
 type UnknownRecord = Record<string, unknown>;

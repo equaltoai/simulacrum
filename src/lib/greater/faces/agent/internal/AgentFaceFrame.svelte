@@ -42,7 +42,7 @@
 	}
 </script>
 
-<section class={`agent-face-frame ${className}`}>
+<section class={`agent-face-frame ${side ? 'agent-face-frame--with-rail' : ''} ${className}`}>
 	<div class="agent-face-frame__backdrop" aria-hidden="true"></div>
 
 	{#if brand || navItems.length}
@@ -62,16 +62,23 @@
 			{#if navItems.length}
 				<nav class="agent-face-frame__nav">
 					{#each navItems as item (item.id)}
-						<a
-							class:agent-face-frame__nav-link--active={item.active}
-							class="agent-face-frame__nav-link"
-							href={item.href ?? '#'}
-						>
-							<span>{item.label}</span>
-							{#if item.badge}
-								<span class="agent-face-frame__nav-badge">{item.badge}</span>
-							{/if}
-						</a>
+						{#if item.id === 'nav-divider'}
+							<hr class="agent-face-frame__nav-divider" />
+						{:else}
+							<a
+								class:agent-face-frame__nav-link--active={item.active}
+								class="agent-face-frame__nav-link"
+								href={item.href ?? '#'}
+							>
+								{#if item.icon}
+									<span class="agent-face-frame__nav-icon material-symbols-outlined">{item.icon}</span>
+								{/if}
+								<span>{item.label}</span>
+								{#if item.badge}
+									<span class="agent-face-frame__nav-badge">{item.badge}</span>
+								{/if}
+							</a>
+						{/if}
 					{/each}
 				</nav>
 			{/if}
@@ -142,28 +149,27 @@
 			</div>
 		{/if}
 
-		<div class:agent-face-frame__body--with-side={Boolean(side)} class="agent-face-frame__body">
-			<div class="agent-face-frame__main">
-				{#if children}
-					{@render children()}
-				{/if}
-			</div>
-
-			{#if side}
-				<aside class="agent-face-frame__rail">
-					{@render side()}
-				</aside>
+		<div class="agent-face-frame__main">
+			{#if children}
+				{@render children()}
 			{/if}
 		</div>
 	</div>
+
+	{#if side}
+		<aside class="agent-face-frame__rail">
+			{@render side()}
+		</aside>
+	{/if}
 </section>
 
 <style>
+	/* ── Frame: 3-column grid (sidebar | content | rail) ── */
 	.agent-face-frame {
 		position: relative;
 		display: grid;
-		grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr);
-		min-height: 100%;
+		grid-template-columns: minmax(14rem, 16rem) minmax(0, 1fr);
+		min-height: 100vh;
 		background:
 			radial-gradient(circle at top right, rgba(226, 155, 254, 0.18), transparent 28rem),
 			radial-gradient(circle at bottom left, rgba(255, 159, 84, 0.18), transparent 26rem),
@@ -172,9 +178,10 @@
 				color-mix(in srgb, var(--gr-semantic-background-secondary) 72%, white 28%),
 				color-mix(in srgb, var(--gr-semantic-background-primary) 88%, white 12%)
 			);
-		border-radius: 2rem;
-		overflow: hidden;
-		box-shadow: 0 30px 80px rgba(48, 20, 0, 0.08);
+	}
+
+	.agent-face-frame--with-rail {
+		grid-template-columns: minmax(14rem, 16rem) minmax(0, 1fr) minmax(16rem, 22rem);
 	}
 
 	.agent-face-frame__backdrop {
@@ -186,22 +193,28 @@
 		pointer-events: none;
 	}
 
+	/* ── Sidebar: glass + icon nav ── */
 	.agent-face-frame__sidebar,
-	.agent-face-frame__content {
+	.agent-face-frame__content,
+	.agent-face-frame__rail {
 		position: relative;
 		z-index: 1;
 	}
 
 	.agent-face-frame__sidebar {
+		grid-column: 1;
+		grid-row: 1 / -1;
+		position: sticky;
+		top: 0;
+		height: 100vh;
+		overflow-y: auto;
 		display: grid;
 		gap: 1.5rem;
-		padding: 2rem 1.5rem;
-		background: linear-gradient(
-			180deg,
-			color-mix(in srgb, var(--gr-semantic-background-primary) 78%, white 22%),
-			color-mix(in srgb, var(--gr-semantic-background-secondary) 92%, white 8%)
-		);
-		border-right: 1px solid color-mix(in srgb, var(--gr-semantic-border-subtle) 65%, white 35%);
+		align-content: start;
+		padding: 1.75rem 1.25rem;
+		background: rgba(255, 251, 245, 0.8);
+		backdrop-filter: blur(24px);
+		-webkit-backdrop-filter: blur(24px);
 	}
 
 	.agent-face-frame__brand-mark,
@@ -235,16 +248,15 @@
 
 	.agent-face-frame__nav {
 		display: grid;
-		gap: 0.55rem;
+		gap: 0.4rem;
 	}
 
 	.agent-face-frame__nav-link {
 		display: flex;
-		justify-content: space-between;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0.8rem 0.95rem;
-		border-radius: 1rem;
+		gap: 0.6rem;
+		padding: 0.7rem 0.85rem;
+		border-radius: 0.75rem;
 		color: inherit;
 		text-decoration: none;
 		background: transparent;
@@ -255,7 +267,7 @@
 
 	.agent-face-frame__nav-link:hover {
 		transform: translateX(0.15rem);
-		background: color-mix(in srgb, var(--gr-semantic-background-secondary) 72%, white 28%);
+		background: rgba(255, 255, 255, 0.55);
 	}
 
 	.agent-face-frame__nav-link--active {
@@ -264,7 +276,24 @@
 		font-weight: 700;
 	}
 
+	.agent-face-frame__nav-divider {
+		border: none;
+		height: 1px;
+		background: color-mix(in srgb, var(--gr-semantic-border-subtle) 40%, transparent 60%);
+		margin: 0.35rem 0;
+	}
+
+	.agent-face-frame__nav-icon {
+		font-size: 1.25rem;
+		font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+	}
+
+	.agent-face-frame__nav-link--active .agent-face-frame__nav-icon {
+		font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+	}
+
 	.agent-face-frame__nav-badge {
+		margin-left: auto;
 		padding: 0.18rem 0.45rem;
 		border-radius: 999px;
 		background: rgba(255, 255, 255, 0.82);
@@ -272,10 +301,14 @@
 		font-weight: 700;
 	}
 
+	/* ── Content: center column ── */
 	.agent-face-frame__content {
+		grid-column: 2;
+		grid-row: 1 / -1;
 		display: grid;
-		gap: 1.5rem;
-		padding: 2rem;
+		gap: 1rem;
+		align-content: start;
+		padding: 1.5rem;
 	}
 
 	.agent-face-frame__hero {
@@ -356,11 +389,12 @@
 		border: 1px dashed color-mix(in srgb, var(--gr-semantic-border-subtle) 82%, white 18%);
 	}
 
+	/* ── Chips & Metrics: auto-fill with max cap ── */
 	.agent-face-frame__chips,
 	.agent-face-frame__metrics {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-		gap: 0.75rem;
+		gap: 0.625rem;
 	}
 
 	.agent-face-frame__chip,
@@ -368,9 +402,8 @@
 		display: grid;
 		gap: 0.2rem;
 		padding: 1rem 1.05rem;
-		border-radius: 1.2rem;
+		border-radius: 1rem;
 		background: rgba(255, 255, 255, 0.72);
-		border: 1px solid color-mix(in srgb, var(--gr-semantic-border-subtle) 68%, white 32%);
 	}
 
 	.agent-face-frame__chip strong,
@@ -386,22 +419,22 @@
 
 	.agent-face-frame__chip--accent,
 	.agent-face-frame__metric--accent {
-		border-color: color-mix(in srgb, var(--gr-color-primary-300) 65%, white 35%);
+		border-left: 3px solid color-mix(in srgb, var(--gr-color-primary-300) 65%, white 35%);
 	}
 
 	.agent-face-frame__chip--success,
 	.agent-face-frame__metric--success {
-		border-color: color-mix(in srgb, var(--gr-color-success-300) 65%, white 35%);
+		border-left: 3px solid color-mix(in srgb, var(--gr-color-success-300) 65%, white 35%);
 	}
 
 	.agent-face-frame__chip--warning,
 	.agent-face-frame__metric--warning {
-		border-color: color-mix(in srgb, var(--gr-color-warning-300) 65%, white 35%);
+		border-left: 3px solid color-mix(in srgb, var(--gr-color-warning-300) 65%, white 35%);
 	}
 
 	.agent-face-frame__chip--critical,
 	.agent-face-frame__metric--critical {
-		border-color: color-mix(in srgb, var(--gr-color-error-300) 65%, white 35%);
+		border-left: 3px solid color-mix(in srgb, var(--gr-color-error-300) 65%, white 35%);
 	}
 
 	.agent-face-frame__metric-value {
@@ -418,36 +451,52 @@
 		color: var(--gr-semantic-foreground-secondary);
 	}
 
-	.agent-face-frame__body {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr);
-		gap: 1rem;
-	}
-
-	.agent-face-frame__body--with-side {
-		grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
-		align-items: start;
-	}
-
-	.agent-face-frame__main,
-	.agent-face-frame__rail {
+	/* ── Main: page content slot ── */
+	.agent-face-frame__main {
 		display: grid;
 		gap: 1rem;
 		align-content: start;
 	}
 
+	/* ── Rail: sticky right sidebar ── */
+	.agent-face-frame__rail {
+		grid-column: 3;
+		grid-row: 1 / -1;
+		position: sticky;
+		top: 0;
+		height: 100vh;
+		overflow-y: auto;
+		padding: 1.5rem 1rem;
+		display: grid;
+		gap: 0.75rem;
+		align-content: start;
+		background: color-mix(in srgb, var(--gr-semantic-background-secondary) 60%, white 40%);
+	}
+
+	/* ── Responsive ── */
 	@media (max-width: 960px) {
-		.agent-face-frame {
+		.agent-face-frame,
+		.agent-face-frame--with-rail {
 			grid-template-columns: 1fr;
 		}
 
 		.agent-face-frame__sidebar {
-			border-right: 0;
-			border-bottom: 1px solid color-mix(in srgb, var(--gr-semantic-border-subtle) 65%, white 35%);
+			position: static;
+			height: auto;
+			grid-column: auto;
+			grid-row: auto;
 		}
 
-		.agent-face-frame__body--with-side {
-			grid-template-columns: 1fr;
+		.agent-face-frame__content {
+			grid-column: auto;
+			grid-row: auto;
+		}
+
+		.agent-face-frame__rail {
+			position: static;
+			height: auto;
+			grid-column: auto;
+			grid-row: auto;
 		}
 	}
 

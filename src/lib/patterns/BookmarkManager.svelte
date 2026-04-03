@@ -1063,7 +1063,6 @@
 		font-size: 0.875rem;
 		color: var(--text-primary, #0f1419);
 		display: -webkit-box;
-		line-clamp: 2;
 		-webkit-line-clamp: 2;
 		-webkit-box-orient: vertical;
 		overflow: hidden;

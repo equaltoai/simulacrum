@@ -3,7 +3,7 @@
 	import { untrack, type Snippet } from 'svelte';
 	import { get } from 'svelte/store';
 	import StatusCard from './StatusCard.svelte';
-	import type { Status } from '$lib/types';
+	import type { Status } from '../types';
 	import type { TimelineIntegrationConfig } from '$lib/integration';
 	import { createTimelineIntegration, createGraphQLTimelineIntegration } from '$lib/integration';
 	import type { LesserGraphQLAdapter } from '$lib/greater/adapters';
@@ -210,7 +210,7 @@
 	$effect(() => {
 		if (!mounted && timelineIntegration && autoConnect) {
 			mounted = true;
-			timelineIntegration.connect().catch((err: unknown) => {
+			timelineIntegration.connect().catch((err) => {
 				console.error('Failed to connect timeline:', err);
 			});
 

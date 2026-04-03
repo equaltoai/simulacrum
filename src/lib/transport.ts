@@ -3,7 +3,7 @@
  * Supports WebSocket streaming, Server-Sent Events, and polling fallbacks
  */
 
-import type { AIAnalysis, Notification, QuoteContext, Status } from '$lib/types';
+import type { AIAnalysis, Notification, QuoteContext, Status } from './types';
 import type { Conversation, DirectMessage } from '$lib/components/messaging';
 
 export interface ListData {

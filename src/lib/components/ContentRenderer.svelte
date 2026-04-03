@@ -29,6 +29,10 @@
 		 */
 		mentionBaseUrl?: string;
 		/**
+		 * Resolve a mention to a preferred href.
+		 */
+		resolveMentionHref?: (mention: Mention) => string | null;
+		/**
 		 * Base URL for hashtags
 		 */
 		hashtagBaseUrl?: string;
@@ -49,6 +53,7 @@
 		mentions = [],
 		tags = [],
 		mentionBaseUrl = '/users/',
+		resolveMentionHref,
 		hashtagBaseUrl = '/tags/',
 		class: className = '',
 		onToggle,
@@ -75,6 +80,7 @@
 		if (!url || typeof url !== 'string') return null;
 		const trimmed = url.trim();
 		if (!trimmed) return null;
+		if (trimmed.startsWith('/')) return encodeURI(trimmed);
 
 		try {
 			const parsed = new URL(trimmed, 'https://example.invalid');
@@ -83,6 +89,14 @@
 		} catch {
 			return null;
 		}
+	}
+
+	function anchorHtml(match: string, href: string, className: string): string {
+		const external = !href.startsWith('/');
+		const attributes = external
+			? `href="${href}" class="${className}" rel="noopener noreferrer" target="_blank"`
+			: `href="${href}" class="${className}"`;
+		return `<a ${attributes}>${match}</a>`;
 	}
 
 	function processContent(html: string): string {
@@ -121,10 +135,10 @@
 		if (mentions.length > 0) {
 			mentions.forEach((mention) => {
 				const pattern = new RegExp(`@${escapeRegExp(mention.username)}(@[\\w.-]+)?`, 'g');
-				const safeUrl = toSafeHref(mention.url);
+				const safeUrl = toSafeHref(resolveMentionHref?.(mention) ?? mention.url);
 				processed = processed.replace(pattern, (match) => {
 					if (!safeUrl) return match;
-					return `<a href="${safeUrl}" class="mention" rel="noopener noreferrer" target="_blank">${match}</a>`;
+					return anchorHtml(match, safeUrl, 'mention');
 				});
 			});
 		}
@@ -136,7 +150,7 @@
 				const safeUrl = toSafeHref(tag.url);
 				processed = processed.replace(pattern, (match) => {
 					if (!safeUrl) return match;
-					return `<a href="${safeUrl}" class="hashtag" rel="noopener noreferrer" target="_blank">${match}</a>`;
+					return anchorHtml(match, safeUrl, 'hashtag');
 				});
 			});
 		}
