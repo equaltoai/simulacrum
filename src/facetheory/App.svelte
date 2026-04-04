@@ -33,6 +33,7 @@
 	} from './flags';
 	import { createPreviewAppState, loadClientAppState } from './loaders';
 	import {
+		resolveConversationComposeActorId,
 		resolveProfileActorId,
 		resolveProfileIdentifier,
 		resolveWindowAgentHint,
@@ -46,6 +47,7 @@
 	interface Props {
 		initialPage: AppPageDescriptor;
 		initialAgentHint?: string | null;
+		initialComposeActorId?: string | null;
 		initialStatusId?: string | null;
 		initialProfileIdentifier?: string | null;
 		initialProfileActorId?: string | null;
@@ -54,6 +56,7 @@
 	let {
 		initialPage,
 		initialAgentHint = null,
+		initialComposeActorId = null,
 		initialStatusId = null,
 		initialProfileIdentifier = null,
 		initialProfileActorId = null,
@@ -61,6 +64,7 @@
 
 	const initialPageValue = untrack(() => initialPage);
 	const initialAgentHintValue = untrack(() => initialAgentHint);
+	const initialComposeActorIdValue = untrack(() => initialComposeActorId);
 	const initialStatusIdValue = untrack(() => initialStatusId);
 	const initialProfileIdentifierValue = untrack(() => initialProfileIdentifier);
 	const initialProfileActorIdValue = untrack(() => initialProfileActorId);
@@ -71,6 +75,7 @@
 
 	let currentPage = $state<AppPageDescriptor>(initialPageValue);
 	let currentAgentHint = $state<string | null>(initialAgentHintValue);
+	let currentComposeActorId = $state<string | null>(initialComposeActorIdValue);
 	let session = $state<AuthSession | null>(null);
 	let appState = $state<ClientAppState>(initialState);
 	let hostToken = $state('');
@@ -83,6 +88,7 @@
 
 	const isAuthenticated = $derived(Boolean(session?.accessToken));
 	const showAuthPreviewNotice = $derived(!isAuthenticated && currentPage.requiresAuth !== false);
+	const showBlockingLoadError = $derived(Boolean(isAuthenticated && loadError));
 
 	const socialBaseData = $derived({
 		hero: {
@@ -127,6 +133,16 @@
 		return `${window.location.pathname}${window.location.search}${window.location.hash}`;
 	}
 
+	function stripLegacyAgentQueryParam() {
+		if (typeof window === 'undefined') return;
+		const search = new URLSearchParams(window.location.search);
+		if (!search.has('agent')) return;
+		search.delete('agent');
+		const nextSearch = search.toString();
+		const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`;
+		window.history.replaceState(window.history.state, '', nextUrl);
+	}
+
 	async function refreshLiveState() {
 		if (!session?.accessToken) return;
 
@@ -140,7 +156,6 @@
 				hostToken,
 			});
 		} catch (error) {
-			appState = createPreviewAppState({ page: currentPage, agentHint: currentAgentHint });
 			loadError = error instanceof Error ? error.message : 'Failed to load the live Simulacrum state.';
 		} finally {
 			busy = false;
@@ -183,8 +198,10 @@
 	}
 
 	onMount(() => {
+		stripLegacyAgentQueryParam();
 		currentPage = resolveWindowPage();
 		currentAgentHint = resolveWindowAgentHint();
+		currentComposeActorId = resolveConversationComposeActorId(window.location.pathname);
 		currentStatusId = resolveStatusId(window.location.pathname);
 		currentProfileIdentifier = resolveProfileIdentifier(window.location.pathname);
 		currentProfileActorId = resolveProfileActorId(new URLSearchParams(window.location.search));
@@ -263,105 +280,107 @@
 			<section class="ft-panel ft-shell__notice">
 				<header class="ft-panel__header">
 					<div>
-						<p class="ft-panel__eyebrow">Live load fallback</p>
-						<h2>Showing the preview shell</h2>
+						<p class="ft-panel__eyebrow">Live load failed</p>
+						<h2>Simulacrum stopped on an API error</h2>
 					</div>
 				</header>
 				<p class="ft-panel__message ft-panel__message--error">{loadError}</p>
 			</section>
 		{/if}
 
-		<div class="ft-shell__stage">
-			{#if currentPage.key === 'dashboard' || currentPage.key === 'not-found'}
-				<NexusDashboard data={appState.faces.dashboard} />
-			{:else if currentPage.key === 'souls'}
-				<SoulRequestCenter data={appState.faces.souls} />
-			{:else if currentPage.key === 'genesis'}
-				<AgentGenesisWorkspace data={appState.faces.genesis} />
-			{:else if currentPage.key === 'approvals'}
-				<GraduationApprovalThread data={appState.faces.approvals} />
-			{:else if currentPage.key === 'identity'}
-				<IdentityNexus data={appState.faces.identity} />
-			{:else if currentPage.key === 'timeline'}
-				<TimelinePage data={socialBaseData} />
-			{:else if currentPage.key === 'conversations'}
-				<ConversationsPage data={socialBaseData} />
-			{:else if currentPage.key === 'notifications'}
-				<NotificationsPage data={socialBaseData} />
-			{:else if currentPage.key === 'explore'}
-				<ExplorePage data={socialBaseData} />
-			{:else if currentPage.key === 'profile'}
-				<ProfilePage
-					data={socialBaseData}
-					profileIdentifier={currentProfileIdentifier}
-					profileId={currentProfileActorId}
-				/>
-			{:else if currentPage.key === 'status' && currentStatusId}
-				<StatusPage data={socialBaseData} statusId={currentStatusId} />
-			{/if}
-		</div>
-
-		<section class="ft-shell__panels">
-			{#if isAuthenticated}
-				{#if HOST_WORKFLOW_BRIDGE_ENABLED}
-					<HostTokenPanel
-						busy={busy}
-						configured={appState.hostWorkflow.tokenConfigured}
-						conversationCount={appState.hostWorkflow.conversations.length}
-						lifecycleEventCount={appState.hostWorkflow.lifecycleEvents.length}
-						note={appState.hostWorkflow.authNote}
-						onClear={handleHostTokenClear}
-						onSave={handleHostTokenSave}
-						selectedConversationId={appState.actionContext.activeConversationId}
-						token={hostToken}
+		{#if !showBlockingLoadError}
+			<div class="ft-shell__stage">
+				{#if currentPage.key === 'dashboard' || currentPage.key === 'not-found'}
+					<NexusDashboard data={appState.faces.dashboard} />
+				{:else if currentPage.key === 'souls'}
+					<SoulRequestCenter data={appState.faces.souls} />
+				{:else if currentPage.key === 'genesis'}
+					<AgentGenesisWorkspace data={appState.faces.genesis} />
+				{:else if currentPage.key === 'approvals'}
+					<GraduationApprovalThread data={appState.faces.approvals} />
+				{:else if currentPage.key === 'identity'}
+					<IdentityNexus data={appState.faces.identity} />
+				{:else if currentPage.key === 'timeline'}
+					<TimelinePage data={socialBaseData} />
+				{:else if currentPage.key === 'conversations'}
+					<ConversationsPage data={socialBaseData} composeActorId={currentComposeActorId} />
+				{:else if currentPage.key === 'notifications'}
+					<NotificationsPage data={socialBaseData} />
+				{:else if currentPage.key === 'explore'}
+					<ExplorePage data={socialBaseData} />
+				{:else if currentPage.key === 'profile'}
+					<ProfilePage
+						data={socialBaseData}
+						profileIdentifier={currentProfileIdentifier}
+						profileId={currentProfileActorId}
 					/>
-				{:else if currentPage.key === 'genesis' || currentPage.key === 'approvals'}
-					<section class="ft-panel">
-						<header class="ft-panel__header">
-							<div>
-								<p class="ft-panel__eyebrow">Deliberate enablement</p>
-								<h2>Host workflow bridge is disabled</h2>
-							</div>
-						</header>
-						<p class="ft-panel__copy">{HOST_WORKFLOW_BRIDGE_DISABLED_NOTE}</p>
-					</section>
+				{:else if currentPage.key === 'status' && currentStatusId}
+					<StatusPage data={socialBaseData} statusId={currentStatusId} />
 				{/if}
+			</div>
 
-				{#if currentPage.key === 'souls'}
-					<SoulRequestActionPanel
-						activeRequest={appState.workflow?.request ?? null}
-						latestReview={appState.workflow?.review ?? null}
-						onUpdated={refreshLiveState}
-						username={appState.actionContext.activeUsername}
-					/>
-				{/if}
+			<section class="ft-shell__panels">
+				{#if isAuthenticated}
+					{#if HOST_WORKFLOW_BRIDGE_ENABLED}
+						<HostTokenPanel
+							busy={busy}
+							configured={appState.hostWorkflow.tokenConfigured}
+							conversationCount={appState.hostWorkflow.conversations.length}
+							lifecycleEventCount={appState.hostWorkflow.lifecycleEvents.length}
+							note={appState.hostWorkflow.authNote}
+							onClear={handleHostTokenClear}
+							onSave={handleHostTokenSave}
+							selectedConversationId={appState.actionContext.activeConversationId}
+							token={hostToken}
+						/>
+					{:else if currentPage.key === 'genesis' || currentPage.key === 'approvals'}
+						<section class="ft-panel">
+							<header class="ft-panel__header">
+								<div>
+									<p class="ft-panel__eyebrow">Deliberate enablement</p>
+									<h2>Host workflow bridge is disabled</h2>
+								</div>
+							</header>
+							<p class="ft-panel__copy">{HOST_WORKFLOW_BRIDGE_DISABLED_NOTE}</p>
+						</section>
+					{/if}
 
-				{#if HOST_WORKFLOW_BRIDGE_ENABLED && currentPage.key === 'genesis'}
-					<MintConversationPanel
-						agentId={appState.actionContext.activeAgentId}
-						conversationStatus={appState.hostWorkflow.selectedConversation?.status ?? null}
-						hostBaseUrl={appState.hostWorkflow.baseUrl}
-						hostToken={hostToken}
-						initialConversationId={appState.actionContext.activeConversationId}
-						initialTranscript={appState.hostWorkflow.transcript}
-						onUpdated={refreshLiveState}
-					/>
-				{/if}
+					{#if currentPage.key === 'souls'}
+						<SoulRequestActionPanel
+							activeRequest={appState.workflow?.request ?? null}
+							latestReview={appState.workflow?.review ?? null}
+							onUpdated={refreshLiveState}
+							username={appState.actionContext.activeUsername}
+						/>
+					{/if}
 
-				{#if HOST_WORKFLOW_BRIDGE_ENABLED && currentPage.key === 'approvals'}
-					<FinalizeSigningPanel
-						activeSoulAgentId={appState.actionContext.activeSoulAgentId}
-						agentId={appState.actionContext.activeAgentId}
-						conversationId={appState.actionContext.activeConversationId}
-						expectedWallet={appState.actionContext.expectedWallet}
-						hostBaseUrl={appState.hostWorkflow.baseUrl}
-						hostToken={hostToken}
-						onUpdated={refreshLiveState}
-						username={appState.actionContext.activeUsername}
-						workflow={appState.workflow}
-					/>
+					{#if HOST_WORKFLOW_BRIDGE_ENABLED && currentPage.key === 'genesis'}
+						<MintConversationPanel
+							agentId={appState.actionContext.activeAgentId}
+							conversationStatus={appState.hostWorkflow.selectedConversation?.status ?? null}
+							hostBaseUrl={appState.hostWorkflow.baseUrl}
+							hostToken={hostToken}
+							initialConversationId={appState.actionContext.activeConversationId}
+							initialTranscript={appState.hostWorkflow.transcript}
+							onUpdated={refreshLiveState}
+						/>
+					{/if}
+
+					{#if HOST_WORKFLOW_BRIDGE_ENABLED && currentPage.key === 'approvals'}
+						<FinalizeSigningPanel
+							activeSoulAgentId={appState.actionContext.activeSoulAgentId}
+							agentId={appState.actionContext.activeAgentId}
+							conversationId={appState.actionContext.activeConversationId}
+							expectedWallet={appState.actionContext.expectedWallet}
+							hostBaseUrl={appState.hostWorkflow.baseUrl}
+							hostToken={hostToken}
+							onUpdated={refreshLiveState}
+							username={appState.actionContext.activeUsername}
+							workflow={appState.workflow}
+						/>
+					{/if}
 				{/if}
-			{/if}
-		</section>
+			</section>
+		{/if}
 	{/if}
 </div>

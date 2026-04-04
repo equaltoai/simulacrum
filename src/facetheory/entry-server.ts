@@ -11,8 +11,9 @@ import { createSvelteFace } from '@theory-cloud/facetheory/svelte';
 
 import App from './App.svelte';
 import {
-	firstQueryValue,
+	resolveConversationComposeActorId,
 	resolvePage,
+	resolveIdentityAgentHint,
 	resolveProfileActorId,
 	resolveProfileIdentifier,
 	resolveStatusId,
@@ -31,12 +32,13 @@ async function loadClientManifest(): Promise<ViteManifest> {
 }
 
 function createFaceForRoute(route: string) {
-	return createSvelteFace({
+	const face = createSvelteFace({
 		route,
 		mode: 'ssr',
 		load: async (ctx) => ({
 			initialPage: resolvePage(ctx.request.path),
-			initialAgentHint: firstQueryValue(ctx.request.query, 'agent'),
+			initialAgentHint: resolveIdentityAgentHint(ctx.request.path),
+			initialComposeActorId: resolveConversationComposeActorId(ctx.request.path),
 			initialStatusId: resolveStatusId(ctx.request.path),
 			initialProfileIdentifier: resolveProfileIdentifier(ctx.request.path),
 			initialProfileActorId: resolveProfileActorId(ctx.request.query),
@@ -46,6 +48,7 @@ function createFaceForRoute(route: string) {
 			props: data as {
 				initialPage: ReturnType<typeof resolvePage>;
 				initialAgentHint: string | null;
+				initialComposeActorId: string | null;
 				initialStatusId: string | null;
 				initialProfileIdentifier: string | null;
 				initialProfileActorId: string | null;
@@ -90,6 +93,26 @@ function createFaceForRoute(route: string) {
 			};
 		},
 	});
+
+	return {
+		...face,
+		render: async (
+			ctx: Parameters<typeof face.render>[0],
+			data: Parameters<typeof face.render>[1]
+		) => {
+			try {
+				return await face.render(ctx, data);
+			} catch (error) {
+				console.error('[facetheory] render failed', {
+					route,
+					path: ctx.request.path,
+					error: error instanceof Error ? error.message : String(error),
+					stack: error instanceof Error ? error.stack : null,
+				});
+				throw error;
+			}
+		},
+	};
 }
 
 const app = createFaceApp({

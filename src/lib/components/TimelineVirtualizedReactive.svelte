@@ -210,7 +210,7 @@
 	$effect(() => {
 		if (!mounted && timelineIntegration && autoConnect) {
 			mounted = true;
-			timelineIntegration.connect().catch((err) => {
+			timelineIntegration.connect().catch((err: unknown) => {
 				console.error('Failed to connect timeline:', err);
 			});
 

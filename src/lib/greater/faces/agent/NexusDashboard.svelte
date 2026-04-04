@@ -20,7 +20,7 @@
 	const continuityMoments = $derived.by((): readonly AgentFaceTimelineMoment[] =>
 		data.continuityMoments?.length
 			? data.continuityMoments
-			: (data.continuity.followUps ?? []).map<AgentFaceTimelineMoment>((followUp) => ({
+			: (data.continuity?.followUps ?? []).map<AgentFaceTimelineMoment>((followUp) => ({
 					id: followUp.id,
 					title: followUp.title,
 					summary: followUp.summary,
@@ -31,8 +31,9 @@
 				}))
 	);
 	const dashboardSignals = $derived.by(() => {
+		type GraduationReadiness = NonNullable<NexusDashboardData['graduation']>['readiness'];
 		const readinessTone = (
-			value: NexusDashboardData['graduation']['readiness']
+			value: GraduationReadiness
 		): AgentSurfaceTone => {
 			switch (value) {
 				case 'ready':
@@ -45,8 +46,10 @@
 			}
 		};
 
-		return [
-			{
+		const signals: { id: string; label: string; value: string; detail: string; tone: AgentSurfaceTone }[] = [];
+
+		if (data.graduation) {
+			signals.push({
 				id: 'graduation-readiness',
 				label: 'Graduation readiness',
 				value: formatAgentWorkflowLabel(data.graduation.readiness),
@@ -54,24 +57,30 @@
 					data.graduation.nextStep ??
 					`${data.graduation.completedMilestones?.length ?? 0} milestones complete`,
 				tone: readinessTone(data.graduation.readiness),
-			},
-			{
+			});
+		}
+
+		if (data.continuity) {
+			signals.push({
 				id: 'continuity-loops',
 				label: 'Continuity loops',
 				value: String(data.continuity.followUps?.length ?? 0),
 				detail: data.continuity.feedbackLoop,
-				tone: 'accent' as const,
-			},
-			{
-				id: 'workflow-activity',
-				label: 'Workflow activity',
-				value: String(data.workflowNotifications?.length ?? 0),
-				detail: `${continuityMoments.length} continuity moment${
-					continuityMoments.length === 1 ? '' : 's'
-				} tracked`,
-				tone: data.workflowNotifications?.length ? ('warning' as const) : ('neutral' as const),
-			},
-		];
+				tone: 'accent',
+			});
+		}
+
+		signals.push({
+			id: 'workflow-activity',
+			label: 'Workflow activity',
+			value: String(data.workflowNotifications?.length ?? 0),
+			detail: `${continuityMoments.length} continuity moment${
+				continuityMoments.length === 1 ? '' : 's'
+			} tracked`,
+			tone: data.workflowNotifications?.length ? 'warning' : 'neutral',
+		});
+
+		return signals;
 	});
 </script>
 
@@ -102,13 +111,15 @@
 				</div>
 			</section>
 
-			<section class="nexus-dashboard__panel">
-				<header class="nexus-dashboard__panel-header">
-					<p>Graduation readiness</p>
-					<h2>Deployment board</h2>
-				</header>
-				<GraduationSummaryCard summary={data.graduation} />
-			</section>
+			{#if data.graduation}
+				<section class="nexus-dashboard__panel">
+					<header class="nexus-dashboard__panel-header">
+						<p>Graduation readiness</p>
+						<h2>Deployment board</h2>
+					</header>
+					<GraduationSummaryCard summary={data.graduation} />
+				</section>
+			{/if}
 
 			{#if data.roster?.length}
 				<section class="nexus-dashboard__panel">
@@ -118,7 +129,10 @@
 					</header>
 					<div class="nexus-dashboard__roster">
 						{#each data.roster as agent (agent.id)}
-							<article class="nexus-dashboard__roster-card">
+							<a
+								class="nexus-dashboard__roster-card nexus-dashboard__roster-card--compact"
+								href={agent.href ?? `/l/identity/${encodeURIComponent(agent.handle?.replace(/^@/, '') ?? agent.id)}`}
+							>
 								<div class="nexus-dashboard__roster-header">
 									<div>
 										<h3>{agent.name}</h3>
@@ -130,18 +144,7 @@
 										{formatAgentWorkflowLabel(agent.currentPhase)}
 									</span>
 								</div>
-								<p class="nexus-dashboard__roster-summary">{agent.summary}</p>
-								{#if agent.metrics?.length}
-									<div class="nexus-dashboard__roster-metrics">
-										{#each agent.metrics.slice(0, 2) as metric, metricIndex (`${agent.id}-${metric.label}-${metricIndex}`)}
-											<div>
-												<strong>{metric.value}</strong>
-												<span>{metric.label}</span>
-											</div>
-										{/each}
-									</div>
-								{/if}
-							</article>
+							</a>
 						{/each}
 					</div>
 				</section>
@@ -216,7 +219,9 @@
 
 	{#snippet side()}
 		<AgentIdentityCard identity={data.identity} />
-		<ContinuityPanel panel={data.continuity} />
+		{#if data.continuity}
+			<ContinuityPanel panel={data.continuity} />
+		{/if}
 		{#if data.lifecycle?.length}
 			<SoulLifecycleRail steps={data.lifecycle} currentPhase={data.identity.currentPhase} />
 		{/if}
@@ -282,9 +287,12 @@
 	}
 
 	.nexus-dashboard__signals,
-	.nexus-dashboard__roster,
 	.nexus-dashboard__timeline {
 		grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+	}
+
+	.nexus-dashboard__roster {
+		grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
 	}
 
 	.nexus-dashboard__signal,
@@ -341,6 +349,29 @@
 		font-weight: 700;
 	}
 
+	a.nexus-dashboard__roster-card {
+		text-decoration: none;
+		color: inherit;
+		transition: background 0.15s ease;
+	}
+
+	a.nexus-dashboard__roster-card:hover {
+		background: color-mix(in srgb, var(--gr-semantic-background-secondary) 68%, white 32%);
+	}
+
+	.nexus-dashboard__roster-card--compact {
+		padding: 0.65rem 0.75rem;
+	}
+
+	.nexus-dashboard__roster-card--compact h3 {
+		font-size: 0.88rem;
+	}
+
+	.nexus-dashboard__roster-card--compact .nexus-dashboard__phase-pill {
+		font-size: 0.68rem;
+		padding: 0.12rem 0.4rem;
+	}
+
 	.nexus-dashboard__roster-metrics {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -350,10 +381,6 @@
 	.nexus-dashboard__roster-metrics div {
 		display: grid;
 		gap: 0.15rem;
-	}
-
-	.nexus-dashboard__roster-metrics strong {
-		font-size: 1.1rem;
 	}
 
 	.nexus-dashboard__roster-metrics span {

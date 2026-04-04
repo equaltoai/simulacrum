@@ -7,6 +7,7 @@
 	import TimelineVirtualizedReactive from '$lib/components/TimelineVirtualizedReactive.svelte';
 	import { applySoulAvatarsToStatuses } from '$lib/greater/adapters/soul/avatarResolver.svelte';
 	import {
+		buildConversationComposeHref,
 		buildPublicProfileHref,
 		buildPublicStatusHref,
 		normalizeProfileIdentifier,
@@ -37,6 +38,9 @@
 	let error = $state<string | null>(null);
 
 	const normalizedProfileIdentifier = $derived(normalizeProfileIdentifier(profileIdentifier));
+	const messageHref = $derived.by(() =>
+		account?.id && $authSession?.accessToken ? buildConversationComposeHref(account.id) : null
+	);
 
 	function resolveProfileRequest(): { id?: string; username?: string } | null {
 		const id = profileId?.trim() || null;
@@ -153,16 +157,23 @@
 									<p class="profile-page__handle">@{account.acct}</p>
 								</div>
 
-								<a
-									href={buildPublicProfileHref({
-										actorId: account.id,
-										acct: account.acct,
-										username: account.username,
-									})}
-									class="profile-page__self-link"
-								>
-									Canonical profile link
-								</a>
+								<div class="profile-page__links">
+									{#if messageHref}
+										<a href={messageHref} class="profile-page__message-link">
+											Direct Message
+										</a>
+									{/if}
+									<a
+										href={buildPublicProfileHref({
+											actorId: account.id,
+											acct: account.acct,
+											username: account.username,
+										})}
+										class="profile-page__self-link"
+									>
+										Canonical profile link
+									</a>
+								</div>
 							</div>
 
 							<div class="profile-page__stats" role="list" aria-label="Profile stats">
@@ -302,13 +313,22 @@
 	}
 
 	.profile-page__self-link,
+	.profile-page__message-link,
 	.profile-page__meta a {
 		color: var(--gr-color-primary-700, #8f5b11);
 		text-decoration: none;
 		font-weight: 600;
 	}
 
+	.profile-page__links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		align-items: center;
+	}
+
 	.profile-page__self-link:hover,
+	.profile-page__message-link:hover,
 	.profile-page__meta a:hover {
 		text-decoration: underline;
 	}

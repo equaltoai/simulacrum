@@ -59,6 +59,7 @@ export type {
 	AgentFaceCallout,
 	AgentFaceConversationEntry,
 	AgentFaceHero,
+	AgentFaceMcpAccess,
 	AgentFaceMetric,
 	AgentFaceNavItem,
 	AgentFaceRequestFilter,

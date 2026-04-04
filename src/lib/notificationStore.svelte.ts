@@ -3,9 +3,9 @@
  * Provides reactive state management for notification data
  */
 
-import type { Notification, NotificationGroup } from '$lib/types';
+import type { Notification, NotificationGroup } from './types';
 import type { TransportManager } from './transport';
-import { groupNotifications } from '$lib/utils/notificationGrouping';
+import { groupNotifications } from './utils/notificationGrouping';
 import { SvelteDate, SvelteMap, SvelteURL } from 'svelte/reactivity';
 
 export interface NotificationState {
