@@ -4,7 +4,7 @@
 	import { authSession } from '$lib/auth/session';
 	import * as Messages from '$lib/components/messaging';
 	import type { MessagesHandlers } from '$lib/components/messaging';
-	import { createLesserMessagesHandlers } from '$lib/greater/adapters';
+	import { createSimulacrumMessagesHandlers } from '$lib/messages/createSimulacrumMessagesHandlers';
 	import MessagesFallbackPolling from '$lib/patterns/MessagesFallbackPolling.svelte';
 	import { PUBLIC_APP_BASE_PATH } from '$lib/publicRoutes';
 	import { getStreamingAdapter } from '$lib/realtime/adapter';
@@ -68,13 +68,13 @@
 		let cancelled = false;
 		initializing = true;
 
-			void (async () => {
-				try {
-					const viewer = await adapter.verifyCredentials();
-					if (cancelled) return;
+		void (async () => {
+			try {
+				const viewer = await adapter.verifyCredentials();
+				if (cancelled) return;
 
-					viewerId = viewer.id;
-				handlers = createLesserMessagesHandlers({ adapter }) as MessagesHandlers;
+				viewerId = viewer.id;
+				handlers = createSimulacrumMessagesHandlers({ adapter, token });
 			} catch (err) {
 				if (cancelled) return;
 				error = err instanceof Error ? err.message : String(err);
