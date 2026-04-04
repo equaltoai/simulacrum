@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 
-	import { api } from '$lib/api';
 	import { authSession } from '$lib/auth/session';
 	import * as Messages from '$lib/components/messaging';
 	import type { MessagesHandlers } from '$lib/components/messaging';
@@ -69,12 +68,12 @@
 		let cancelled = false;
 		initializing = true;
 
-		void (async () => {
-			try {
-				const viewer = await api.fetchViewer();
-				if (cancelled) return;
+			void (async () => {
+				try {
+					const viewer = await adapter.verifyCredentials();
+					if (cancelled) return;
 
-				viewerId = viewer.id;
+					viewerId = viewer.id;
 				handlers = createLesserMessagesHandlers({ adapter }) as MessagesHandlers;
 			} catch (err) {
 				if (cancelled) return;
