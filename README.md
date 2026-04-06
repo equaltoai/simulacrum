@@ -14,6 +14,8 @@ canonical rewrite is now an agent-first FaceTheory app installed into Lesser at
   [`docs/drones/agent-first-facetheory-contract.md`](./docs/drones/agent-first-facetheory-contract.md)
 - Rollout guidance:
   [`docs/drones/agent-first-rollout.md`](./docs/drones/agent-first-rollout.md)
+- Browser validation contract:
+  [`docs/browser-validation-contract.md`](./docs/browser-validation-contract.md)
 - Upstream UI handoff:
   `../greater-components/docs/faces/agent/simulacrum-migration-checklist.md`
 
