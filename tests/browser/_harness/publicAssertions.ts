@@ -26,7 +26,36 @@ function statusCardLocator(page: Page) {
 	return page.getByRole('button', { name: /Status by / }).first();
 }
 
+function routeRootLocator(page: Page, routeKey: PublicRouteKey) {
+	return page.locator(`[data-testid="public-route"][data-route-key="${routeKey}"]`).first();
+}
+
 async function getPublicRouteState(page: Page, routeKey: PublicRouteKey): Promise<PublicRouteState> {
+	const routeRoot = routeRootLocator(page, routeKey);
+	if ((await routeRoot.count()) > 0) {
+		if (await isVisible(routeRoot.getByTestId('public-route-error').first())) {
+			return 'error';
+		}
+
+		if (await isVisible(routeRoot.getByTestId('public-route-loading').first())) {
+			return 'loading';
+		}
+
+		if (await isVisible(routeRoot.getByTestId('public-route-empty').first())) {
+			return 'empty';
+		}
+
+		if (await isVisible(routeRoot.getByTestId('public-route-not-found').first())) {
+			return 'not-found';
+		}
+
+		if (await isVisible(routeRoot.getByTestId('public-route-ready').first())) {
+			return 'ready';
+		}
+
+		return 'unknown';
+	}
+
 	if (await isVisible(page.getByRole('alert').first())) {
 		return 'error';
 	}
@@ -64,6 +93,19 @@ async function getPublicRouteState(page: Page, routeKey: PublicRouteKey): Promis
 }
 
 export async function expectPublicRouteShell(page: Page, routeKey: PublicRouteKey) {
+	const routeRoot = routeRootLocator(page, routeKey);
+	if ((await routeRoot.count()) > 0) {
+		await expect(routeRoot).toBeVisible();
+		await expect(
+			page.getByTestId('public-route-hero').getByRole('heading', {
+				level: 1,
+				name: PUBLIC_ROUTE_HEADINGS[routeKey],
+				exact: true,
+			})
+		).toBeVisible();
+		return;
+	}
+
 	await expect(
 		page.getByRole('heading', { level: 1, name: PUBLIC_ROUTE_HEADINGS[routeKey], exact: true })
 	).toBeVisible();
@@ -95,23 +137,41 @@ export async function waitForPublicRouteSettlement(
 export async function expectPublicRouteError(page: Page, routeKey: PublicRouteKey) {
 	const state = await waitForPublicRouteSettlement(page, routeKey);
 	expect(state).toBe('error');
+	const routeRoot = routeRootLocator(page, routeKey);
+	if ((await routeRoot.count()) > 0) {
+		await expect(routeRoot.getByTestId('public-route-error').first()).toBeVisible();
+		return;
+	}
+
 	await expect(page.getByRole('alert').first()).toBeVisible();
 }
 
 export async function expectExploreReady(page: Page) {
 	const state = await waitForPublicRouteSettlement(page, 'explore');
 	expect(state).toBe('ready');
+	if ((await routeRootLocator(page, 'explore').count()) > 0) {
+		await expect(page.getByTestId('public-explore-timeline')).toBeVisible();
+	}
 	await expect(statusCardLocator(page)).toBeVisible();
 }
 
 export async function expectProfileReady(page: Page) {
 	const state = await waitForPublicRouteSettlement(page, 'profile');
 	expect(state).toBe('ready');
+	if ((await routeRootLocator(page, 'profile').count()) > 0) {
+		await expect(page.getByTestId('public-profile-header')).toBeVisible();
+		await expect(page.getByTestId('public-profile-handle')).toBeVisible();
+		await expect(page.getByTestId('public-profile-stats')).toBeVisible();
+	}
 	await expect(page.getByRole('link', { name: 'Canonical profile link' })).toBeVisible();
 }
 
 export async function expectStatusReady(page: Page) {
 	const state = await waitForPublicRouteSettlement(page, 'status');
 	expect(state).toBe('ready');
+	if ((await routeRootLocator(page, 'status').count()) > 0) {
+		await expect(page.getByTestId('public-status-thread')).toBeVisible();
+		await expect(page.getByTestId('public-status-focus')).toBeVisible();
+	}
 	await expect(statusCardLocator(page)).toBeVisible();
 }

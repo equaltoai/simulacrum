@@ -24,6 +24,11 @@
 	let hasLoaded = $state(false);
 	let error = $state<string | null>(null);
 
+	const showLoading = $derived(isLoading || !hasLoaded);
+	const showError = $derived(Boolean(error));
+	const showReady = $derived(!showLoading && !showError && Boolean(status));
+	const showNotFound = $derived(!showLoading && !showError && !status);
+
 	function handleStatusClick(nextStatus: Status) {
 		if (typeof window === 'undefined') return;
 		window.location.assign(buildPublicStatusHref(nextStatus.id));
@@ -93,39 +98,68 @@
 	actions={data.actions}
 	statusChips={[]}
 	metrics={[]}
+	heroTestId="public-route-hero"
 	class={className}
 >
 	{#snippet children()}
-		<div class="status-page">
-			{#if error}
-				<div class="status-page__notice status-page__notice--error" role="alert">{error}</div>
-			{/if}
+		<div data-testid="public-route" data-route-key="status">
+			<div class="status-page" data-testid="public-status-route">
+				{#if showError}
+					<div
+						class="status-page__notice status-page__notice--error"
+						role="alert"
+						data-testid="public-route-error"
+					>
+						{error}
+					</div>
+				{:else if showLoading}
+					<div class="status-page__notice" data-testid="public-route-loading">Loading post...</div>
+				{:else if showReady && status}
+					<div data-testid="public-route-ready">
+						<div data-testid="public-status-thread">
+							{#if ancestors.length}
+								<div class="status-page__ancestors" data-testid="public-status-ancestors">
+									{#each ancestors as ancestor (ancestor.id)}
+										<StatusCard
+											status={ancestor}
+											density="compact"
+											onclick={handleStatusClick}
+											testId="public-status-card"
+											dataStatusId={ancestor.id}
+										/>
+									{/each}
+								</div>
+							{/if}
 
-			{#if isLoading || !hasLoaded}
-				<div class="status-page__notice">Loading post...</div>
-			{:else if status}
-				{#if ancestors.length}
-					<div class="status-page__ancestors">
-						{#each ancestors as ancestor (ancestor.id)}
-							<StatusCard status={ancestor} density="compact" onclick={handleStatusClick} />
-						{/each}
+							<div class="status-page__focus" data-testid="public-status-focus">
+								<StatusCard
+									status={status}
+									onclick={handleStatusClick}
+									testId="public-status-card"
+									dataStatusId={status.id}
+								/>
+							</div>
+
+							{#if descendants.length}
+								<div class="status-page__descendants" data-testid="public-status-descendants">
+									{#each descendants as descendant (descendant.id)}
+										<StatusCard
+											status={descendant}
+											onclick={handleStatusClick}
+											testId="public-status-card"
+											dataStatusId={descendant.id}
+										/>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
+				{:else if showNotFound}
+					<div class="status-page__notice" data-testid="public-route-not-found">
+						Post not found.
 					</div>
 				{/if}
-
-				<div class="status-page__focus">
-					<StatusCard status={status} onclick={handleStatusClick} />
-				</div>
-
-				{#if descendants.length}
-					<div class="status-page__descendants">
-						{#each descendants as descendant (descendant.id)}
-							<StatusCard status={descendant} onclick={handleStatusClick} />
-						{/each}
-					</div>
-				{/if}
-			{:else if !isLoading}
-				<div class="status-page__notice">Post not found.</div>
-			{/if}
+			</div>
 		</div>
 	{/snippet}
 </AgentFaceFrame>

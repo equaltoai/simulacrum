@@ -37,6 +37,11 @@
 	let hasLoaded = $state(false);
 	let error = $state<string | null>(null);
 
+	const showLoading = $derived(isLoading || !hasLoaded);
+	const showError = $derived(Boolean(error));
+	const showReady = $derived(!showLoading && !showError && Boolean(account));
+	const showNotFound = $derived(!showLoading && !showError && !account);
+
 	const normalizedProfileIdentifier = $derived(normalizeProfileIdentifier(profileIdentifier));
 	const messageHref = $derived.by(() =>
 		account?.id && $authSession?.accessToken ? buildConversationComposeHref(account.id) : null
@@ -118,112 +123,141 @@
 	actions={data.actions}
 	statusChips={data.statusChips}
 	metrics={data.metrics}
+	heroTestId="public-route-hero"
 	class={className}
 >
 	{#snippet children()}
-		<div class="profile-page">
-			{#if error}
-				<div class="profile-page__notice profile-page__notice--error" role="alert">{error}</div>
-			{/if}
-
-			{#if isLoading || !hasLoaded}
-				<div class="profile-page__notice">Loading profile…</div>
-			{:else if account}
-				<section class="profile-page__header">
-					{#if account.header}
-						<img
-							src={account.header}
-							alt=""
-							class="profile-page__cover"
-							loading="lazy"
-						/>
-					{/if}
-
-					<div class="profile-page__identity">
-						<div class="profile-page__avatar">
-							{#if account.avatar}
-								<img src={account.avatar} alt="" loading="lazy" width="96" height="96" />
-							{:else}
-								<div class="profile-page__avatar-placeholder">
-									{(account.displayName || account.username || '?')[0]?.toUpperCase()}
-								</div>
-							{/if}
-						</div>
-
-						<div class="profile-page__summary">
-							<div class="profile-page__title-row">
-								<div>
-									<h2>{account.displayName || account.username}</h2>
-									<p class="profile-page__handle">@{account.acct}</p>
-								</div>
-
-								<div class="profile-page__links">
-									{#if messageHref}
-										<a href={messageHref} class="profile-page__message-link">
-											Direct Message
-										</a>
-									{/if}
-									<a
-										href={buildPublicProfileHref({
-											actorId: account.id,
-											acct: account.acct,
-											username: account.username,
-										})}
-										class="profile-page__self-link"
-									>
-										Canonical profile link
-									</a>
-								</div>
-							</div>
-
-							<div class="profile-page__stats" role="list" aria-label="Profile stats">
-								<span role="listitem">
-									<strong>{account.statusesCount ?? 0}</strong> posts
-								</span>
-								<span role="listitem">
-									<strong>{account.followersCount ?? 0}</strong> followers
-								</span>
-								<span role="listitem">
-									<strong>{account.followingCount ?? 0}</strong> following
-								</span>
-							</div>
-
-							{#if account.note}
-								<ContentRenderer content={account.note} collapsed={false} />
-							{/if}
-
-							{#if account.fields && account.fields.length > 0}
-								<dl class="profile-page__fields">
-									{#each account.fields as field (`${field.name}-${field.value}`)}
-										<div class="profile-page__field">
-											<dt>{field.name}</dt>
-											<dd>
-												<ContentRenderer content={field.value} collapsed={false} />
-											</dd>
-										</div>
-									{/each}
-								</dl>
-							{/if}
-
-							<div class="profile-page__meta">
-								<a href={account.url} rel="noopener noreferrer" target="_blank">
-									Open ActivityPub actor
-								</a>
-							</div>
-						</div>
+		<div data-testid="public-route" data-route-key="profile">
+			<div class="profile-page" data-testid="public-profile-route">
+				{#if showError}
+					<div
+						class="profile-page__notice profile-page__notice--error"
+						role="alert"
+						data-testid="public-route-error"
+					>
+						{error}
 					</div>
-				</section>
+				{:else if showLoading}
+					<div class="profile-page__notice" data-testid="public-route-loading">Loading profile…</div>
+				{:else if showReady && account}
+					<div data-testid="public-route-ready">
+						<section class="profile-page__header" data-testid="public-profile-header">
+							{#if account.header}
+								<img
+									src={account.header}
+									alt=""
+									class="profile-page__cover"
+									loading="lazy"
+								/>
+							{/if}
 
-				<section class="profile-page__timeline">
-					{#if items.length === 0}
-						<div class="profile-page__notice">No public posts available for this account yet.</div>
-					{:else}
-						<TimelineVirtualizedReactive {items} onStatusClick={handleStatusClick} />
-					{/if}
-				</section>
-			{:else}
-				<div class="profile-page__notice">Profile not found.</div>
-			{/if}
+							<div class="profile-page__identity">
+								<div class="profile-page__avatar">
+									{#if account.avatar}
+										<img src={account.avatar} alt="" loading="lazy" width="96" height="96" />
+									{:else}
+										<div class="profile-page__avatar-placeholder">
+											{(account.displayName || account.username || '?')[0]?.toUpperCase()}
+										</div>
+									{/if}
+								</div>
+
+								<div class="profile-page__summary">
+									<div class="profile-page__title-row">
+										<div>
+											<h2>{account.displayName || account.username}</h2>
+											<p class="profile-page__handle" data-testid="public-profile-handle">
+												@{account.acct}
+											</p>
+										</div>
+
+										<div class="profile-page__links">
+											{#if messageHref}
+												<a href={messageHref} class="profile-page__message-link">
+													Direct Message
+												</a>
+											{/if}
+											<a
+												href={buildPublicProfileHref({
+													actorId: account.id,
+													acct: account.acct,
+													username: account.username,
+												})}
+												class="profile-page__self-link"
+											>
+												Canonical profile link
+											</a>
+										</div>
+									</div>
+
+									<div
+										class="profile-page__stats"
+										role="list"
+										aria-label="Profile stats"
+										data-testid="public-profile-stats"
+									>
+										<span role="listitem">
+											<strong>{account.statusesCount ?? 0}</strong> posts
+										</span>
+										<span role="listitem">
+											<strong>{account.followersCount ?? 0}</strong> followers
+										</span>
+										<span role="listitem">
+											<strong>{account.followingCount ?? 0}</strong> following
+										</span>
+									</div>
+
+									{#if account.note}
+										<ContentRenderer content={account.note} collapsed={false} />
+									{/if}
+
+									{#if account.fields && account.fields.length > 0}
+										<dl class="profile-page__fields">
+											{#each account.fields as field (`${field.name}-${field.value}`)}
+												<div class="profile-page__field">
+													<dt>{field.name}</dt>
+													<dd>
+														<ContentRenderer content={field.value} collapsed={false} />
+													</dd>
+												</div>
+											{/each}
+										</dl>
+									{/if}
+
+									<div class="profile-page__meta">
+										<a href={account.url} rel="noopener noreferrer" target="_blank">
+											Open ActivityPub actor
+										</a>
+									</div>
+								</div>
+							</div>
+						</section>
+
+						<section class="profile-page__timeline">
+							{#if items.length === 0}
+								<div
+									class="profile-page__notice"
+									data-testid="public-profile-empty-posts"
+								>
+									No public posts available for this account yet.
+								</div>
+							{:else}
+								<TimelineVirtualizedReactive
+									{items}
+									onStatusClick={handleStatusClick}
+									testId="public-profile-timeline"
+									statusCardTestId="public-status-card"
+									statusCardDataStatusId={true}
+								/>
+							{/if}
+						</section>
+					</div>
+				{:else if showNotFound}
+					<div class="profile-page__notice" data-testid="public-route-not-found">
+						Profile not found.
+					</div>
+				{/if}
+			</div>
 		</div>
 	{/snippet}
 </AgentFaceFrame>
