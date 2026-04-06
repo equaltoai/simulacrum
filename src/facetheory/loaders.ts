@@ -17,7 +17,6 @@ import {
 	fetchMyDroneReviews,
 	fetchMySouls,
 	fetchViewer,
-	updateProfile,
 	type AgentWorkflowSurface,
 	type DroneAgentState,
 	type ReviewDecisionCard,
@@ -538,6 +537,12 @@ const PREVIEW_AGENT: DroneAgentState = {
 	verifiedAt: null,
 	createdAt: PREVIEW_TIMESTAMP,
 	activityCount: 42,
+	quarantineStatus: null,
+	quarantineStart: null,
+	quarantineEnd: null,
+	quarantineApprovedBy: null,
+	quarantineApprovedAt: null,
+	quarantineActive: false,
 	identitySemantics: {
 		identityState: 'drone',
 		identityLabel: 'Drone body',
@@ -1115,16 +1120,6 @@ export async function loadClientAppState({
 					};
 		}
 
-		// Resolve on-chain avatar from lesser-host and persist as account avatar.
-		const structuredAvatar = publishedSoulProfile?.agent.avatar?.image?.trim();
-		if (structuredAvatar && !viewer.avatar?.trim()) {
-			try {
-				await updateProfile({ input: { avatar: structuredAvatar }, signal });
-			} catch {
-				// Non-critical — continue without avatar
-			}
-		}
-
 		const hostWorkflow = !HOST_WORKFLOW_BRIDGE_ENABLED
 			? emptyHostWorkflow(false, false, lesserHostBaseUrl)
 			: boundSoulAgentId
@@ -1447,6 +1442,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 	const navItems = buildNavItems(
 		input.page,
 		activeUsername,
+		input.myAgents.length,
 		rawRequestQueue.length,
 		input.hostWorkflow.conversations.length,
 		input.mySouls.length,
@@ -1464,7 +1460,9 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		input.page,
 		activeUsername,
 		activeAgent?.id ?? null,
-		Boolean(activeAgent?.agentCapabilities.canDM)
+		Boolean(activeAgent?.agentCapabilities.canDM),
+		input.myAgents.length,
+		input.mySouls.length
 	);
 	const shared = {
 		brand: {
@@ -1498,6 +1496,16 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		focusRequest: requestQueue[0],
 		reviewDecision,
 		callouts: [
+			...(input.mySouls.length > 0 && input.myAgents.length === 0
+					? [{
+						id: 'request-note-drones',
+						title: 'Create a drone body before binding souls',
+						summary: `${input.mySouls.length} soul${
+							input.mySouls.length === 1 ? '' : 's'
+						} already exist on this instance, but Simulacrum only binds them to local drone bodies. Create a drone body first, then open that body's Identity page to bind a soul in context.`,
+						tone: 'warning' as const,
+					}]
+				: []),
 			{
 				id: 'request-note-host',
 				title: input.hostWorkflow.bridgeEnabled
@@ -1587,6 +1595,17 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		continuityMoments: timeline,
 		workflowNotifications: notifications,
 		callouts: [
+			...(input.mySouls.length > 0 && input.myAgents.length === 0
+					? [{
+						id: 'dashboard-note-drones',
+						title: 'Souls are waiting for bodies',
+						summary: `This instance already exposes ${input.mySouls.length} soul${
+							input.mySouls.length === 1 ? '' : 's'
+						}, but the historic flow still applies: create a local drone body first, then open its Identity page to bind a soul.`,
+						meta: 'Historic flow preserved in the new shell: create body -> open identity -> bind soul',
+						tone: 'warning' as const,
+					}]
+				: []),
 			...(activeAgent?.identitySemantics.continuitySummary ?? workflow?.identitySemantics.continuitySummary
 				? [{
 						id: 'dashboard-note-continuity',
@@ -1614,7 +1633,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 			eyebrow: 'Identity and attribution',
 			title: 'Identity Nexus',
 			summary:
-				'Expose continuity, reachability, and attribution together so it is obvious what changed at graduation and what remained the same body.',
+				'Expose continuity, reachability, attribution, and soul attachment together so it is obvious what changed at graduation and what remained the same body.',
 		},
 		identity,
 		declaration: identityDeclarationCard,
@@ -1634,6 +1653,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		attributions,
 		evidence,
 		callouts: [
+			...buildQuarantineCallouts(activeAgent),
 			{
 				id: 'identity-note-runtime',
 				title: activeAgent?.agentCapabilities.canDM ? 'Communications available' : 'Communications locked pre-graduation',
@@ -1884,6 +1904,7 @@ function buildRoster(
 function buildNavItems(
 	page: AppPageDescriptor,
 	activeUsername: string | null,
+	agentCount: number,
 	requestCount: number,
 	conversationCount: number,
 	soulCount: number,
@@ -1908,6 +1929,14 @@ function buildNavItems(
 			icon: 'space_dashboard',
 			href: getPageHref('dashboard', activeUsername),
 			active: page.key === 'dashboard',
+		},
+		{
+			id: 'nav-drones',
+			label: 'Drones',
+			icon: 'robot_2',
+			href: getPageHref('drones', activeUsername),
+			active: page.key === 'drones',
+			badge: agentCount ? String(agentCount) : soulCount ? '!' : undefined,
 		},
 		{
 			id: 'nav-souls',
@@ -1981,12 +2010,46 @@ function buildActions(
 	page: AppPageDescriptor,
 	activeUsername: string | null,
 	activeActorId: string | null,
-	canDirectMessage: boolean
+	canDirectMessage: boolean,
+	agentCount: number,
+	soulCount: number
 ): readonly AgentFaceAction[] {
+	const needsDroneBodies = soulCount > 0 && agentCount === 0;
+
+	if (needsDroneBodies) {
+		switch (page.key) {
+			case 'dashboard':
+			case 'souls':
+			case 'identity':
+				return [
+					{
+						label: 'Create Drone Body',
+						href: getPageHref('drones', activeUsername),
+						tone: 'primary',
+						detail: 'Bodies must exist before souls can be attached from Identity.',
+					},
+					{
+						label: 'Open Soul Requests',
+						href: getPageHref('souls', activeUsername),
+						tone: 'secondary',
+						detail: `${soulCount} soul${soulCount === 1 ? '' : 's'} waiting for local bodies.`,
+					},
+				];
+			case 'drones':
+				return [];
+		}
+	}
+
 	const nextPrimary = (() => {
 		switch (page.key) {
 			case 'dashboard':
 				return { label: 'Open Soul Requests', href: getPageHref('souls', activeUsername), tone: 'primary' as const };
+			case 'drones':
+				return {
+					label: activeUsername ? 'Open Identity Nexus' : 'Return to Dashboard',
+					href: activeUsername ? getPageHref('identity', activeUsername) : getPageHref('dashboard', activeUsername),
+					tone: 'primary' as const,
+				};
 			case 'souls':
 				return { label: 'Open Genesis Lane', href: getPageHref('genesis', activeUsername), tone: 'primary' as const };
 			case 'genesis':
@@ -2021,6 +2084,7 @@ function buildStatusChips(
 	hostWorkflow: HostWorkflowState
 ): readonly AgentFaceStatusChip[] {
 	const semantics = workflow?.identitySemantics ?? activeAgent?.identitySemantics;
+	const quarantineChip = buildQuarantineStatusChip(activeAgent);
 	return [
 		...(semantics ? [
 			{
@@ -2034,6 +2098,7 @@ function buildStatusChips(
 				tone: (semantics.bodyIdentityPreserved ? 'success' : 'warning') as AgentFaceStatusChip['tone'],
 			},
 		] : []),
+		...(quarantineChip ? [quarantineChip] : []),
 		{
 			label: hostWorkflow.bridgeEnabled
 				? hostWorkflow.tokenConfigured
@@ -2052,6 +2117,105 @@ function buildStatusChips(
 				: 'accent',
 		},
 	];
+}
+
+function buildQuarantineStatusChip(activeAgent: DroneAgentState | null): AgentFaceStatusChip | null {
+	if (!activeAgent) return null;
+
+	if (activeAgent.quarantineActive) {
+		return {
+			label: 'Quarantine active',
+			detail: activeAgent.quarantineEnd
+				? `restricted until ${formatFaceDate(activeAgent.quarantineEnd)}`
+				: 'publishing restricted pending dismissal',
+			tone: 'warning',
+		};
+	}
+
+	const normalizedStatus = normalizeQuarantineStatus(activeAgent.quarantineStatus);
+	if (normalizedStatus === 'approved') {
+		return {
+			label: 'Quarantine cleared',
+			detail: activeAgent.quarantineApprovedAt
+				? `dismissed ${formatFaceDate(activeAgent.quarantineApprovedAt)}`
+				: 'owner dismissal recorded',
+			tone: 'success',
+		};
+	}
+
+	if (normalizedStatus === 'expired') {
+		return {
+			label: 'Quarantine expired',
+			detail: activeAgent.quarantineEnd
+				? `window ended ${formatFaceDate(activeAgent.quarantineEnd)}`
+				: 'restriction window ended',
+			tone: 'neutral',
+		};
+	}
+
+	return {
+		label: 'Quarantine clear',
+		detail: 'no active publication hold',
+		tone: 'neutral',
+	};
+}
+
+function buildQuarantineCallouts(activeAgent: DroneAgentState | null): readonly AgentFaceCallout[] {
+	if (!activeAgent) return [];
+
+	if (activeAgent.quarantineActive) {
+		return [{
+			id: 'identity-note-quarantine-active',
+			title: 'Publishing quarantine is active',
+			summary: activeAgent.quarantineEnd
+				? `Public posting stays restricted until ${formatFaceDate(activeAgent.quarantineEnd)} unless the owner dismisses quarantine from this identity page.`
+				: 'Public posting stays restricted until the owner dismisses quarantine from this identity page.',
+			tone: 'warning',
+		}];
+	}
+
+	const normalizedStatus = normalizeQuarantineStatus(activeAgent.quarantineStatus);
+	if (normalizedStatus === 'approved') {
+		const approvedBy = activeAgent.quarantineApprovedBy?.trim();
+		return [{
+			id: 'identity-note-quarantine-approved',
+			title: 'Publishing quarantine was dismissed',
+			summary: activeAgent.quarantineApprovedAt
+				? `${approvedBy ? `${approvedBy} cleared the hold ` : 'The hold was cleared '}${formatFaceDate(activeAgent.quarantineApprovedAt)}.`
+				: 'The current body is clear to publish publicly.',
+			tone: 'success',
+		}];
+	}
+
+	if (normalizedStatus === 'expired') {
+		return [{
+			id: 'identity-note-quarantine-expired',
+			title: 'Publishing quarantine expired',
+			summary: activeAgent.quarantineEnd
+				? `The original restriction window ended ${formatFaceDate(activeAgent.quarantineEnd)}.`
+				: 'The original restriction window has ended.',
+			tone: 'accent',
+		}];
+	}
+
+	return [];
+}
+
+function normalizeQuarantineStatus(value?: string | null): string {
+	return value?.trim().toLowerCase() ?? '';
+}
+
+function formatFaceDate(value?: string | null): string {
+	if (!value) return 'recently';
+
+	const parsed = new Date(value);
+	if (Number.isNaN(parsed.getTime())) return value;
+
+	return parsed.toLocaleDateString('en-US', {
+		month: 'short',
+		day: 'numeric',
+		year: 'numeric',
+	});
 }
 
 function buildMetrics(
