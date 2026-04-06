@@ -21,6 +21,14 @@
 			"$app/paths": ["src/facetheory/shims/app-paths.ts"]
 		}
 	},
-	"include": ["src/**/*.d.ts", "src/**/*.ts", "src/**/*.svelte", "vite.config.ts", "svelte.config.js"],
+	"include": [
+		"src/**/*.d.ts",
+		"src/**/*.ts",
+		"src/**/*.svelte",
+		"tests/**/*.ts",
+		"vite.config.ts",
+		"playwright.config.ts",
+		"svelte.config.js"
+	],
 	"exclude": ["build", "dist", "node_modules", "src/routes/**/*"]
 }
