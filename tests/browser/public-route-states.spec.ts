@@ -1,3 +1,5 @@
+import { expect } from '@playwright/test';
+
 import { test } from './_harness/fixtures';
 import {
 	expectExploreEmpty,

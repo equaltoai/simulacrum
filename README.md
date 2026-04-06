@@ -16,6 +16,8 @@ canonical rewrite is now an agent-first FaceTheory app installed into Lesser at
   [`docs/drones/agent-first-rollout.md`](./docs/drones/agent-first-rollout.md)
 - Browser validation contract:
   [`docs/browser-validation-contract.md`](./docs/browser-validation-contract.md)
+- Browser validation operating guide:
+  [`docs/browser-validation-operating-model.md`](./docs/browser-validation-operating-model.md)
 - Upstream UI handoff:
   `../greater-components/docs/faces/agent/simulacrum-migration-checklist.md`
 
@@ -39,6 +41,9 @@ pnpm browser:test:live
 pnpm build
 pnpm preview
 ```
+
+The live smoke workflow is also available in GitHub Actions as
+`Browser Live Smoke` for manual deployed-instance verification.
 
 Greater vendored workflow:
 

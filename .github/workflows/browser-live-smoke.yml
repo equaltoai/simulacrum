@@ -1,0 +1,97 @@
+name: Browser Live Smoke
+
+# Intentionally manual-only for now. The live suite still exercises deployed
+# public content and network conditions, so we want explicit opt-in runs before
+# deciding whether a scheduled cadence is quiet enough to be useful.
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: Comma-separated live base URLs to smoke
+        required: false
+        default: https://dev.simulacrum.greater.website,https://dev.theory.greater.website
+      live_status_id:
+        description: Optional fixed status id for the live status route scenario
+        required: false
+      live_profile_identifier:
+        description: Optional fixed profile identifier for the live profile scenario
+        required: false
+      live_profile_actor_id:
+        description: Optional fixed actor id to pair with the profile identifier
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-live-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Run Live Browser Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: true
+      BROWSER_TEST_LIVE_TARGETS: ${{ inputs.targets }}
+      BROWSER_TEST_LIVE_STATUS_ID: ${{ inputs.live_status_id }}
+      BROWSER_TEST_LIVE_PROFILE_IDENTIFIER: ${{ inputs.live_profile_identifier }}
+      BROWSER_TEST_LIVE_PROFILE_ACTOR_ID: ${{ inputs.live_profile_actor_id }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run live browser smoke
+        run: pnpm browser:test:live
+
+      - name: Append browser summaries to workflow summary
+        if: always()
+        shell: bash
+        run: |
+          shopt -s nullglob
+          summaries=(artifacts/browser/*/summary.md)
+          if [ ${#summaries[@]} -eq 0 ]; then
+            echo "No browser summary files were generated." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "## Browser Live Smoke"
+            echo
+            echo "- Targets: ${BROWSER_TEST_LIVE_TARGETS}"
+            echo "- Ref: ${GITHUB_REF}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for summary in "${summaries[@]}"; do
+            run_dir="$(dirname "$summary")"
+            echo >> "$GITHUB_STEP_SUMMARY"
+            echo "### ${run_dir#artifacts/browser/}" >> "$GITHUB_STEP_SUMMARY"
+            cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload browser artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-live-smoke-${{ github.run_id }}
+          path: artifacts/browser
+          if-no-files-found: warn
+          retention-days: 14
