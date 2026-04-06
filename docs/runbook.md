@@ -211,6 +211,16 @@ Expected:
 - HTML references `/l/_assets/...`
 - `/auth/login` still resolves correctly on the same domain
 
+After the deploy-level checks pass, run the public browser smoke either:
+
+- locally with `pnpm browser:test:live`
+- remotely with the manual GitHub Actions workflow
+  `.github/workflows/browser-live-smoke.yml`
+
+The browser-suite operating guide and API-boundary notes live in:
+
+- [`docs/browser-validation-operating-model.md`](./browser-validation-operating-model.md)
+
 Confirm the active install recorded in the local receipt:
 
 Simulacrum dev:
