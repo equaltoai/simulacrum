@@ -1,10 +1,13 @@
 import { test, expect } from './_harness/fixtures';
 import {
 	expectExploreReady,
+	expectPublicRouteLoading,
 	expectPublicRouteShell,
 } from './_harness/publicAssertions';
 import { gotoPublicRoute } from './_harness/publicRoutes';
-import { buildMockStatus, mockPublicGraphQL } from './_harness/publicGraphqlMocks';
+import { buildMockStatus, delayPublicGraphQL, mockPublicGraphQL } from './_harness/publicGraphqlMocks';
+
+const LOADING_DELAY_MS = 150;
 
 test.describe('public explore', () => {
 	test('renders the shell and settles into a deterministic public timeline', async ({ page }) => {
@@ -22,16 +25,12 @@ test.describe('public explore', () => {
 				statuses: [status],
 			},
 		});
-
-		await page.route('**/api/graphql', async (route) => {
-			await page.waitForTimeout(150);
-			await route.fallback();
-		});
+		await delayPublicGraphQL(page, LOADING_DELAY_MS);
 
 		await gotoPublicRoute(page, 'explore');
 
 		await expectPublicRouteShell(page, 'explore');
-		await expect(page.getByTestId('public-route-loading')).toBeVisible();
+		await expectPublicRouteLoading(page, 'explore');
 
 		await expectExploreReady(page);
 		await expect(page.getByTestId('public-explore-timeline')).toBeVisible();

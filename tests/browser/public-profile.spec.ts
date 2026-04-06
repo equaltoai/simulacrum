@@ -1,9 +1,11 @@
 import { expect } from '@playwright/test';
 
 import { test } from './_harness/fixtures';
-import { expectProfileReady } from './_harness/publicAssertions';
-import { buildMockActor, buildMockStatus, mockPublicGraphQL } from './_harness/publicGraphqlMocks';
+import { expectProfileReady, expectPublicRouteLoading } from './_harness/publicAssertions';
+import { buildMockActor, buildMockStatus, delayPublicGraphQL, mockPublicGraphQL } from './_harness/publicGraphqlMocks';
 import { gotoPublicRoute } from './_harness/publicRoutes';
+
+const LOADING_DELAY_MS = 150;
 
 test.describe('public profile route', () => {
 	test('renders deterministic public identity and timeline content once ready', async ({ page }) => {
@@ -51,9 +53,11 @@ test.describe('public profile route', () => {
 			actorProfile: { actor },
 			actorTimeline: { statuses: timelineStatuses },
 		});
+		await delayPublicGraphQL(page, LOADING_DELAY_MS);
 
 		await gotoPublicRoute(page, 'profile', '/l/profile/harness-profile');
 
+		await expectPublicRouteLoading(page, 'profile');
 		await expectProfileReady(page);
 		await expect(
 			page.getByTestId('public-profile-header').getByRole('heading', { level: 2, name: 'Harness Profile' })

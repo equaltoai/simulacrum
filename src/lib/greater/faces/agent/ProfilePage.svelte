@@ -62,6 +62,11 @@
 		window.location.assign(buildPublicStatusHref(status.id));
 	}
 
+	function isProfileNotFoundError(err: unknown): boolean {
+		const message = err instanceof Error ? err.message : String(err);
+		return message === 'Account not found' || message === 'Profile not found';
+	}
+
 	$effect(() => {
 		const accessToken = $authSession?.accessToken ?? null;
 		const request = resolveProfileRequest();
@@ -102,7 +107,12 @@
 					hasLoaded = true;
 				} catch (err) {
 					if (err instanceof DOMException && err.name === 'AbortError') return;
-					error = err instanceof Error ? err.message : String(err);
+					if (isProfileNotFoundError(err)) {
+						account = null;
+						items = [];
+					} else {
+						error = err instanceof Error ? err.message : String(err);
+					}
 					hasLoaded = true;
 				} finally {
 					if (!controller.signal.aborted) {
