@@ -21,6 +21,11 @@
 	let hasLoaded = $state(false);
 	let error = $state<string | null>(null);
 
+	const showLoading = $derived(isLoading || !hasLoaded);
+	const showError = $derived(Boolean(error));
+	const showEmpty = $derived(!showLoading && !showError && items.length === 0);
+	const showReady = $derived(!showLoading && !showError && items.length > 0);
+
 	function handleStatusClick(status: Status) {
 		if (typeof window === 'undefined') return;
 		window.location.assign(buildPublicStatusHref(status.id));
@@ -70,21 +75,40 @@
 	actions={data.actions}
 	statusChips={data.statusChips}
 	metrics={data.metrics}
+	heroTestId="public-route-hero"
 	class={className}
 >
 	{#snippet children()}
-		<div class="explore-page">
-			{#if error}
-				<div class="explore-page__notice explore-page__notice--error" role="alert">{error}</div>
-			{/if}
-
-			{#if isLoading || !hasLoaded}
-				<div class="explore-page__notice">Loading public timeline...</div>
-			{:else if items.length === 0}
-				<div class="explore-page__notice">No public posts available yet.</div>
-			{:else}
-				<TimelineVirtualizedReactive {items} onStatusClick={handleStatusClick} />
-			{/if}
+		<div data-testid="public-route" data-route-key="explore">
+			<div class="explore-page" data-testid="public-explore-route">
+				{#if showError}
+					<div
+						class="explore-page__notice explore-page__notice--error"
+						role="alert"
+						data-testid="public-route-error"
+					>
+						{error}
+					</div>
+				{:else if showLoading}
+					<div class="explore-page__notice" data-testid="public-route-loading">
+						Loading public timeline...
+					</div>
+				{:else if showEmpty}
+					<div class="explore-page__notice" data-testid="public-route-empty">
+						No public posts available yet.
+					</div>
+				{:else if showReady}
+					<div data-testid="public-route-ready">
+						<TimelineVirtualizedReactive
+							{items}
+							onStatusClick={handleStatusClick}
+							testId="public-explore-timeline"
+							statusCardTestId="public-status-card"
+							statusCardDataStatusId={true}
+						/>
+					</div>
+				{/if}
+			</div>
 		</div>
 	{/snippet}
 </AgentFaceFrame>

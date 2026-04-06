@@ -16,6 +16,7 @@
 		actions?: readonly AgentFaceAction[];
 		statusChips?: readonly AgentFaceStatusChip[];
 		metrics?: readonly AgentFaceMetric[];
+		heroTestId?: string;
 		children?: Snippet;
 		side?: Snippet;
 		class?: string;
@@ -28,6 +29,7 @@
 		actions = [],
 		statusChips = [],
 		metrics = [],
+		heroTestId,
 		children,
 		side,
 		class: className = '',
@@ -90,7 +92,7 @@
 	{/if}
 
 	<div class="agent-face-frame__content">
-		<header class="agent-face-frame__hero">
+		<header class="agent-face-frame__hero" data-testid={heroTestId}>
 			<div class="agent-face-frame__hero-copy">
 				<p class="agent-face-frame__eyebrow">{hero.eyebrow}</p>
 				<h1>{hero.title}</h1>
