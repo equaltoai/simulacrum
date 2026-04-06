@@ -17,6 +17,7 @@
 		"api:test": "node scripts/api-test.mjs",
 		"browser:test": "playwright test",
 		"browser:test:headed": "playwright test --headed",
+		"browser:test:live": "node scripts/browser-test-live.mjs",
 		"browser:test:ui": "playwright test --ui",
 		"test": "node --test tests/api/_harness/redact.test.mjs"
 	},

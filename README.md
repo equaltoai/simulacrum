@@ -35,6 +35,7 @@ pnpm install
 pnpm dev
 pnpm check
 pnpm browser:test
+pnpm browser:test:live
 pnpm build
 pnpm preview
 ```
