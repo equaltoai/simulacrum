@@ -1,12 +1,12 @@
 import type { Page, Route } from '@playwright/test';
 
-type DeepPartial<T> = {
-	[K in keyof T]?: T[K] extends (infer U)[]
-		? DeepPartial<U>[]
-		: T[K] extends object | null | undefined
-			? DeepPartial<NonNullable<T[K]>>
-			: T[K];
-};
+type DeepPartial<T> = T extends (infer U)[]
+	? DeepPartial<U>[]
+	: T extends object
+		? {
+				[K in keyof T]?: DeepPartial<T[K]>;
+			}
+		: T;
 
 type GraphQLMockOperation = 'timeline' | 'actorProfile' | 'threadContext';
 
