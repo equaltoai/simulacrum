@@ -1,15 +1,20 @@
-# Simulacrum Instance Frontend Runbook
+# Simulacrum Client Deploy Runbook
 
 This runbook covers building and deploying the current FaceTheory app served at
-`/l/*` to the existing Simulacrum dev stage.
+`/l/*` to Lesser dev-stage instances. Today we actively target:
+
+- `simulacrum` at `https://dev.simulacrum.greater.website/l/`
+- `theory` at `https://dev.theory.greater.website/l/`
 
 ## Current deploy path
 
 Simulacrum now ships through the installed-client flow:
 
 - build outputs live under `build/server` and `build/client`
-- the install manifest is `facetheory.lesser.json`
 - deployment uses `lesser client install`
+- the checked-in manifest template is `facetheory.lesser.json`
+- other Lesser instances should use an instance-specific manifest whose
+  `app_name` matches the target instance slug
 
 The old static upload path is retired:
 
@@ -20,12 +25,17 @@ The old static upload path is retired:
 
 ## Prereqs
 
-- AWS access via `AWS_PROFILE=Sim`
-- an existing dev receipt at
-  `~/.lesser/simulacrum/simulacrum.greater.website/state.json`
+- AWS access for the target instance profile
 - `node >= 24`
 - `pnpm`
 - `curl`
+
+Current dev-stage targets:
+
+| app slug | base domain | stage URL | AWS profile | local receipt |
+| --- | --- | --- | --- | --- |
+| `simulacrum` | `simulacrum.greater.website` | `https://dev.simulacrum.greater.website` | `Sim` | `~/.lesser/simulacrum/simulacrum.greater.website/state.json` |
+| `theory` | `theory.greater.website` | `https://dev.theory.greater.website` | `Theory` | `~/.lesser/theory/theory.greater.website/state.json` |
 
 If the receipt is missing, bootstrap or refresh the stage from the `lesser`
 repo before attempting a client install.
@@ -99,10 +109,47 @@ Expected artifacts:
 - `build/client/assets/*`
 - `facetheory.lesser.json`
 
+## Render an instance-specific install manifest
+
+The checked-in `facetheory.lesser.json` is the default manifest for the
+`simulacrum` instance. When deploying the same client to another Lesser
+instance, render a manifest whose `app_name` matches that instance slug.
+
+Simulacrum dev:
+
+```bash
+node scripts/render-install-manifest.mjs \
+  --app simulacrum \
+  --display-name Simulacrum \
+  --out ./facetheory.simulacrum.lesser.json
+```
+
+Theory dev:
+
+```bash
+node scripts/render-install-manifest.mjs \
+  --app theory \
+  --display-name Theory \
+  --out ./facetheory.theory.lesser.json
+```
+
+Expected:
+
+- the rendered manifest keeps the shared build/server/assets paths
+- `app_name` matches the Lesser instance slug you will install to
+- `display_name` is instance-appropriate for receipts and install metadata
+
+Keep rendered manifests at the repo root so `lesser client install` resolves the
+app root correctly. The generated `facetheory.<app>.lesser.json` files are
+gitignored. You can also use the checked-in `facetheory.lesser.json` directly
+for the `simulacrum` instance if you do not need a separate output file.
+
 ## Deploy to dev
 
 If you just ran `pnpm build`, use `--skip-build` so the CLI installs the
 artifacts you already validated locally:
+
+Simulacrum dev:
 
 ```bash
 "$HOME/.local/bin/lesser" client install \
@@ -111,6 +158,18 @@ artifacts you already validated locally:
   --aws-profile Sim \
   --stage dev \
   --config ./facetheory.lesser.json \
+  --skip-build
+```
+
+Theory dev:
+
+```bash
+"$HOME/.local/bin/lesser" client install \
+  --app theory \
+  --base-domain theory.greater.website \
+  --aws-profile Theory \
+  --stage dev \
+  --config ./facetheory.theory.lesser.json \
   --skip-build
 ```
 
@@ -129,10 +188,20 @@ What this does:
 
 Check the app root, a deep FaceTheory route, and auth:
 
+Simulacrum dev:
+
 ```bash
 curl -i -sS https://dev.simulacrum.greater.website/l/ | sed -n '1,40p'
 curl -i -sS https://dev.simulacrum.greater.website/l/identity | sed -n '1,40p'
 curl -i -sS https://dev.simulacrum.greater.website/auth/login | sed -n '1,40p'
+```
+
+Theory dev:
+
+```bash
+curl -i -sS https://dev.theory.greater.website/l/ | sed -n '1,40p'
+curl -i -sS https://dev.theory.greater.website/l/identity | sed -n '1,40p'
+curl -i -sS https://dev.theory.greater.website/auth/login | sed -n '1,40p'
 ```
 
 Expected:
@@ -144,8 +213,16 @@ Expected:
 
 Confirm the active install recorded in the local receipt:
 
+Simulacrum dev:
+
 ```bash
 sed -n '1,220p' ~/.lesser/simulacrum/simulacrum.greater.website/state.json
+```
+
+Theory dev:
+
+```bash
+sed -n '1,220p' ~/.lesser/theory/theory.greater.website/state.json
 ```
 
 Look for:

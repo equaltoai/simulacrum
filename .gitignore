@@ -8,6 +8,8 @@ node_modules
 /.svelte-kit
 /build
 /dist
+/facetheory.*.lesser.json
+!/facetheory.lesser.json
 
 # OS
 .DS_Store

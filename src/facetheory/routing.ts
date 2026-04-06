@@ -16,6 +16,15 @@ const PAGE_DEFINITIONS: Record<AppPageKey, AppPageDescriptor> = {
 			'Track the active drone-to-soul lifecycle, continuity posture, and post-graduation follow-through from one canonical surface.',
 		requiresAuth: true,
 	},
+	drones: {
+		key: 'drones',
+		path: '/drones',
+		title: 'Drone Bodies',
+		eyebrow: 'Body creation and stewardship',
+		summary:
+			'Create local drone bodies, manage the roster, and hand soul attachment off to each body\'s Identity page.',
+		requiresAuth: true,
+	},
 	souls: {
 		key: 'souls',
 		path: '/souls',
@@ -51,7 +60,7 @@ const PAGE_DEFINITIONS: Record<AppPageKey, AppPageDescriptor> = {
 		title: 'Identity Nexus',
 		eyebrow: 'Continuity and attribution',
 		summary:
-			'Show what changed, what stayed continuous, and how the resulting soul remains reachable and accountable after graduation.',
+			'Show what changed, what stayed continuous, and bind or inspect the soul that gives this body its accountable identity.',
 		requiresAuth: true,
 	},
 	timeline: {
@@ -154,6 +163,8 @@ export function resolvePage(pathname: string): AppPageDescriptor {
 	switch (route) {
 		case '/':
 			return PAGE_DEFINITIONS.dashboard;
+		case '/drones':
+			return PAGE_DEFINITIONS.drones;
 		case '/souls':
 			return PAGE_DEFINITIONS.souls;
 		case '/souls/genesis':

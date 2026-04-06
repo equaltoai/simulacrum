@@ -227,6 +227,12 @@ export interface DroneAgentState {
 	verifiedAt?: string | null;
 	createdAt: string;
 	activityCount: number;
+	quarantineStatus?: string | null;
+	quarantineStart?: string | null;
+	quarantineEnd?: string | null;
+	quarantineApprovedBy?: string | null;
+	quarantineApprovedAt?: string | null;
+	quarantineActive: boolean;
 	identitySemantics: AgentIdentitySemantics;
 	workflow?: AgentWorkflowSurface | null;
 }
@@ -560,6 +566,12 @@ const DRONE_AGENT_FIELDS = `
 	verifiedAt
 	createdAt
 	activityCount
+	quarantineStatus
+	quarantineStart
+	quarantineEnd
+	quarantineApprovedBy
+	quarantineApprovedAt
+	quarantineActive
 	identitySemantics {
 		${AGENT_IDENTITY_SEMANTICS_FIELDS}
 	}

@@ -14,6 +14,7 @@
 	import ExplorePage from '$lib/greater/faces/agent/ExplorePage.svelte';
 	import ProfilePage from '$lib/greater/faces/agent/ProfilePage.svelte';
 	import StatusPage from '$lib/greater/faces/agent/StatusPage.svelte';
+	import type { AgentFaceBaseData } from '$lib/greater/faces/agent';
 	import {
 		authSession,
 		clearAuthSession,
@@ -24,7 +25,10 @@
 	} from '$lib/auth/session';
 
 	import FinalizeSigningPanel from './components/FinalizeSigningPanel.svelte';
+	import DronesPage from './components/DronesPage.svelte';
 	import HostTokenPanel from './components/HostTokenPanel.svelte';
+	import IdentityQuarantinePanel from './components/IdentityQuarantinePanel.svelte';
+	import IdentitySoulBindingPanel from './components/IdentitySoulBindingPanel.svelte';
 	import MintConversationPanel from './components/MintConversationPanel.svelte';
 	import SoulRequestActionPanel from './components/SoulRequestActionPanel.svelte';
 	import {
@@ -102,6 +106,22 @@
 		statusChips: [],
 		metrics: [],
 	});
+
+	const dronesPageData = $derived({
+		hero: {
+			eyebrow: currentPage.eyebrow,
+			title: currentPage.title,
+			summary: currentPage.summary,
+		},
+		brand: appState.faces.dashboard.brand,
+		navItems: appState.faces.dashboard.navItems,
+		actions: appState.faces.dashboard.actions,
+		statusChips: appState.faces.dashboard.statusChips,
+		metrics: appState.faces.dashboard.metrics,
+		agentCount: appState.agentCount,
+		soulCount: appState.soulCount,
+		currentUserName: appState.currentUserName,
+	} satisfies AgentFaceBaseData & { agentCount: number; soulCount: number; currentUserName?: string });
 
 	$effect(() => {
 		if (!isAuthenticated) {
@@ -292,6 +312,8 @@
 			<div class="ft-shell__stage">
 				{#if currentPage.key === 'dashboard' || currentPage.key === 'not-found'}
 					<NexusDashboard data={appState.faces.dashboard} />
+				{:else if currentPage.key === 'drones'}
+					<DronesPage data={dronesPageData} onUpdated={refreshLiveState} />
 				{:else if currentPage.key === 'souls'}
 					<SoulRequestCenter data={appState.faces.souls} />
 				{:else if currentPage.key === 'genesis'}
@@ -321,6 +343,16 @@
 
 			<section class="ft-shell__panels">
 				{#if isAuthenticated}
+					{#if currentPage.key === 'identity'}
+						<IdentityQuarantinePanel agent={appState.activeAgent} onUpdated={refreshLiveState} />
+						<IdentitySoulBindingPanel
+							boundSoulAgentId={appState.actionContext.activeSoulAgentId}
+							displayName={appState.activeAgent?.displayName ?? null}
+							onUpdated={refreshLiveState}
+							username={appState.actionContext.activeUsername}
+						/>
+					{/if}
+
 					{#if HOST_WORKFLOW_BRIDGE_ENABLED}
 						<HostTokenPanel
 							busy={busy}
