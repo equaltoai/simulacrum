@@ -316,6 +316,13 @@ async function fulfillOperation(route: Route, operation: GraphQLMockOperation, s
 	}
 }
 
+export async function delayPublicGraphQL(page: Page, delayMs: number) {
+	await page.route('**/api/graphql', async (route) => {
+		await page.waitForTimeout(delayMs);
+		await route.fallback();
+	});
+}
+
 export async function mockPublicGraphQL(page: Page, scenario: GraphQLMockScenario) {
 	await page.route('**/api/graphql', async (route) => {
 		const postData = route.request().postDataJSON() as { query?: string } | null;

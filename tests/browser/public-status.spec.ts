@@ -1,34 +1,13 @@
-import type { Page } from '@playwright/test';
-
 import { test, expect } from './_harness/fixtures';
-import { expectPublicRouteShell, expectStatusReady } from './_harness/publicAssertions';
-import { buildMockStatus, mockPublicGraphQL } from './_harness/publicGraphqlMocks';
+import {
+	expectPublicRouteLoading,
+	expectPublicRouteShell,
+	expectStatusReady,
+} from './_harness/publicAssertions';
+import { buildMockStatus, delayPublicGraphQL, mockPublicGraphQL } from './_harness/publicGraphqlMocks';
 import { gotoPublicRoute } from './_harness/publicRoutes';
 
-async function installGraphqlFetchDelay(page: Page, pageDelayMs: number) {
-	await page.addInitScript(
-		({ delayMs }: { delayMs: number }) => {
-			const originalFetch = window.fetch.bind(window);
-
-			window.fetch = async (...args) => {
-				const request = args[0] as Request | string | URL;
-				const url =
-					typeof request === 'string'
-						? request
-						: request instanceof URL
-							? request.toString()
-							: request.url;
-
-				if (url.includes('/api/graphql')) {
-					await new Promise((resolve) => setTimeout(resolve, delayMs));
-				}
-
-				return originalFetch(...args);
-			};
-		},
-		{ delayMs: pageDelayMs }
-	);
-}
+const LOADING_DELAY_MS = 150;
 
 test.describe('public status route', () => {
 	test('renders the shell, loading state, and deterministic thread content', async ({ page }) => {
@@ -81,7 +60,6 @@ test.describe('public status route', () => {
 			},
 		});
 
-		await installGraphqlFetchDelay(page, 250);
 		await mockPublicGraphQL(page, {
 			threadContext: {
 				rootNote: rootStatus,
@@ -89,10 +67,11 @@ test.describe('public status route', () => {
 				descendants: [descendantStatus],
 			},
 		});
+		await delayPublicGraphQL(page, LOADING_DELAY_MS);
 
 		await gotoPublicRoute(page, 'status', `/l/status/${rootStatus.id}`);
 		await expectPublicRouteShell(page, 'status');
-		await expect(page.getByTestId('public-route-loading')).toBeVisible();
+		await expectPublicRouteLoading(page, 'status');
 
 		await expectStatusReady(page);
 		await expect(page.getByTestId('public-route-ready')).toBeVisible();

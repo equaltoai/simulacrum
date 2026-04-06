@@ -24,8 +24,14 @@ export async function gotoPublicRoute(page: Page, routeKey: PublicRouteKey, path
 	await page.goto(pathname ?? PUBLIC_ROUTE_PATHS[routeKey]);
 }
 
-export async function simulatePublicGraphQLFailure(page: Page) {
+export async function simulatePublicGraphQLFailure(
+	page: Page,
+	options: { delayMs?: number } = {}
+) {
 	await page.route('**/api/graphql', async (route) => {
+		if (options.delayMs) {
+			await page.waitForTimeout(options.delayMs);
+		}
 		await route.abort('failed');
 	});
 }

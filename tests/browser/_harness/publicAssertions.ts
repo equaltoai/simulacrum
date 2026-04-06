@@ -146,6 +146,38 @@ export async function expectPublicRouteError(page: Page, routeKey: PublicRouteKe
 	await expect(page.getByRole('alert').first()).toBeVisible();
 }
 
+export async function expectPublicRouteLoading(page: Page, routeKey: PublicRouteKey) {
+	const routeRoot = routeRootLocator(page, routeKey);
+	if ((await routeRoot.count()) > 0) {
+		await expect(routeRoot.getByTestId('public-route-loading').first()).toBeVisible();
+		return;
+	}
+
+	await expect(page.getByText(PUBLIC_ROUTE_LOADING_TEXT[routeKey], { exact: true })).toBeVisible();
+}
+
+export async function expectPublicRouteNotFound(page: Page, routeKey: PublicRouteKey) {
+	const state = await waitForPublicRouteSettlement(page, routeKey);
+	expect(state).toBe('not-found');
+	const routeRoot = routeRootLocator(page, routeKey);
+	if ((await routeRoot.count()) > 0) {
+		await expect(routeRoot.getByTestId('public-route-not-found').first()).toBeVisible();
+		return;
+	}
+
+	const fallbackText = routeKey === 'profile' ? 'Profile not found.' : 'Post not found.';
+	await expect(page.getByText(fallbackText, { exact: true })).toBeVisible();
+}
+
+export async function expectExploreEmpty(page: Page) {
+	const state = await waitForPublicRouteSettlement(page, 'explore');
+	expect(state).toBe('empty');
+	if ((await routeRootLocator(page, 'explore').count()) > 0) {
+		await expect(page.getByTestId('public-route-empty')).toBeVisible();
+	}
+	await expect(page.getByText('No public posts available yet.', { exact: true })).toBeVisible();
+}
+
 export async function expectExploreReady(page: Page) {
 	const state = await waitForPublicRouteSettlement(page, 'explore');
 	expect(state).toBe('ready');
@@ -164,6 +196,13 @@ export async function expectProfileReady(page: Page) {
 		await expect(page.getByTestId('public-profile-stats')).toBeVisible();
 	}
 	await expect(page.getByRole('link', { name: 'Canonical profile link' })).toBeVisible();
+}
+
+export async function expectProfileReadyEmptyPosts(page: Page) {
+	await expectProfileReady(page);
+	await expect(page.getByTestId('public-profile-empty-posts')).toBeVisible();
+	await expect(page.getByTestId('public-profile-timeline')).toHaveCount(0);
+	await expect(page.getByTestId('public-status-card')).toHaveCount(0);
 }
 
 export async function expectStatusReady(page: Page) {
