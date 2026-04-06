@@ -36,3 +36,6 @@ nohup.out
 
 # API test artifacts
 /artifacts/api
+
+# Browser test artifacts
+/artifacts/browser

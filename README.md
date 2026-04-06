@@ -34,6 +34,7 @@ The rewrite must:
 pnpm install
 pnpm dev
 pnpm check
+pnpm browser:test
 pnpm build
 pnpm preview
 ```
