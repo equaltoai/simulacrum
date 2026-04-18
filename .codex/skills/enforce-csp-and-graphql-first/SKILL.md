@@ -1,6 +1,6 @@
 ---
 name: enforce-csp-and-graphql-first
-description: Use when a change touches CSP compliance (inline scripts / styles / event handlers / third-party origins / unsafe-eval) or GraphQL-first discipline (new REST paths, REST leaking into data operations). Walks the dual constraint: strict CSP on built bundle + GraphQL-first with REST only for auth. Loosening either is refused without explicit governance authorization.
+description: Use when a change touches CSP compliance (inline scripts / styles / event handlers / third-party origins / unsafe-eval) or GraphQL-first discipline (new REST paths, REST leaking into data operations). Walks the dual constraint strict CSP on built bundle + GraphQL-first with REST only for auth. Loosening either is refused without explicit governance authorization.
 ---
 
 # Enforce CSP and GraphQL-first
@@ -128,32 +128,39 @@ If not:
 ## CSP + GraphQL-first audit: <change name>
 
 ### Proposed change
+
 <concrete description>
 
 ### CSP dimension
+
 - CSP surface affected: <inline script / inline style / inline event handler / third-party origin / unsafe-eval / connect-src addition / none>
 - Classification: <compliant / violating / legitimate expansion (e.g. new API origin)>
 - For violating: refuse or explicit governance authorization with sunset?
 - For dependency-forced loosening: replace / upstream route / scoped exception?
 
 ### GraphQL-first dimension
+
 - REST surface affected: <auth only / proposed data REST / none>
 - Classification: <auth-only (fine) / data-REST (refuse; route upstream to lesser)>
 - For data-REST: upstream route to lesser identified?
 
 ### Build-time verification
+
 - `pnpm build` output passes CSP validation: <confirmed>
 - CSP headers correct in served bundle: <confirmed against install manifest>
 
 ### CI verification
+
 - CI CSP-validation job green: <confirmed>
 
 ### Consumer-of-the-frontend impact
+
 - Users on simulacrum dev instance: <CSP strict — browsers enforce>
 - Users on theory dev instance: <same>
 - LLM bot accounts: <same; bots interact via auth + GraphQL>
 
 ### Proposed next skill
+
 <enumerate-changes if audit clean; route-upstream-issue if upstream fix needed; scope-need if audit surfaces scope growth; investigate-issue if audit reveals existing CSP / GraphQL-first violation>
 ```
 
