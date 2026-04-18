@@ -2,17 +2,21 @@ import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+const INLINE_SCRIPT_TAG_PATTERN = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+const SCRIPT_OPEN_TAG_PATTERN = /<script\b([^>]*)>/gi;
+const SCRIPT_SRC_ATTRIBUTE_PATTERN = /\bsrc\s*=/i;
+
 function hashContent(value) {
 	return createHash('sha256').update(value).digest('hex').slice(0, 12);
 }
 
 function findBootstrapScript(html) {
-	const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+	const scripts = [...html.matchAll(INLINE_SCRIPT_TAG_PATTERN)];
 	for (const match of scripts) {
-		if (match[1]?.includes('__sveltekit_')) {
+		if (match[2]?.includes('__sveltekit_')) {
 			return {
 				fullMatch: match[0],
-				content: match[1],
+				content: match[2],
 				index: match.index ?? -1,
 			};
 		}
@@ -21,8 +25,8 @@ function findBootstrapScript(html) {
 }
 
 function hasInlineScripts(html) {
-	const tags = [...html.matchAll(/<script\b([^>]*)>/g)];
-	return tags.some((match) => !/\bsrc\s*=/.test(match[1] ?? ''));
+	const tags = [...html.matchAll(SCRIPT_OPEN_TAG_PATTERN)];
+	return tags.some((match) => !SCRIPT_SRC_ATTRIBUTE_PATTERN.test(match[1] ?? ''));
 }
 
 async function deleteOldBootstraps(assetsDir) {
@@ -73,4 +77,3 @@ if (hasInlineScripts(updatedHtml)) {
 
 await writeFile(indexPath, updatedHtml, { encoding: 'utf8' });
 console.log(`externalize-sveltekit-bootstrap: wrote _assets/${fileName}`);
-
