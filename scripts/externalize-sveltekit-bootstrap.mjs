@@ -6,23 +6,74 @@ function hashContent(value) {
 	return createHash('sha256').update(value).digest('hex').slice(0, 12);
 }
 
+function findCaseInsensitiveIndex(haystack, needle, fromIndex = 0) {
+	return haystack.toLowerCase().indexOf(needle.toLowerCase(), fromIndex);
+}
+
+function isTagNameBoundary(character) {
+	return !character || /\s|\/|>/.test(character);
+}
+
+function hasSrcAttribute(openTag) {
+	return /\bsrc\s*=/.test(openTag);
+}
+
 function findBootstrapScript(html) {
-	const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
-	for (const match of scripts) {
-		if (match[1]?.includes('__sveltekit_')) {
+	let searchIndex = 0;
+	while (searchIndex < html.length) {
+		const scriptIndex = findCaseInsensitiveIndex(html, '<script', searchIndex);
+		if (scriptIndex < 0) break;
+		const tagNameEnd = scriptIndex + '<script'.length;
+		if (!isTagNameBoundary(html[tagNameEnd])) {
+			searchIndex = tagNameEnd;
+			continue;
+		}
+
+		const openTagEnd = html.indexOf('>', tagNameEnd);
+		if (openTagEnd < 0) break;
+
+		const closeTagStart = findCaseInsensitiveIndex(html, '</script', openTagEnd + 1);
+		if (closeTagStart < 0) break;
+
+		const closeTagEnd = html.indexOf('>', closeTagStart + '</script'.length);
+		if (closeTagEnd < 0) break;
+
+		const fullMatch = html.slice(scriptIndex, closeTagEnd + 1);
+		const content = html.slice(openTagEnd + 1, closeTagStart);
+		if (content.includes('__sveltekit_')) {
 			return {
-				fullMatch: match[0],
-				content: match[1],
-				index: match.index ?? -1,
+				fullMatch,
+				content,
+				index: scriptIndex,
 			};
 		}
+
+		searchIndex = closeTagEnd + 1;
 	}
 	return null;
 }
 
 function hasInlineScripts(html) {
-	const tags = [...html.matchAll(/<script\b([^>]*)>/g)];
-	return tags.some((match) => !/\bsrc\s*=/.test(match[1] ?? ''));
+	let searchIndex = 0;
+	while (searchIndex < html.length) {
+		const scriptIndex = findCaseInsensitiveIndex(html, '<script', searchIndex);
+		if (scriptIndex < 0) return false;
+
+		const tagNameEnd = scriptIndex + '<script'.length;
+		if (!isTagNameBoundary(html[tagNameEnd])) {
+			searchIndex = tagNameEnd;
+			continue;
+		}
+
+		const openTagEnd = html.indexOf('>', tagNameEnd);
+		if (openTagEnd < 0) return false;
+
+		const openTag = html.slice(scriptIndex, openTagEnd + 1);
+		if (!hasSrcAttribute(openTag)) return true;
+
+		searchIndex = openTagEnd + 1;
+	}
+	return false;
 }
 
 async function deleteOldBootstraps(assetsDir) {
@@ -73,4 +124,3 @@ if (hasInlineScripts(updatedHtml)) {
 
 await writeFile(indexPath, updatedHtml, { encoding: 'utf8' });
 console.log(`externalize-sveltekit-bootstrap: wrote _assets/${fileName}`);
-

@@ -4,16 +4,17 @@ import { writable } from 'svelte/store';
 import { createPkcePair, generateRandomString } from './pkce';
 
 export const DEFAULT_OAUTH_SCOPE = 'read write follow';
+const PUBLIC_TOKEN_ENDPOINT_AUTH_METHOD: TokenEndpointAuthMethod = 'none';
+const ADMIN_OAUTH_SCOPE = `${DEFAULT_OAUTH_SCOPE} admin`;
 
 type TokenEndpointAuthMethod = 'client_secret_post' | 'client_secret_basic' | 'none';
+type OAuthClientCacheBucket = 'default' | 'admin';
 
 type StoredOAuthClient = {
 	clientId: string;
-	clientSecret?: string;
 	redirectUri: string;
-	scope: string;
 	createdAt: number;
-	tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
+	tokenEndpointAuthMethod: TokenEndpointAuthMethod;
 };
 
 export type AuthSession = {
@@ -28,7 +29,9 @@ export type AuthSession = {
 
 const STORAGE_KEYS = {
 	session: 'simulacrum:auth_session',
-	oauthClient: 'simulacrum:oauth_client',
+	oauthClientDefault: 'simulacrum:oauth_client_default',
+	oauthClientAdmin: 'simulacrum:oauth_client_admin',
+	oauthClientBucket: 'simulacrum:oauth_client_bucket',
 	oauthState: 'simulacrum:oauth_state',
 	oauthVerifier: 'simulacrum:oauth_verifier',
 	oauthScope: 'simulacrum:oauth_scope',
@@ -37,6 +40,26 @@ const STORAGE_KEYS = {
 } as const;
 
 export const authSession = writable<AuthSession | null>(null);
+
+function normalizeScopeValue(scope: string): string {
+	return scope
+		.split(/\s+/)
+		.map((part) => part.trim())
+		.filter(Boolean)
+		.sort()
+		.join(' ');
+}
+
+function scopeToCacheBucket(scope?: string): OAuthClientCacheBucket | null {
+	const normalizedScope = normalizeScopeValue(scope ?? DEFAULT_OAUTH_SCOPE);
+	if (normalizedScope === normalizeScopeValue(DEFAULT_OAUTH_SCOPE)) return 'default';
+	if (normalizedScope === normalizeScopeValue(ADMIN_OAUTH_SCOPE)) return 'admin';
+	return null;
+}
+
+function oauthClientStorageKey(bucket: OAuthClientCacheBucket): string {
+	return bucket === 'admin' ? STORAGE_KEYS.oauthClientAdmin : STORAGE_KEYS.oauthClientDefault;
+}
 
 function decodeBase64Url(value: string): string {
 	const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
@@ -107,6 +130,7 @@ export function clearAuthSession() {
 	if (!browser) return;
 
 	sessionStorage.removeItem(STORAGE_KEYS.session);
+	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBucket);
 	authSession.set(null);
 }
 
@@ -134,6 +158,7 @@ async function registerOAuthClient({
 		client_name: 'Simulacrum',
 		redirect_uris: redirectUri,
 		scopes: scope,
+		token_endpoint_auth_method: PUBLIC_TOKEN_ENDPOINT_AUTH_METHOD,
 		website: window.location.origin,
 	});
 
@@ -144,7 +169,7 @@ async function registerOAuthClient({
 	});
 
 	const data = (await response.json().catch(() => null)) as
-		| { client_id: string; client_secret?: string }
+		| { client_id: string; token_endpoint_auth_method?: TokenEndpointAuthMethod }
 		| { error?: string; error_description?: string }
 		| null;
 
@@ -161,14 +186,62 @@ async function registerOAuthClient({
 
 	const client: StoredOAuthClient = {
 		clientId: data.client_id,
-		clientSecret: data.client_secret,
 		redirectUri,
-		scope,
 		createdAt: Date.now(),
+		tokenEndpointAuthMethod: data.token_endpoint_auth_method ?? PUBLIC_TOKEN_ENDPOINT_AUTH_METHOD,
 	};
 
-	localStorage.setItem(STORAGE_KEYS.oauthClient, JSON.stringify(client));
+	const cacheBucket = scopeToCacheBucket(scope);
+	if (cacheBucket) {
+		localStorage.setItem(oauthClientStorageKey(cacheBucket), JSON.stringify(client));
+	}
 	return client;
+}
+
+function readOAuthClientFromStorage({
+	redirectUri,
+	cacheBucket,
+}: {
+	redirectUri: string;
+	cacheBucket: OAuthClientCacheBucket;
+}): StoredOAuthClient | null {
+	if (!browser) return null;
+
+	const storageKey = oauthClientStorageKey(cacheBucket);
+	const raw = localStorage.getItem(storageKey);
+	if (!raw) return null;
+
+	try {
+		const parsed = JSON.parse(raw) as Partial<
+			StoredOAuthClient & { clientSecret?: unknown; tokenEndpointAuthMethod?: unknown }
+		>;
+		if (!parsed?.clientId || parsed.redirectUri !== redirectUri) return null;
+		if (parsed.clientSecret) {
+			localStorage.removeItem(storageKey);
+			return null;
+		}
+
+		const authMethod =
+			parsed.tokenEndpointAuthMethod === PUBLIC_TOKEN_ENDPOINT_AUTH_METHOD
+				? PUBLIC_TOKEN_ENDPOINT_AUTH_METHOD
+				: null;
+		if (!authMethod) {
+			localStorage.removeItem(storageKey);
+			return null;
+		}
+
+		const storedClient: StoredOAuthClient = {
+			clientId: parsed.clientId,
+			redirectUri: parsed.redirectUri,
+			createdAt: typeof parsed.createdAt === 'number' ? parsed.createdAt : Date.now(),
+			tokenEndpointAuthMethod: authMethod,
+		};
+
+		return storedClient;
+	} catch {
+		localStorage.removeItem(storageKey);
+		return null;
+	}
 }
 
 async function ensureOAuthClient({
@@ -176,34 +249,28 @@ async function ensureOAuthClient({
 	scope,
 }: {
 	redirectUri: string;
-	scope: string;
+	scope?: string;
 }): Promise<StoredOAuthClient> {
 	if (!browser) throw new Error('OAuth client config is only available in the browser');
 
 	const envClientId = import.meta.env.VITE_PUBLIC_OAUTH_CLIENT_ID as string | undefined;
-	const envClientSecret = import.meta.env.VITE_PUBLIC_OAUTH_CLIENT_SECRET as string | undefined;
 
 	if (envClientId) {
 		return {
 			clientId: envClientId,
-			clientSecret: envClientSecret,
 			redirectUri,
-			scope,
 			createdAt: 0,
+			tokenEndpointAuthMethod: PUBLIC_TOKEN_ENDPOINT_AUTH_METHOD,
 		};
 	}
 
-	const raw = localStorage.getItem(STORAGE_KEYS.oauthClient);
-	if (raw) {
-		try {
-			const parsed = JSON.parse(raw) as StoredOAuthClient;
-			if (parsed?.clientId && parsed.redirectUri === redirectUri && parsed.scope === scope) return parsed;
-		} catch {
-			// fall through to re-register
-		}
+	const cacheBucket = scopeToCacheBucket(scope);
+	if (cacheBucket) {
+		const storedClient = readOAuthClientFromStorage({ redirectUri, cacheBucket });
+		if (storedClient) return storedClient;
 	}
 
-	return registerOAuthClient({ redirectUri, scope });
+	return registerOAuthClient({ redirectUri, scope: scope ?? DEFAULT_OAUTH_SCOPE });
 }
 
 export async function startOAuthLogin({
@@ -219,12 +286,14 @@ export async function startOAuthLogin({
 
 	const redirectUri = getRedirectUri();
 	const client = await ensureOAuthClient({ redirectUri, scope });
+	const clientBucket = scopeToCacheBucket(scope) ?? 'default';
 	const state = generateRandomString(16);
 	const { codeVerifier, codeChallenge } = await createPkcePair();
 
 	sessionStorage.setItem(STORAGE_KEYS.oauthState, state);
+	sessionStorage.setItem(STORAGE_KEYS.oauthClientBucket, clientBucket);
 	sessionStorage.setItem(STORAGE_KEYS.oauthVerifier, codeVerifier);
-	sessionStorage.setItem(STORAGE_KEYS.oauthScope, scope);
+	sessionStorage.removeItem(STORAGE_KEYS.oauthScope);
 	sessionStorage.setItem(
 		STORAGE_KEYS.oauthReturnTo,
 		returnTo ?? `${window.location.pathname}${window.location.search}${window.location.hash}`
@@ -273,8 +342,8 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	if (!state) return { ok: false as const, error: 'Missing OAuth state' };
 
 	const expectedState = sessionStorage.getItem(STORAGE_KEYS.oauthState);
+	const clientBucket = sessionStorage.getItem(STORAGE_KEYS.oauthClientBucket);
 	const codeVerifier = sessionStorage.getItem(STORAGE_KEYS.oauthVerifier);
-	const scope = sessionStorage.getItem(STORAGE_KEYS.oauthScope) ?? DEFAULT_OAUTH_SCOPE;
 	const resource = sessionStorage.getItem(STORAGE_KEYS.oauthResource);
 
 	if (!expectedState || state !== expectedState) {
@@ -284,13 +353,18 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	if (!codeVerifier) {
 		return { ok: false as const, error: 'Missing PKCE verifier. Please try again.' };
 	}
+	if (clientBucket !== 'default' && clientBucket !== 'admin') {
+		return { ok: false as const, error: 'Missing OAuth client bucket. Please try again.' };
+	}
 
 	const redirectUri = getRedirectUri();
-	const client = await ensureOAuthClient({ redirectUri, scope });
+	const clientScope = clientBucket === 'admin' ? ADMIN_OAUTH_SCOPE : DEFAULT_OAUTH_SCOPE;
+	const client = await ensureOAuthClient({ redirectUri, scope: clientScope });
 
 	const tokenBody = new URLSearchParams({
 		grant_type: 'authorization_code',
 		code,
+		client_id: client.clientId,
 		redirect_uri: redirectUri,
 		code_verifier: codeVerifier,
 	});
@@ -302,17 +376,6 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	const tokenHeaders: Record<string, string> = {
 		'content-type': 'application/x-www-form-urlencoded',
 	};
-
-	const authMethod = client.tokenEndpointAuthMethod ?? 'client_secret_post';
-	if (authMethod === 'client_secret_basic' && client.clientSecret) {
-		const credentials = btoa(`${client.clientId}:${client.clientSecret}`);
-		tokenHeaders['authorization'] = `Basic ${credentials}`;
-	} else {
-		tokenBody.set('client_id', client.clientId);
-		if (authMethod !== 'none' && client.clientSecret) {
-			tokenBody.set('client_secret', client.clientSecret);
-		}
-	}
 
 	const tokenResponse = await fetch('/oauth/token', {
 		method: 'POST',
@@ -357,6 +420,7 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	});
 
 	sessionStorage.removeItem(STORAGE_KEYS.oauthState);
+	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBucket);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthVerifier);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthScope);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthResource);
