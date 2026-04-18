@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const INLINE_SCRIPT_TAG_PATTERN = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+const INLINE_SCRIPT_TAG_PATTERN = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
 const SCRIPT_OPEN_TAG_PATTERN = /<script\b([^>]*)>/gi;
 const SCRIPT_SRC_ATTRIBUTE_PATTERN = /\bsrc\s*=/i;
 
