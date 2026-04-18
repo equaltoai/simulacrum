@@ -1,0 +1,9 @@
+model_instructions_file = "steward.md"
+
+  [mcp_servers.sim_lab]
+  url = "https://lab.theorymcp.ai/equaltoai/agents/sim/mcp"
+  oauth_resource = "https://lab.theorymcp.ai/equaltoai/agents/sim/mcp"
+  scopes = ["mcp:tools", "ai.kb.query", "memory.append"]
+
+[mcp_servers.sim_lab.tools.memory_append]
+approval_mode = "approve"
