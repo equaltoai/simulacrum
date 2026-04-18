@@ -31,7 +31,7 @@ const STORAGE_KEYS = {
 	session: 'simulacrum:auth_session',
 	oauthClientDefault: 'simulacrum:oauth_client_default',
 	oauthClientAdmin: 'simulacrum:oauth_client_admin',
-	oauthClientId: 'simulacrum:oauth_client_id',
+	oauthClientBucket: 'simulacrum:oauth_client_bucket',
 	oauthState: 'simulacrum:oauth_state',
 	oauthVerifier: 'simulacrum:oauth_verifier',
 	oauthScope: 'simulacrum:oauth_scope',
@@ -130,7 +130,7 @@ export function clearAuthSession() {
 	if (!browser) return;
 
 	sessionStorage.removeItem(STORAGE_KEYS.session);
-	sessionStorage.removeItem(STORAGE_KEYS.oauthClientId);
+	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBucket);
 	authSession.set(null);
 }
 
@@ -286,11 +286,12 @@ export async function startOAuthLogin({
 
 	const redirectUri = getRedirectUri();
 	const client = await ensureOAuthClient({ redirectUri, scope });
+	const clientBucket = scopeToCacheBucket(scope) ?? 'default';
 	const state = generateRandomString(16);
 	const { codeVerifier, codeChallenge } = await createPkcePair();
 
 	sessionStorage.setItem(STORAGE_KEYS.oauthState, state);
-	sessionStorage.setItem(STORAGE_KEYS.oauthClientId, client.clientId);
+	sessionStorage.setItem(STORAGE_KEYS.oauthClientBucket, clientBucket);
 	sessionStorage.setItem(STORAGE_KEYS.oauthVerifier, codeVerifier);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthScope);
 	sessionStorage.setItem(
@@ -341,7 +342,7 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	if (!state) return { ok: false as const, error: 'Missing OAuth state' };
 
 	const expectedState = sessionStorage.getItem(STORAGE_KEYS.oauthState);
-	const clientId = sessionStorage.getItem(STORAGE_KEYS.oauthClientId);
+	const clientBucket = sessionStorage.getItem(STORAGE_KEYS.oauthClientBucket);
 	const codeVerifier = sessionStorage.getItem(STORAGE_KEYS.oauthVerifier);
 	const resource = sessionStorage.getItem(STORAGE_KEYS.oauthResource);
 
@@ -352,16 +353,18 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	if (!codeVerifier) {
 		return { ok: false as const, error: 'Missing PKCE verifier. Please try again.' };
 	}
-	if (!clientId) {
-		return { ok: false as const, error: 'Missing OAuth client id. Please try again.' };
+	if (clientBucket !== 'default' && clientBucket !== 'admin') {
+		return { ok: false as const, error: 'Missing OAuth client bucket. Please try again.' };
 	}
 
 	const redirectUri = getRedirectUri();
+	const clientScope = clientBucket === 'admin' ? ADMIN_OAUTH_SCOPE : DEFAULT_OAUTH_SCOPE;
+	const client = await ensureOAuthClient({ redirectUri, scope: clientScope });
 
 	const tokenBody = new URLSearchParams({
 		grant_type: 'authorization_code',
 		code,
-		client_id: clientId,
+		client_id: client.clientId,
 		redirect_uri: redirectUri,
 		code_verifier: codeVerifier,
 	});
@@ -417,7 +420,7 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	});
 
 	sessionStorage.removeItem(STORAGE_KEYS.oauthState);
-	sessionStorage.removeItem(STORAGE_KEYS.oauthClientId);
+	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBucket);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthVerifier);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthScope);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthResource);
