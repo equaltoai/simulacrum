@@ -27,14 +27,14 @@ importers:
         specifier: ^3.13.23
         version: 3.13.23(svelte@5.54.0)
       '@theory-cloud/apptheory':
-        specifier: https://github.com/theory-cloud/AppTheory/releases/download/v0.24.6/theory-cloud-apptheory-0.24.6.tgz
-        version: https://github.com/theory-cloud/AppTheory/releases/download/v0.24.6/theory-cloud-apptheory-0.24.6.tgz
+        specifier: https://github.com/theory-cloud/AppTheory/releases/download/v0.25.1/theory-cloud-apptheory-0.25.1.tgz
+        version: https://github.com/theory-cloud/AppTheory/releases/download/v0.25.1/theory-cloud-apptheory-0.25.1.tgz
       '@theory-cloud/facetheory':
-        specifier: https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.0/theory-cloud-facetheory-0.6.0.tgz
-        version: https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.0/theory-cloud-facetheory-0.6.0.tgz(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(svelte@5.54.0)
+        specifier: https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.1/theory-cloud-facetheory-0.6.1.tgz
+        version: https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.1/theory-cloud-facetheory-0.6.1.tgz(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(svelte@5.54.0)
       '@theory-cloud/tabletheory-ts':
-        specifier: https://github.com/theory-cloud/TableTheory/releases/download/v1.5.5/theory-cloud-tabletheory-ts-1.5.5.tgz
-        version: https://github.com/theory-cloud/TableTheory/releases/download/v1.5.5/theory-cloud-tabletheory-ts-1.5.5.tgz
+        specifier: https://github.com/theory-cloud/TableTheory/releases/download/v1.6.0/theory-cloud-tabletheory-ts-1.6.0.tgz
+        version: https://github.com/theory-cloud/TableTheory/releases/download/v1.6.0/theory-cloud-tabletheory-ts-1.6.0.tgz
       acorn:
         specifier: ^8.16.0
         version: 8.16.0
@@ -873,14 +873,14 @@ packages:
   '@tanstack/virtual-core@3.13.23':
     resolution: {integrity: sha512-zSz2Z2HNyLjCplANTDyl3BcdQJc2k1+yyFoKhNRmCr7V7dY8o8q5m8uFTI1/Pg1kL+Hgrz6u3Xo6eFUB7l66cg==}
 
-  '@theory-cloud/apptheory@https://github.com/theory-cloud/AppTheory/releases/download/v0.24.6/theory-cloud-apptheory-0.24.6.tgz':
-    resolution: {tarball: https://github.com/theory-cloud/AppTheory/releases/download/v0.24.6/theory-cloud-apptheory-0.24.6.tgz}
-    version: 0.24.6
+  '@theory-cloud/apptheory@https://github.com/theory-cloud/AppTheory/releases/download/v0.25.1/theory-cloud-apptheory-0.25.1.tgz':
+    resolution: {tarball: https://github.com/theory-cloud/AppTheory/releases/download/v0.25.1/theory-cloud-apptheory-0.25.1.tgz}
+    version: 0.25.1
     engines: {node: '>=24'}
 
-  '@theory-cloud/facetheory@https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.0/theory-cloud-facetheory-0.6.0.tgz':
-    resolution: {tarball: https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.0/theory-cloud-facetheory-0.6.0.tgz}
-    version: 0.6.0
+  '@theory-cloud/facetheory@https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.1/theory-cloud-facetheory-0.6.1.tgz':
+    resolution: {tarball: https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.1/theory-cloud-facetheory-0.6.1.tgz}
+    version: 0.6.1
     engines: {node: '>=24'}
     peerDependencies:
       '@emotion/cache': '>=11'
@@ -908,9 +908,9 @@ packages:
       vue:
         optional: true
 
-  '@theory-cloud/tabletheory-ts@https://github.com/theory-cloud/TableTheory/releases/download/v1.5.5/theory-cloud-tabletheory-ts-1.5.5.tgz':
-    resolution: {tarball: https://github.com/theory-cloud/TableTheory/releases/download/v1.5.5/theory-cloud-tabletheory-ts-1.5.5.tgz}
-    version: 1.5.5
+  '@theory-cloud/tabletheory-ts@https://github.com/theory-cloud/TableTheory/releases/download/v1.6.0/theory-cloud-tabletheory-ts-1.6.0.tgz':
+    resolution: {tarball: https://github.com/theory-cloud/TableTheory/releases/download/v1.6.0/theory-cloud-tabletheory-ts-1.6.0.tgz}
+    version: 1.6.0
     engines: {node: '>=24'}
 
   '@tybys/wasm-util@0.10.1':
@@ -2843,21 +2843,21 @@ snapshots:
 
   '@tanstack/virtual-core@3.13.23': {}
 
-  '@theory-cloud/apptheory@https://github.com/theory-cloud/AppTheory/releases/download/v0.24.6/theory-cloud-apptheory-0.24.6.tgz':
+  '@theory-cloud/apptheory@https://github.com/theory-cloud/AppTheory/releases/download/v0.25.1/theory-cloud-apptheory-0.25.1.tgz':
     dependencies:
       '@aws-sdk/client-apigatewaymanagementapi': 3.1019.0
-      '@theory-cloud/tabletheory-ts': https://github.com/theory-cloud/TableTheory/releases/download/v1.5.5/theory-cloud-tabletheory-ts-1.5.5.tgz
+      '@theory-cloud/tabletheory-ts': https://github.com/theory-cloud/TableTheory/releases/download/v1.6.0/theory-cloud-tabletheory-ts-1.6.0.tgz
     transitivePeerDependencies:
       - aws-crt
 
-  '@theory-cloud/facetheory@https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.0/theory-cloud-facetheory-0.6.0.tgz(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(svelte@5.54.0)':
+  '@theory-cloud/facetheory@https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.1/theory-cloud-facetheory-0.6.1.tgz(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(svelte@5.54.0)':
     dependencies:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
     optionalDependencies:
       svelte: 5.54.0
 
-  '@theory-cloud/tabletheory-ts@https://github.com/theory-cloud/TableTheory/releases/download/v1.5.5/theory-cloud-tabletheory-ts-1.5.5.tgz':
+  '@theory-cloud/tabletheory-ts@https://github.com/theory-cloud/TableTheory/releases/download/v1.6.0/theory-cloud-tabletheory-ts-1.6.0.tgz':
     dependencies:
       '@aws-sdk/client-dynamodb': 3.1019.0
       '@aws-sdk/client-kms': 3.1019.0
