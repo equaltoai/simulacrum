@@ -34,7 +34,6 @@ const STORAGE_KEYS = {
 	oauthClientBucket: 'simulacrum:oauth_client_bucket',
 	oauthState: 'simulacrum:oauth_state',
 	oauthVerifier: 'simulacrum:oauth_verifier',
-	oauthScope: 'simulacrum:oauth_scope',
 	oauthReturnTo: 'simulacrum:oauth_return_to',
 	oauthResource: 'simulacrum:oauth_resource',
 } as const;
@@ -285,15 +284,17 @@ export async function startOAuthLogin({
 	if (!browser) return;
 
 	const redirectUri = getRedirectUri();
+	const clientBucket = scopeToCacheBucket(scope);
+	if (!clientBucket) {
+		throw new Error('Unsupported OAuth scope for Simulacrum login.');
+	}
 	const client = await ensureOAuthClient({ redirectUri, scope });
-	const clientBucket = scopeToCacheBucket(scope) ?? 'default';
 	const state = generateRandomString(16);
 	const { codeVerifier, codeChallenge } = await createPkcePair();
 
 	sessionStorage.setItem(STORAGE_KEYS.oauthState, state);
 	sessionStorage.setItem(STORAGE_KEYS.oauthClientBucket, clientBucket);
 	sessionStorage.setItem(STORAGE_KEYS.oauthVerifier, codeVerifier);
-	sessionStorage.removeItem(STORAGE_KEYS.oauthScope);
 	sessionStorage.setItem(
 		STORAGE_KEYS.oauthReturnTo,
 		returnTo ?? `${window.location.pathname}${window.location.search}${window.location.hash}`
@@ -358,8 +359,10 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	}
 
 	const redirectUri = getRedirectUri();
-	const clientScope = clientBucket === 'admin' ? ADMIN_OAUTH_SCOPE : DEFAULT_OAUTH_SCOPE;
-	const client = await ensureOAuthClient({ redirectUri, scope: clientScope });
+	const client = await ensureOAuthClient({
+		redirectUri,
+		scope: clientBucket === 'admin' ? ADMIN_OAUTH_SCOPE : DEFAULT_OAUTH_SCOPE,
+	});
 
 	const tokenBody = new URLSearchParams({
 		grant_type: 'authorization_code',
@@ -422,7 +425,6 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	sessionStorage.removeItem(STORAGE_KEYS.oauthState);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBucket);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthVerifier);
-	sessionStorage.removeItem(STORAGE_KEYS.oauthScope);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthResource);
 
 	const returnTo = sessionStorage.getItem(STORAGE_KEYS.oauthReturnTo) ?? `${base}/`;

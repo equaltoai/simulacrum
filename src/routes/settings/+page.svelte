@@ -17,6 +17,7 @@
 		requestAccounts,
 		type TipsConfig,
 	} from '$lib/tips';
+	import { htmlToPlainText } from '$lib/utils/html';
 
 	type PushAlerts = PushSubscription['alerts'];
 
@@ -79,16 +80,9 @@
 		{ key: 'adminSignUp', label: 'Admin sign ups' },
 	] as const satisfies ReadonlyArray<{ key: keyof PushAlerts; label: string }>;
 
-	function stripHtml(html: string): string {
-		if (typeof document === 'undefined') return html;
-		const container = document.createElement('div');
-		container.innerHTML = html;
-		return (container.textContent ?? '').trim();
-	}
-
 	function hydrateForms(nextViewer: Account, nextPreferences: UserPreferences) {
 		displayName = nextViewer.displayName ?? '';
-		bio = nextViewer.note ? stripHtml(nextViewer.note) : '';
+		bio = nextViewer.note ? htmlToPlainText(nextViewer.note) : '';
 		avatar = nextViewer.avatar ?? '';
 		header = nextViewer.header ?? '';
 

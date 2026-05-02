@@ -147,6 +147,10 @@
 		return trimmed.replace(/^@/, '').toLowerCase();
 	}
 
+	function normalizeAcct(value?: string | null) {
+		return normalizeUsername(value);
+	}
+
 	function normalizeAddress(value?: string | null) {
 		const trimmed = value?.trim();
 		return trimmed ? trimmed.toLowerCase() : '';
@@ -215,12 +219,27 @@
 	}
 
 	function isAgentOwner(agent: Agent | null, viewer: Account | null) {
-		const viewerUsername = normalizeUsername(viewer?.username);
-		if (!viewerUsername || !agent) return false;
+		if (!viewer?.id || !agent) return false;
 
-		return [agent.agentOwner, agent.ownerActor?.username].some(
-			(candidate) => normalizeUsername(candidate) === viewerUsername
-		);
+		if (agent.ownerActor?.id && agent.ownerActor.id === viewer.id) return true;
+
+		const viewerAcct = normalizeAcct(viewer.acct || viewer.username);
+		if (!viewerAcct) return false;
+
+		if (agent.ownerActor?.username) {
+			const ownerAcct = normalizeAcct(
+				agent.ownerActor.domain
+					? `${agent.ownerActor.username}@${agent.ownerActor.domain}`
+					: agent.ownerActor.username
+			);
+			if (ownerAcct && ownerAcct === viewerAcct) return true;
+		}
+
+		const agentOwner = normalizeAcct(agent.agentOwner);
+		if (!agentOwner) return false;
+		if (agentOwner.includes('@')) return agentOwner === viewerAcct;
+
+		return !viewerAcct.includes('@') && agentOwner === normalizeUsername(viewer.username);
 	}
 
 	type PendingLeaseEnrollment = {
@@ -2226,7 +2245,7 @@
 					<div class="settings-form__notice settings-form__notice--error" role="alert">{runtimeLoadError}</div>
 				{/if}
 
-				<div class="settings-token" aria-live="polite">
+				<div class="settings-token">
 					<div class="settings-token__row">
 						<strong>Current connector client ID</strong>
 						<button
@@ -2846,7 +2865,7 @@
 				{/if}
 
 				{#if selectedLease}
-					<div class="settings-token" aria-live="polite">
+					<div class="settings-token">
 						<div class="settings-token__row">
 							<strong>Current advanced bearer token</strong>
 							<button

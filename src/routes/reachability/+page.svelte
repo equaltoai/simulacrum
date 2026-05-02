@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { page } from '$app/stores';
+	import { authSession, startOAuthLogin } from '$lib/auth/session';
 	import { createLesserHostSoulClient, type SoulAgentChannelsResponse } from '$lib/greater/adapters/soul';
 	import * as Soul from '$lib/components/soul';
 
@@ -8,6 +9,7 @@
 	let result = $state<SoulAgentChannelsResponse | null>(null);
 	let resolvedAgentId = $state<string | null>(null);
 	let isLoading = $state(false);
+	let isLoggingIn = $state(false);
 	let error = $state<string | null>(null);
 
 	const SOUL_AGENT_ID_RE = /^0x[0-9a-fA-F]{64}$/;
@@ -17,7 +19,14 @@
 		if (typeof window === 'undefined') {
 			throw new Error('Soul client only available in the browser');
 		}
-		return createLesserHostSoulClient({ baseUrl: window.location.origin });
+		const accessToken = $authSession?.accessToken?.trim();
+		if (!accessToken) {
+			throw new Error('Sign in before looking up reachability channels.');
+		}
+		return createLesserHostSoulClient({
+			baseUrl: window.location.origin,
+			headers: { authorization: `Bearer ${accessToken}` },
+		});
 	}
 
 	function isEmail(value: string) {
@@ -50,6 +59,11 @@
 	}
 
 	async function load(input: string) {
+		if (!$authSession) {
+			error = 'Sign in before looking up reachability channels.';
+			return;
+		}
+
 		isLoading = true;
 		error = null;
 		result = null;
@@ -72,6 +86,18 @@
 		void load(query);
 	}
 
+	async function handleLogin() {
+		if (isLoggingIn) return;
+		isLoggingIn = true;
+		try {
+			await startOAuthLogin({
+				returnTo: `${$page.url.pathname}${$page.url.search}${$page.url.hash}`,
+			});
+		} finally {
+			isLoggingIn = false;
+		}
+	}
+
 	function summarizeRateLimits(preferences: Soul.SoulContactPreferences | null): string[] {
 		const limits = preferences?.rateLimits;
 		if (!limits) return [];
@@ -87,6 +113,12 @@
 	}
 
 	$effect(() => {
+		if (!$authSession) {
+			result = null;
+			resolvedAgentId = null;
+			isLoading = false;
+			return;
+		}
 		if (didAutoResolve) return;
 		const q = $page.url.searchParams.get('q')?.trim() ?? '';
 		if (!q) return;
@@ -102,8 +134,16 @@
 
 <section class="page">
 	<h1>Reachability</h1>
-	<p>Look up an agent by ENS name, email, phone, or agentId.</p>
+	<p>Look up an agent by ENS name, email, phone, or agentId after signing in.</p>
 
+	{#if !$authSession}
+		<div class="page__notice">
+			Reachability can expose contact-channel metadata. Sign in before resolving channels.
+		</div>
+		<button type="button" class="gr-button gr-button--solid" onclick={handleLogin} disabled={isLoggingIn}>
+			{isLoggingIn ? 'Redirecting…' : 'Sign in to continue'}
+		</button>
+	{:else}
 	<form class="settings-form" onsubmit={handleSubmit}>
 		<label class="settings-field settings-field--full">
 			<span class="settings-field__label">Lookup</span>
@@ -125,6 +165,7 @@
 			</a>
 		</div>
 	</form>
+	{/if}
 
 	{#if error}
 		<div class="page__notice page__notice--error" role="alert">{error}</div>

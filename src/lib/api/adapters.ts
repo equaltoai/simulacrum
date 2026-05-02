@@ -407,8 +407,8 @@ export function statusToTimelineItem(status: Status): TimelineItem {
 	};
 }
 
-function toNotificationType(type: string): Notification['type'] {
-	const key = type.trim().replace(/[.:]/g, '_').toUpperCase();
+function toNotificationType(type: unknown): Notification['type'] {
+	const key = typeof type === 'string' ? type.trim().replace(/[.:]/g, '_').toUpperCase() : '';
 
 	if (key.startsWith('COMMUNICATION')) {
 		return 'communication_inbound';
@@ -519,14 +519,15 @@ function toCommunicationNotification(
 
 export function toNotification(input: {
 	readonly id: string;
-	readonly type: string;
+	readonly type: string | null | undefined;
 	readonly read?: boolean | null;
 	readonly createdAt: string;
 	readonly account: ActorLike;
 	readonly status?: ObjectFieldsFragment | null;
 	readonly communication?: CommunicationNotificationFieldsFragment | null;
 }): Notification {
-	const type = input.communication ? 'communication_inbound' : toNotificationType(input.type);
+	const requestedType = input.communication ? 'communication_inbound' : toNotificationType(input.type);
+	const type = requestedType === 'communication_inbound' && !input.communication ? 'mention' : requestedType;
 	const base = {
 		id: input.id,
 		type,
@@ -539,9 +540,12 @@ export function toNotification(input: {
 
 	switch (type) {
 		case 'communication_inbound':
+			if (!input.communication) {
+				return { ...(base as unknown as Record<string, unknown>), type: 'mention' } as Notification;
+			}
 			return {
 				...(base as unknown as Record<string, unknown>),
-				communication: toCommunicationNotification(input.communication!),
+				communication: toCommunicationNotification(input.communication),
 			} as Notification;
 		case 'follow':
 		case 'follow_request':

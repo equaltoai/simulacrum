@@ -25,7 +25,9 @@ test('redactJwtLikeStrings truncates JWT-like tokens', () => {
 test('redactUnknown redacts common token keys (including nested)', () => {
 	const input = {
 		access_token: 'access',
+		id_token: 'id',
 		refreshToken: 'refresh',
+		password: 'secret-password',
 		nested: {
 			token: 'token',
 			client_secret: 'secret',
@@ -38,7 +40,9 @@ test('redactUnknown redacts common token keys (including nested)', () => {
 	const output = redactUnknown(input);
 
 	assert.equal(output.access_token, '<redacted>');
+	assert.equal(output.id_token, '<redacted>');
 	assert.equal(output.refreshToken, '<redacted>');
+	assert.equal(output.password, '<redacted>');
 	assert.equal(output.nested.token, '<redacted>');
 	assert.equal(output.nested.client_secret, '<redacted>');
 	assert.equal(output.nested.code, '<redacted>');
@@ -58,11 +62,13 @@ test('redactFormUrlEncoded redacts sensitive fields in form bodies', () => {
 });
 
 test('redactUnknown redacts sensitive fields inside form-like strings', () => {
-	const input = 'code=abc123&code_verifier=verifier&client_id=client';
+	const input = 'code=abc123&code_verifier=verifier&client_id=client&password=pw&id_token=id';
 	const output = redactUnknown(input);
 
 	assert.match(output, /code=<redacted>/);
 	assert.match(output, /code_verifier=<redacted>/);
+	assert.match(output, /password=<redacted>/);
+	assert.match(output, /id_token=<redacted>/);
 });
 
 test('redactUrl redacts sensitive query params', () => {
@@ -73,4 +79,3 @@ test('redactUrl redacts sensitive query params', () => {
 	assert.match(output, /access_token=<redacted>/);
 	assert.match(output, /ok=1/);
 });
-

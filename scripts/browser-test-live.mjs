@@ -25,6 +25,21 @@ function runIdFor(target) {
 	return `${host}-${stamp}`;
 }
 
+function parseTarget(target) {
+	try {
+		const parsed = new URL(target);
+		if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+			return { ok: false, error: `unsupported protocol ${parsed.protocol}` };
+		}
+		return { ok: true, target: parsed.toString().replace(/\/$/, '') };
+	} catch (error) {
+		return {
+			ok: false,
+			error: error instanceof Error ? error.message : String(error),
+		};
+	}
+}
+
 function runAttempt(target, attempt) {
 	return new Promise((resolve) => {
 		const runId = `${runIdFor(target)}${attempt > 0 ? `-retry${attempt}` : ''}`;
@@ -66,6 +81,26 @@ function runAttempt(target, attempt) {
 }
 
 async function runTarget(target) {
+	const parsed = parseTarget(target);
+	if (!parsed.ok) {
+		console.error(`\n==> Live browser smoke: ${target}`);
+		console.error(`    invalid target: ${parsed.error}`);
+		return {
+			target,
+			status: 'invalid',
+			attempts: [
+				{
+					target,
+					runId: 'invalid-target',
+					attempt: 0,
+					code: 1,
+					signal: null,
+				},
+			],
+		};
+	}
+
+	target = parsed.target;
 	const attempts = [];
 
 	for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
@@ -98,9 +133,17 @@ console.log('\nLive browser smoke summary');
 for (const result of results) {
 	const lastAttempt = result.attempts[result.attempts.length - 1];
 	console.log(
-		`- ${result.status === 'passed' ? 'PASS' : result.status === 'flaky' ? 'FLAKY' : 'FAIL'} ${result.target} (${lastAttempt.runId})`
+		`- ${
+			result.status === 'passed'
+				? 'PASS'
+				: result.status === 'flaky'
+					? 'FLAKY'
+					: result.status === 'invalid'
+						? 'INVALID'
+						: 'FAIL'
+		} ${result.target} (${lastAttempt.runId})`
 	);
 }
 
-const failed = results.find((result) => result.status === 'failed');
+const failed = results.find((result) => result.status === 'failed' || result.status === 'invalid');
 process.exit(failed ? failed.attempts[failed.attempts.length - 1]?.code ?? 1 : 0);
