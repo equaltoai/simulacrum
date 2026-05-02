@@ -47,7 +47,7 @@
 		"@noble/hashes": "^2.0.1",
 		"@tanstack/svelte-virtual": "^3.13.23",
 		"@theory-cloud/apptheory": "https://github.com/theory-cloud/AppTheory/releases/download/v0.25.1/theory-cloud-apptheory-0.25.1.tgz",
-		"@theory-cloud/facetheory": "https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.1/theory-cloud-facetheory-0.6.1.tgz",
+		"@theory-cloud/facetheory": "https://github.com/theory-cloud/FaceTheory/releases/download/v2.0.0/theory-cloud-facetheory-2.0.0.tgz",
 		"@theory-cloud/tabletheory-ts": "https://github.com/theory-cloud/TableTheory/releases/download/v1.6.0/theory-cloud-tabletheory-ts-1.6.0.tgz",
 		"acorn": "^8.16.0",
 		"focus-trap": "^8.0.0",

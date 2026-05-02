@@ -30,8 +30,8 @@ importers:
         specifier: https://github.com/theory-cloud/AppTheory/releases/download/v0.25.1/theory-cloud-apptheory-0.25.1.tgz
         version: https://github.com/theory-cloud/AppTheory/releases/download/v0.25.1/theory-cloud-apptheory-0.25.1.tgz
       '@theory-cloud/facetheory':
-        specifier: https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.1/theory-cloud-facetheory-0.6.1.tgz
-        version: https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.1/theory-cloud-facetheory-0.6.1.tgz(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(svelte@5.54.0)
+        specifier: https://github.com/theory-cloud/FaceTheory/releases/download/v2.0.0/theory-cloud-facetheory-2.0.0.tgz
+        version: https://github.com/theory-cloud/FaceTheory/releases/download/v2.0.0/theory-cloud-facetheory-2.0.0.tgz(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(svelte@5.54.0)
       '@theory-cloud/tabletheory-ts':
         specifier: https://github.com/theory-cloud/TableTheory/releases/download/v1.6.0/theory-cloud-tabletheory-ts-1.6.0.tgz
         version: https://github.com/theory-cloud/TableTheory/releases/download/v1.6.0/theory-cloud-tabletheory-ts-1.6.0.tgz
@@ -878,9 +878,9 @@ packages:
     version: 0.25.1
     engines: {node: '>=24'}
 
-  '@theory-cloud/facetheory@https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.1/theory-cloud-facetheory-0.6.1.tgz':
-    resolution: {tarball: https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.1/theory-cloud-facetheory-0.6.1.tgz}
-    version: 0.6.1
+  '@theory-cloud/facetheory@https://github.com/theory-cloud/FaceTheory/releases/download/v2.0.0/theory-cloud-facetheory-2.0.0.tgz':
+    resolution: {tarball: https://github.com/theory-cloud/FaceTheory/releases/download/v2.0.0/theory-cloud-facetheory-2.0.0.tgz}
+    version: 2.0.0
     engines: {node: '>=24'}
     peerDependencies:
       '@emotion/cache': '>=11'
@@ -2850,7 +2850,7 @@ snapshots:
     transitivePeerDependencies:
       - aws-crt
 
-  '@theory-cloud/facetheory@https://github.com/theory-cloud/FaceTheory/releases/download/v0.6.1/theory-cloud-facetheory-0.6.1.tgz(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(svelte@5.54.0)':
+  '@theory-cloud/facetheory@https://github.com/theory-cloud/FaceTheory/releases/download/v2.0.0/theory-cloud-facetheory-2.0.0.tgz(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(svelte@5.54.0)':
     dependencies:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)

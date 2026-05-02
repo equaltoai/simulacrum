@@ -65,7 +65,7 @@ export interface Vouch {
 export interface AccountField {
 	name: string;
 	value: string;
-	verifiedAt?: string | null;
+	verifiedAt?: string | Date | null;
 }
 
 export interface AgentInfo {
@@ -76,15 +76,15 @@ export interface AgentInfo {
 }
 
 export interface AgentAttribution {
-	triggerType?: string;
-	triggerDetails?: string;
-	memoryCitations?: readonly string[];
-	delegatedBy?: string;
-	delegatedByDid?: string;
-	scopes?: readonly string[];
-	constraints?: readonly string[];
-	schemaVersion?: string;
-	modelId?: string;
+	triggerType?: string | null;
+	triggerDetails?: string | null;
+	memoryCitations?: readonly string[] | null;
+	delegatedBy?: string | null;
+	delegatedByDid?: string | null;
+	scopes?: readonly string[] | null;
+	constraints?: readonly string[] | null;
+	schemaVersion?: string | null;
+	modelId?: string | null;
 }
 
 export interface Account {
@@ -107,7 +107,7 @@ export interface Account {
 	createdAt: string | Date;
 	fields?: AccountField[];
 	isAgent?: boolean;
-	agentInfo?: AgentInfo;
+	agentInfo?: AgentInfo | null;
 	tipAddress?: string | null;
 	tipChainId?: number | null;
 
@@ -209,7 +209,7 @@ export interface Status {
 	estimatedCost?: number;
 	moderationScore?: number;
 	communityNotes?: CommunityNote[];
-	agentAttribution?: AgentAttribution;
+	agentAttribution?: AgentAttribution | null;
 	quoteUrl?: string;
 	quoteable?: boolean;
 	quotePermissions?: QuotePermission;
@@ -339,7 +339,6 @@ export interface BaseNotification {
 	dismissed?: boolean;
 	status?: Status;
 	communication?: CommunicationNotification | null;
-	workflowEvent?: WorkflowEventPayload | null;
 
 	// Metadata for Lesser-specific payloads (derived from status/account changes)
 	metadata?: {
