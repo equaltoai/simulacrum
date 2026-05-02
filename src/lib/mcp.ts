@@ -364,6 +364,13 @@ function uniqueStrings(values: unknown): string[] {
 	return [...new Set(values.map(trimString).filter(Boolean))];
 }
 
+function safeMcpActorSegment(actor?: string): string | null {
+	const trimmed = trimString(actor);
+	if (!trimmed) return null;
+	if (trimmed === '.' || trimmed === '..') return encodeURIComponent(`_${trimmed}_`);
+	return encodeURIComponent(trimmed);
+}
+
 async function parseResponseBody(response: Response): Promise<unknown> {
 	const text = await response.text();
 	if (!text) return null;
@@ -412,7 +419,8 @@ export function resolveMcpTransport(origin: string, actor?: string): McpTranspor
 		apiOrigin = `${url.protocol}//${apiHost}${url.port ? `:${url.port}` : ''}`;
 	}
 
-	const mcpPath = actor ? `/mcp/${encodeURIComponent(actor)}` : '/mcp';
+	const actorSegment = safeMcpActorSegment(actor);
+	const mcpPath = actorSegment ? `/mcp/${actorSegment}` : '/mcp';
 	const endpoint = new URL(mcpPath, `${apiOrigin}/`).toString();
 	const oauthDiscoveryPath = actor
 		? `/.well-known/oauth-protected-resource${mcpPath}`
@@ -469,7 +477,15 @@ export async function fetchOAuthProtectedResource(
 		});
 	}
 
-	return (payload ?? {}) as OAuthProtectedResourceDocument;
+	if (!payload || typeof payload !== 'object') return {};
+
+	const document = payload as OAuthProtectedResourceDocument;
+	return {
+		resource: trimString(document.resource) || undefined,
+		authorization_servers: uniqueStrings(document.authorization_servers),
+		scopes_supported: uniqueStrings(document.scopes_supported),
+		bearer_methods_supported: uniqueStrings(document.bearer_methods_supported),
+	};
 }
 
 async function requestMcpRpc<T>({

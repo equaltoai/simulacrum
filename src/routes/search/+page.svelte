@@ -10,11 +10,14 @@
 	const initialQuery = $derived($page.url.searchParams.get('q') ?? '');
 	let viewerId = $state<string | null>(null);
 	let viewerIdRequest: Promise<string | null> | null = null;
+	let viewerIdController: AbortController | null = null;
 
 	let lastAccessToken = $state<string | null>(null);
 	$effect(() => {
 		const token = $authSession?.accessToken ?? null;
 		if (token === lastAccessToken) return;
+		viewerIdController?.abort();
+		viewerIdController = null;
 		lastAccessToken = token;
 		viewerId = null;
 		viewerIdRequest = null;
@@ -25,19 +28,33 @@
 		if (!token) return null;
 		if (viewerId) return viewerId;
 		if (!viewerIdRequest) {
+			const requestToken = token;
+			const controller = new AbortController();
+			viewerIdController = controller;
 			viewerIdRequest = api
-				.fetchViewer()
-				.then((viewer) => viewer.id)
+				.fetchViewer({ signal: controller.signal })
+				.then((viewer) => {
+					if (lastAccessToken !== requestToken) return null;
+					return viewer.id;
+				})
 				.catch((err) => {
+					if (err instanceof DOMException && err.name === 'AbortError') return null;
 					console.warn('Failed to fetch viewer id for search page:', err);
 					return null;
 				})
 				.finally(() => {
+					if (viewerIdController === controller) {
+						viewerIdController = null;
+					}
 					viewerIdRequest = null;
 				});
 		}
-		viewerId = await viewerIdRequest;
-		return viewerId;
+		const resolved = await viewerIdRequest;
+		if (lastAccessToken === token) {
+			viewerId = resolved;
+			return viewerId;
+		}
+		return null;
 	}
 
 	function profileHref(acct: string) {

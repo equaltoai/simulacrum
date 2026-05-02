@@ -103,7 +103,7 @@
 			<div class="shell__body">
 					<nav class="shell__nav" aria-label="Primary">
 						{#each navItems as item (item.href)}
-							{#if item.label !== 'Admin' || hasAdminScope($authSession?.scope)}
+							{#if (item.label !== 'Admin' || hasAdminScope($authSession?.scope)) && (item.label !== 'Reachability' || $authSession)}
 								<a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
 									{item.label}
 								</a>

@@ -220,17 +220,11 @@ export function resolveStatusId(pathname: string): string | null {
 }
 
 export function resolveConversationComposeActorId(pathname: string): string | null {
-	const route = normalizeRoutePath(pathname);
-	if (!route.startsWith('/conversations/compose/')) return null;
-
-	const encoded = route.slice('/conversations/compose/'.length).trim();
-	if (!encoded) return null;
-
-	try {
-		return decodeURIComponent(encoded) || null;
-	} catch {
-		return encoded;
-	}
+	// Conversation creation is a state-changing operation and must not be triggered by
+	// merely visiting a crafted URL. Keep legacy compose URLs on the conversations page
+	// without passing a target actor into the auto-bootstrap path.
+	void pathname;
+	return null;
 }
 
 export function getPageHref(key: AppPageKey, agentHint?: string | null): string {
@@ -243,7 +237,8 @@ export function getPageHref(key: AppPageKey, agentHint?: string | null): string 
 }
 
 export function buildConversationComposeHref(actorId: string): string {
-	return `${FACETHEORY_BASE_PATH}/conversations/compose/${encodeURIComponent(actorId)}`;
+	void actorId;
+	return `${FACETHEORY_BASE_PATH}/conversations`;
 }
 
 export function resolveWindowPage(): AppPageDescriptor {

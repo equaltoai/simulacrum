@@ -8,6 +8,25 @@
 	}
 
 	let { quoteUrl, quoteContext, class: className = '' }: Props = $props();
+
+	function toSafeHref(value?: string | null): string | null {
+		const trimmed = value?.trim();
+		if (!trimmed) return null;
+		if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed;
+
+		try {
+			const parsed = new URL(trimmed);
+			if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+				return parsed.toString();
+			}
+		} catch {
+			return null;
+		}
+
+		return null;
+	}
+
+	const safeQuoteUrl = $derived(toSafeHref(quoteUrl));
 </script>
 
 {#if quoteContext}
@@ -21,8 +40,8 @@
 			{/if}
 		</div>
 
-		{#if quoteUrl}
-			<a class="quote-preview__link" href={quoteUrl} target="_blank" rel="noopener noreferrer">
+		{#if safeQuoteUrl}
+			<a class="quote-preview__link" href={safeQuoteUrl} target="_blank" rel="noopener noreferrer">
 				Open quoted post
 			</a>
 		{/if}
@@ -80,4 +99,3 @@
 		text-decoration: underline;
 	}
 </style>
-

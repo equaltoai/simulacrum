@@ -2,6 +2,7 @@
 	import { authSession } from '$lib/auth/session';
 	import { restRequest, RestRequestError } from '$lib/api/rest';
 	import type { Status } from '$lib/types';
+	import { htmlToPlainText } from '$lib/utils/html';
 
 	interface Props {
 		status: Status;
@@ -99,31 +100,28 @@
 		return new TextDecoder().decode(bytes.slice(0, maxBytes)).trim();
 	}
 
-	function htmlToText(html: string): string {
-		if (typeof window === 'undefined') {
-			return html.replace(/<[^>]*>/g, '').trim();
-		}
-		const div = document.createElement('div');
-		div.innerHTML = html;
-		return (div.textContent ?? '').trim();
-	}
-
 	function extractLinksFromHTML(html: string): string[] {
-		if (typeof window === 'undefined') return [];
+		if (typeof DOMParser === 'undefined') return [];
 		if (!html) return [];
 
-		const container = document.createElement('div');
-		container.innerHTML = html;
-		const anchors = Array.from(container.querySelectorAll('a[href]'));
+		const document = new DOMParser().parseFromString(html, 'text/html');
+		const anchors = Array.from(document.querySelectorAll('a[href]'));
 		const out: string[] = [];
 		const seen = new Set<string>();
+		const baseHref = typeof window !== 'undefined' ? window.location.origin : 'https://simulacrum.invalid';
 		for (const a of anchors) {
-			const href = (a as HTMLAnchorElement).href?.trim();
-			if (!href) continue;
-			if (!href.startsWith('http://') && !href.startsWith('https://')) continue;
-			if (seen.has(href)) continue;
-			seen.add(href);
-			out.push(href);
+			const rawHref = a.getAttribute('href')?.trim();
+			if (!rawHref) continue;
+			try {
+				const parsed = new URL(rawHref, baseHref);
+				if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') continue;
+				const href = parsed.toString();
+				if (seen.has(href)) continue;
+				seen.add(href);
+				out.push(href);
+			} catch {
+				continue;
+			}
 		}
 		return out.slice(0, 50);
 	}
@@ -239,7 +237,7 @@
 
 		links = extractLinksFromHTML(currentStatus?.content ?? '');
 
-		const nextClaimText = clampBytes(htmlToText(currentStatus?.content ?? ''), 8000);
+		const nextClaimText = clampBytes(htmlToPlainText(currentStatus?.content ?? ''), 8000);
 		claimText = nextClaimText;
 
 		if (statusId !== initializedFor) {

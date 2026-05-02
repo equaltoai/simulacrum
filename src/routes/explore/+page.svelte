@@ -8,6 +8,7 @@
 	import type { FollowedHashtag, TrendingLink, TrendingStatus, TrendingTag } from '$lib/api';
 	import { getStreamingAdapter } from '$lib/realtime/adapter';
 	import { excludeAgents } from '$lib/prefs/agents';
+	import { htmlToPlainText } from '$lib/utils/html';
 
 	type Feed = 'local' | 'public';
 	let feed = $state<Feed>('local');
@@ -39,13 +40,6 @@
 
 	function statusHref(id: string) {
 		return `${base}/status/${encodeURIComponent(id)}`;
-	}
-
-	function stripHtml(html: string): string {
-		if (typeof document === 'undefined') return html.replace(/<[^>]*>/g, '').trim();
-		const container = document.createElement('div');
-		container.innerHTML = html;
-		return (container.textContent ?? '').trim();
 	}
 
 	$effect(() => {
@@ -204,7 +198,7 @@
 							<ul class="explore-trends__list">
 								{#each trends.statuses as status (status.id)}
 									<li>
-										<a href={statusHref(status.id)}>{stripHtml(status.content).slice(0, 80) || 'View post'}</a>
+										<a href={statusHref(status.id)}>{htmlToPlainText(status.content).slice(0, 80) || 'View post'}</a>
 										<span class="explore-trends__meta">{status.engagements} engagements</span>
 									</li>
 								{/each}

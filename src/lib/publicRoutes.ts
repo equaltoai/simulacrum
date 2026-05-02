@@ -60,11 +60,8 @@ export function buildPublicStatusHref(statusId: string | null | undefined): stri
 }
 
 export function buildConversationComposeHref(actorId: string | null | undefined): string {
-	const trimmed = trimRouteValue(actorId);
-	const pathname = trimmed
-		? `${PUBLIC_APP_BASE_PATH}/conversations/compose/${encodeURIComponent(trimmed)}`
-		: `${PUBLIC_APP_BASE_PATH}/conversations`;
-	return buildPublicUrl(pathname).pathname;
+	void actorId;
+	return buildPublicUrl(`${PUBLIC_APP_BASE_PATH}/conversations`).pathname;
 }
 
 export function buildPublicProfileHref({

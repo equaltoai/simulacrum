@@ -22,10 +22,19 @@
 	}: Props = $props();
 
 	const resolvedSrc = $derived.by(() => (src && src.trim().length > 0 ? src : defaultAvatar));
+	let lastResolvedSrc = $state<string | null>(null);
+	let fallbackApplied = $state(false);
+
+	$effect(() => {
+		if (resolvedSrc === lastResolvedSrc) return;
+		lastResolvedSrc = resolvedSrc;
+		fallbackApplied = false;
+	});
 
 	function handleError(event: Event) {
+		if (fallbackApplied) return;
+		fallbackApplied = true;
 		const image = event.currentTarget as HTMLImageElement;
-		if (image.src === defaultAvatar) return;
 		image.src = defaultAvatar;
 	}
 </script>
@@ -40,4 +49,3 @@
 	{decoding}
 	onerror={handleError}
 />
-

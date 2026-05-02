@@ -31,7 +31,7 @@ export class WalletSwitchRequiredError extends Error {
 
 export type StoredLeaseSessionKey = {
 	publicKey: string;
-	privateKeyPkcs8: string;
+	privateKey: CryptoKey;
 	createdAt: number;
 };
 
@@ -50,12 +50,26 @@ const STORAGE_PREFIX = {
 	token: 'simulacrum:agent_lease_token:',
 } as const;
 
+const leaseSessionKeys = new Map<string, StoredLeaseSessionKey>();
+let legacySessionKeysPurged = false;
+
 function sessionKeyStorageKey(username: string, leaseID: string): string {
 	return `${STORAGE_PREFIX.sessionKey}${username.trim().toLowerCase()}:${leaseID.trim()}`;
 }
 
 function tokenStorageKey(username: string, leaseID: string): string {
 	return `${STORAGE_PREFIX.token}${username.trim().toLowerCase()}:${leaseID.trim()}`;
+}
+
+function purgeLegacyStoredLeaseSessionKeys(): void {
+	if (!browser || legacySessionKeysPurged) return;
+	legacySessionKeysPurged = true;
+	for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+		const key = sessionStorage.key(index);
+		if (key?.startsWith(STORAGE_PREFIX.sessionKey)) {
+			sessionStorage.removeItem(key);
+		}
+	}
 }
 
 function leaseTokenExpiresAt(value: StoredLeaseToken): number | null {
@@ -71,29 +85,12 @@ function bytesToBase64(bytes: ArrayBuffer | Uint8Array): string {
 	return btoa(binary);
 }
 
-function base64ToArrayBuffer(value: string): ArrayBuffer {
-	const binary = atob(value);
-	const bytes = new Uint8Array(binary.length);
-	for (let index = 0; index < binary.length; index += 1) {
-		bytes[index] = binary.charCodeAt(index);
-	}
-	return bytes.buffer.slice(0);
-}
-
 export function readStoredLeaseSessionKey(username: string, leaseID: string): StoredLeaseSessionKey | null {
 	if (!browser) return null;
-
-	const raw = sessionStorage.getItem(sessionKeyStorageKey(username, leaseID));
-	if (!raw) return null;
-
-	try {
-		const parsed = JSON.parse(raw) as StoredLeaseSessionKey;
-		if (!parsed?.publicKey || !parsed?.privateKeyPkcs8) return null;
-		return parsed;
-	} catch {
-		sessionStorage.removeItem(sessionKeyStorageKey(username, leaseID));
-		return null;
-	}
+	purgeLegacyStoredLeaseSessionKeys();
+	const key = sessionKeyStorageKey(username, leaseID);
+	sessionStorage.removeItem(key);
+	return leaseSessionKeys.get(key) ?? null;
 }
 
 export function writeStoredLeaseSessionKey(
@@ -102,32 +99,36 @@ export function writeStoredLeaseSessionKey(
 	value: StoredLeaseSessionKey
 ): void {
 	if (!browser) return;
-	sessionStorage.setItem(sessionKeyStorageKey(username, leaseID), JSON.stringify(value));
+	purgeLegacyStoredLeaseSessionKeys();
+	const key = sessionKeyStorageKey(username, leaseID);
+	sessionStorage.removeItem(key);
+	leaseSessionKeys.set(key, value);
 }
 
 export function clearStoredLeaseSessionKey(username: string, leaseID: string): void {
 	if (!browser) return;
-	sessionStorage.removeItem(sessionKeyStorageKey(username, leaseID));
+	purgeLegacyStoredLeaseSessionKeys();
+	const key = sessionKeyStorageKey(username, leaseID);
+	sessionStorage.removeItem(key);
+	leaseSessionKeys.delete(key);
 }
 
 export async function generateStoredLeaseSessionKey(): Promise<StoredLeaseSessionKey> {
 	if (!browser || !globalThis.crypto?.subtle) {
 		throw new Error('Session keys require a modern browser with Web Crypto support.');
 	}
+	purgeLegacyStoredLeaseSessionKeys();
 
-	const keyPair = await crypto.subtle.generateKey('Ed25519', true, ['sign', 'verify']);
+	const keyPair = await crypto.subtle.generateKey('Ed25519', false, ['sign', 'verify']);
 	if (!('privateKey' in keyPair) || !('publicKey' in keyPair)) {
 		throw new Error('Unable to generate an Ed25519 session key.');
 	}
 
-	const [publicKey, privateKeyPkcs8] = await Promise.all([
-		crypto.subtle.exportKey('raw', keyPair.publicKey),
-		crypto.subtle.exportKey('pkcs8', keyPair.privateKey),
-	]);
+	const publicKey = await crypto.subtle.exportKey('raw', keyPair.publicKey);
 
 	return {
 		publicKey: bytesToBase64(publicKey),
-		privateKeyPkcs8: bytesToBase64(privateKeyPkcs8),
+		privateKey: keyPair.privateKey,
 		createdAt: Date.now(),
 	};
 }
@@ -140,15 +141,7 @@ export async function signLeaseSessionMessage(
 		throw new Error('Session signing requires a modern browser with Web Crypto support.');
 	}
 
-	const privateKey = await crypto.subtle.importKey(
-		'pkcs8',
-		base64ToArrayBuffer(sessionKey.privateKeyPkcs8),
-		'Ed25519',
-		false,
-		['sign']
-	);
-
-	const signature = await crypto.subtle.sign('Ed25519', privateKey, new TextEncoder().encode(message));
+	const signature = await crypto.subtle.sign('Ed25519', sessionKey.privateKey, new TextEncoder().encode(message));
 	return bytesToBase64(signature);
 }
 

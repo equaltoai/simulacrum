@@ -83,6 +83,7 @@
 	let session = $state<AuthSession | null>(null);
 	let appState = $state<ClientAppState>(initialState);
 	let hostToken = $state('');
+	let lastSessionAccessToken = $state<string | null>(null);
 	let busy = $state(false);
 	let authError = $state<string | null>(null);
 	let loadError = $state<string | null>(null);
@@ -189,6 +190,8 @@
 
 	function handleLogout() {
 		clearAuthSession();
+		writeStoredHostToken('');
+		hostToken = '';
 		session = null;
 		loadError = null;
 	}
@@ -229,6 +232,12 @@
 		initAuthFromStorage();
 
 		const unsubscribe = authSession.subscribe((value) => {
+			const nextAccessToken = value?.accessToken ?? null;
+			if (!nextAccessToken || (lastSessionAccessToken && lastSessionAccessToken !== nextAccessToken)) {
+				writeStoredHostToken('');
+				hostToken = '';
+			}
+			lastSessionAccessToken = nextAccessToken;
 			session = value;
 			if (value && currentPage.key !== 'auth-callback') {
 				void refreshLiveState();

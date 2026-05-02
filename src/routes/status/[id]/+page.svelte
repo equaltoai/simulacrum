@@ -19,6 +19,7 @@
 	import ModerationTools from '$lib/patterns/ModerationTools.svelte';
 	import type { Status } from '$lib/types';
 	import { toActivityPubActor } from '$lib/utils/activitypub';
+	import { htmlToPlainText } from '$lib/utils/html';
 
 	let viewerId = $state<string | null>(null);
 	let status = $state<Status | null>(null);
@@ -61,15 +62,6 @@
 
 	function closeComposer() {
 		composerMode = null;
-	}
-
-	function htmlToText(html: string): string {
-		if (typeof window === 'undefined') {
-			return html.replace(/<[^>]*>/g, '').trim();
-		}
-		const div = document.createElement('div');
-		div.innerHTML = html;
-		return (div.textContent ?? '').trim();
 	}
 
 	$effect(() => {
@@ -551,7 +543,7 @@
 					<Composer
 						mode="edit"
 						editId={status.id}
-						initialContent={htmlToText(status.content)}
+						initialContent={htmlToPlainText(status.content)}
 						initialSpoilerText={status.spoilerText ?? ''}
 						initialSensitive={status.sensitive ?? false}
 						onCancel={closeComposer}

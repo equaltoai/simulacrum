@@ -1,9 +1,13 @@
 const SENSITIVE_KEY_SET = new Set([
 	'accesstoken',
 	'access_token',
+	'idtoken',
+	'id_token',
 	'refreshtoken',
 	'refresh_token',
 	'token',
+	'password',
+	'passcode',
 	'clientsecret',
 	'client_secret',
 	'code',
@@ -14,8 +18,10 @@ const SENSITIVE_KEY_SET = new Set([
 
 const SENSITIVE_QUERY_KEYS = new Set([
 	'access_token',
+	'id_token',
 	'refresh_token',
 	'token',
+	'password',
 	'client_secret',
 	'code',
 	'code_verifier',

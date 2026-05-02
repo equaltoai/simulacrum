@@ -1049,22 +1049,13 @@ export async function loadClientAppState({
 		let publishedSoulError: string | null = null;
 
 		if (boundSoulAgentId && lesserHostBaseUrl) {
-			const [channelsResult, preferencesResult, publishedSoulResult] =
-				await Promise.allSettled([
-					loadChannels(lesserHostBaseUrl, boundSoulAgentId, signal),
-					loadPreferences(lesserHostBaseUrl, boundSoulAgentId, signal),
-					loadPublishedSoulProfile(lesserHostBaseUrl, boundSoulAgentId, signal),
-				]);
-
-			if (channelsResult.status === 'fulfilled') {
-				channelsResponse = channelsResult.value;
-				channelsUpdatedAt = channelsResult.value.updatedAt ?? null;
-			}
-
-			if (preferencesResult.status === 'fulfilled') {
-				preferencesResponse = preferencesResult.value;
-			}
-
+			const publishedSoulResult = await loadPublishedSoulProfile(
+				lesserHostBaseUrl,
+				boundSoulAgentId,
+				signal
+			)
+				.then((value) => ({ status: 'fulfilled' as const, value }))
+				.catch((reason) => ({ status: 'rejected' as const, reason }));
 			if (publishedSoulResult.status === 'fulfilled') {
 				publishedSoulProfile = publishedSoulResult.value;
 			} else {
@@ -1076,6 +1067,20 @@ export async function loadClientAppState({
 			}
 
 			if (shouldShowReachability) {
+				const [channelsResult, preferencesResult] = await Promise.allSettled([
+					loadChannels(lesserHostBaseUrl, boundSoulAgentId, signal),
+					loadPreferences(lesserHostBaseUrl, boundSoulAgentId, signal),
+				]);
+
+				if (channelsResult.status === 'fulfilled') {
+					channelsResponse = channelsResult.value;
+					channelsUpdatedAt = channelsResult.value.updatedAt ?? null;
+				}
+
+				if (preferencesResult.status === 'fulfilled') {
+					preferencesResponse = preferencesResult.value;
+				}
+
 				if (channelsResult.status !== 'fulfilled') {
 					reachabilityNotice = {
 						title: 'Reachability lookup failed',
