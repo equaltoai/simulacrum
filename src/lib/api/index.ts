@@ -564,48 +564,150 @@ query ObjectByIdWithViewerState($id: ID!) {
 }
 `;
 
+/*
+ * The public status route loads root, ancestors, and descendants in one Lesser
+ * GraphQL operation. Reusing Greater's full ObjectFields fragment here exceeds
+ * Lesser's live complexity limit after adapter growth, so this route keeps a
+ * deliberately narrow status-card payload instead of asking for viewer-only or
+ * nested boost/quote expansion that the unauthenticated public shell does not
+ * need for readiness.
+ */
+const PUBLIC_ACTOR_FIELDS_FRAGMENT = `
+fragment PublicActorFields on Actor {
+	id
+	username
+	domain
+	displayName
+	summary
+	avatar
+	header
+	followers
+	following
+	statusesCount
+	bot
+	locked
+	updatedAt
+	isAgent
+	agentInfo {
+		id
+		agentType
+		verified
+		verifiedAt
+	}
+	tipAddress
+	tipChainId
+	trustScore
+	fields {
+		name
+		value
+		verifiedAt
+	}
+}
+`;
+
+const PUBLIC_OBJECT_FIELDS_FRAGMENT = `
+fragment PublicObjectFields on Object {
+	id
+	content
+	visibility
+	sensitive
+	spoilerText
+	createdAt
+	updatedAt
+	repliesCount
+	likesCount
+	sharesCount
+	boosted
+	contentHash
+	estimatedCost
+	moderationScore
+	agentAttribution {
+		triggerType
+		triggerDetails
+		memoryCitations
+		delegatedBy
+		delegatedByDid
+		scopes
+		constraints
+		schemaVersion
+		modelId
+	}
+	quoteUrl
+	quoteable
+	quotePermissions
+	quoteCount
+	attachments {
+		id
+		type
+		url
+		preview
+		description
+		blurhash
+		width
+		height
+		duration
+	}
+	tags {
+		name
+		url
+	}
+	mentions {
+		id
+		username
+		domain
+		url
+	}
+	communityNotes {
+		id
+		content
+		helpful
+		notHelpful
+		createdAt
+		author {
+			...PublicActorFields
+		}
+	}
+	actor {
+		...PublicActorFields
+	}
+	inReplyTo {
+		id
+		type
+		actor {
+			...PublicActorFields
+		}
+	}
+	poll {
+		id
+		expiresAt
+		expired
+		multiple
+		voted
+		ownVotes
+		votersCount
+		votesCount
+		hideTotals
+		options {
+			title
+			votesCount
+		}
+	}
+}
+`;
+
 const THREAD_CONTEXT_WITH_POSTS_QUERY = `
-${OBJECT_FIELDS_FRAGMENT}
+${PUBLIC_ACTOR_FIELDS_FRAGMENT}
+${PUBLIC_OBJECT_FIELDS_FRAGMENT}
 query ThreadContextWithPosts($noteId: ID!) {
 	threadContext(noteId: $noteId) {
 		rootNote {
-			...ObjectFields
-			${POLL_FIELDS}
-			viewerFavourited
-			viewerBookmarked
-			viewerPinned
-			boostedObject {
-				${POLL_FIELDS}
-				viewerFavourited
-				viewerBookmarked
-				viewerPinned
-			}
+			...PublicObjectFields
 		}
 		ancestors {
-			...ObjectFields
-			${POLL_FIELDS}
-			viewerFavourited
-			viewerBookmarked
-			viewerPinned
-			boostedObject {
-				${POLL_FIELDS}
-				viewerFavourited
-				viewerBookmarked
-				viewerPinned
-			}
+			...PublicObjectFields
 		}
 		descendants {
-			...ObjectFields
-			${POLL_FIELDS}
-			viewerFavourited
-			viewerBookmarked
-			viewerPinned
-			boostedObject {
-				${POLL_FIELDS}
-				viewerFavourited
-				viewerBookmarked
-				viewerPinned
-			}
+			...PublicObjectFields
 		}
 		replyCount
 		participantCount
