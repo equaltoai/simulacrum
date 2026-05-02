@@ -956,11 +956,13 @@ export function createPreviewAppState({
 export async function loadClientAppState({
 	page,
 	agentHint,
+	authToken,
 	hostToken,
 	signal,
 }: {
 	page: AppPageDescriptor;
 	agentHint?: string | null;
+	authToken?: string | null;
 	hostToken?: string | null;
 	signal?: AbortSignal;
 }): Promise<ClientAppState> {
@@ -1068,8 +1070,8 @@ export async function loadClientAppState({
 
 			if (shouldShowReachability) {
 				const [channelsResult, preferencesResult] = await Promise.allSettled([
-					loadChannels(lesserHostBaseUrl, boundSoulAgentId, signal),
-					loadPreferences(lesserHostBaseUrl, boundSoulAgentId, signal),
+					loadChannels(lesserHostBaseUrl, boundSoulAgentId, authToken, signal),
+					loadPreferences(lesserHostBaseUrl, boundSoulAgentId, authToken, signal),
 				]);
 
 				if (channelsResult.status === 'fulfilled') {
@@ -1179,19 +1181,32 @@ export async function loadClientAppState({
 async function loadChannels(
 	baseUrl: string,
 	agentId: string,
+	authToken?: string | null,
 	signal?: AbortSignal
 ): Promise<SoulAgentChannelsResponse> {
-	const client = createLesserHostSoulClient({ baseUrl });
+	const client = createAuthorizedLesserHostSoulClient(baseUrl, authToken);
 	return await client.getAgentChannels(agentId);
 }
 
 async function loadPreferences(
 	baseUrl: string,
 	agentId: string,
+	authToken?: string | null,
 	signal?: AbortSignal
 ): Promise<SoulAgentChannelPreferencesResponse> {
-	const client = createLesserHostSoulClient({ baseUrl });
+	const client = createAuthorizedLesserHostSoulClient(baseUrl, authToken);
 	return await client.getAgentChannelPreferences(agentId);
+}
+
+function createAuthorizedLesserHostSoulClient(baseUrl: string, authToken?: string | null) {
+	const token = authToken?.trim();
+	if (!token) {
+		throw new Error('Sign in before loading reachability channels.');
+	}
+	return createLesserHostSoulClient({
+		baseUrl,
+		headers: { authorization: `Bearer ${token}` },
+	});
 }
 
 async function loadLesserHostBaseUrl(signal?: AbortSignal): Promise<string | null> {

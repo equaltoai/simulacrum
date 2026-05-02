@@ -174,6 +174,7 @@
 			appState = await loadClientAppState({
 				page: currentPage,
 				agentHint: currentAgentHint,
+				authToken: session.accessToken,
 				hostToken,
 			});
 		} catch (error) {

@@ -19,7 +19,14 @@
 		if (typeof window === 'undefined') {
 			throw new Error('Soul client only available in the browser');
 		}
-		return createLesserHostSoulClient({ baseUrl: window.location.origin });
+		const accessToken = $authSession?.accessToken?.trim();
+		if (!accessToken) {
+			throw new Error('Sign in before looking up reachability channels.');
+		}
+		return createLesserHostSoulClient({
+			baseUrl: window.location.origin,
+			headers: { authorization: `Bearer ${accessToken}` },
+		});
 	}
 
 	function isEmail(value: string) {
