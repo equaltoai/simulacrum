@@ -102,6 +102,16 @@ test('redactUnknown redacts multiline plain text secret bodies', () => {
 	assert.match(output, /note=ok/);
 });
 
+test('redactUnknown redacts multiline plaintext authorization and cookie form fields', () => {
+	const output = redactUnknown(['authorization=abcdefghijklmnop', 'cookie=sessionidabcdefghijklmnop', 'note=ok'].join('\n'));
+
+	assert.doesNotMatch(output, /abcdefghijklmnop/);
+	assert.doesNotMatch(output, /sessionidabcdefghijklmnop/);
+	assert.match(output, /authorization=<redacted>/);
+	assert.match(output, /cookie=<redacted>/);
+	assert.match(output, /note=ok/);
+});
+
 test('redactUrl redacts sensitive query params', () => {
 	const input = 'https://example.com/callback?code=abc123&access_token=secret&ok=1';
 	const output = redactUrl(input);

@@ -36,7 +36,7 @@ const SENSITIVE_QUERY_KEYS = new Set([
 const JWT_LIKE_REGEX = /\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
 const BEARER_TOKEN_REGEX = /\bBearer\s+([A-Za-z0-9._~+/=-]{8,})\b/gi;
 const FORM_LIKE_LINE_REGEX =
-	/(^|[&\s])(?:access_token|id_token|refresh_token|token|password|client_secret|code|code_verifier|signature|api_key)\s*=/i;
+	/(^|[&\s])(?:access_token|id_token|refresh_token|token|password|client_secret|code|code_verifier|signature|api_key|authorization|cookie)\s*=/i;
 
 function normalizeKey(key) {
 	return String(key).toLowerCase().replace(/[^a-z0-9_]+/g, '');
