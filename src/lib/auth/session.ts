@@ -32,6 +32,7 @@ const STORAGE_KEYS = {
 	oauthClientDefault: 'simulacrum:oauth_client_default',
 	oauthClientAdmin: 'simulacrum:oauth_client_admin',
 	oauthClientBucket: 'simulacrum:oauth_client_bucket',
+	oauthClientNotAfter: 'simulacrum:oauth_client_not_after',
 	oauthState: 'simulacrum:oauth_state',
 	oauthVerifier: 'simulacrum:oauth_verifier',
 	oauthReturnTo: 'simulacrum:oauth_return_to',
@@ -130,6 +131,7 @@ export function clearAuthSession() {
 
 	sessionStorage.removeItem(STORAGE_KEYS.session);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBucket);
+	sessionStorage.removeItem(STORAGE_KEYS.oauthClientNotAfter);
 	authSession.set(null);
 }
 
@@ -294,6 +296,10 @@ export async function startOAuthLogin({
 
 	sessionStorage.setItem(STORAGE_KEYS.oauthState, state);
 	sessionStorage.setItem(STORAGE_KEYS.oauthClientBucket, clientBucket);
+	// Store a non-secret local time bound for the public client cache. If
+	// another tab rotates the cached client after this PKCE request starts,
+	// fail closed instead of exchanging the code with the wrong client_id.
+	sessionStorage.setItem(STORAGE_KEYS.oauthClientNotAfter, String(Date.now()));
 	sessionStorage.setItem(STORAGE_KEYS.oauthVerifier, codeVerifier);
 	sessionStorage.setItem(
 		STORAGE_KEYS.oauthReturnTo,
@@ -344,6 +350,7 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 
 	const expectedState = sessionStorage.getItem(STORAGE_KEYS.oauthState);
 	const clientBucket = sessionStorage.getItem(STORAGE_KEYS.oauthClientBucket);
+	const clientNotAfter = Number(sessionStorage.getItem(STORAGE_KEYS.oauthClientNotAfter));
 	const codeVerifier = sessionStorage.getItem(STORAGE_KEYS.oauthVerifier);
 	const resource = sessionStorage.getItem(STORAGE_KEYS.oauthResource);
 
@@ -363,6 +370,12 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 		redirectUri,
 		scope: clientBucket === 'admin' ? ADMIN_OAUTH_SCOPE : DEFAULT_OAUTH_SCOPE,
 	});
+	if (Number.isFinite(clientNotAfter) && client.createdAt > clientNotAfter) {
+		return {
+			ok: false as const,
+			error: 'OAuth client changed before callback. Please sign in again.',
+		};
+	}
 
 	const tokenBody = new URLSearchParams({
 		grant_type: 'authorization_code',
@@ -424,6 +437,7 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 
 	sessionStorage.removeItem(STORAGE_KEYS.oauthState);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBucket);
+	sessionStorage.removeItem(STORAGE_KEYS.oauthClientNotAfter);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthVerifier);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthResource);
 

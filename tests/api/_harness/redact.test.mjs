@@ -71,6 +71,47 @@ test('redactUnknown redacts sensitive fields inside form-like strings', () => {
 	assert.match(output, /id_token=<redacted>/);
 });
 
+test('redactUnknown redacts JSON carried as a plain text request body', () => {
+	const input = JSON.stringify({
+		access_token: 'access-secret',
+		nested: { client_secret: 'client-secret', keep: 'ok' },
+	});
+	const output = redactUnknown(input);
+
+	assert.equal(typeof output, 'string');
+	assert.doesNotMatch(output, /access-secret/);
+	assert.doesNotMatch(output, /client-secret/);
+	assert.match(output, /"access_token":"<redacted>"/);
+	assert.match(output, /"client_secret":"<redacted>"/);
+	assert.match(output, /"keep":"ok"/);
+});
+
+test('redactUnknown redacts multiline plain text secret bodies', () => {
+	const input = [
+		'grant_type=authorization_code',
+		'code=abc123',
+		'Authorization: Bearer abcdefghijklmnop',
+		'note=ok',
+	].join('\n');
+	const output = redactUnknown(input);
+
+	assert.doesNotMatch(output, /abc123/);
+	assert.doesNotMatch(output, /abcdefghijklmnop/);
+	assert.match(output, /code=<redacted>/);
+	assert.match(output, /Authorization: Bearer <redacted>/);
+	assert.match(output, /note=ok/);
+});
+
+test('redactUnknown redacts multiline plaintext authorization and cookie form fields', () => {
+	const output = redactUnknown(['authorization=abcdefghijklmnop', 'cookie=sessionidabcdefghijklmnop', 'note=ok'].join('\n'));
+
+	assert.doesNotMatch(output, /abcdefghijklmnop/);
+	assert.doesNotMatch(output, /sessionidabcdefghijklmnop/);
+	assert.match(output, /authorization=<redacted>/);
+	assert.match(output, /cookie=<redacted>/);
+	assert.match(output, /note=ok/);
+});
+
 test('redactUrl redacts sensitive query params', () => {
 	const input = 'https://example.com/callback?code=abc123&access_token=secret&ok=1';
 	const output = redactUrl(input);

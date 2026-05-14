@@ -8,6 +8,10 @@ const SENSITIVE_KEY_SET = new Set([
 	'token',
 	'password',
 	'passcode',
+	'apikey',
+	'api_key',
+	'authorization',
+	'cookie',
 	'clientsecret',
 	'client_secret',
 	'code',
@@ -22,6 +26,7 @@ const SENSITIVE_QUERY_KEYS = new Set([
 	'refresh_token',
 	'token',
 	'password',
+	'api_key',
 	'client_secret',
 	'code',
 	'code_verifier',
@@ -29,6 +34,9 @@ const SENSITIVE_QUERY_KEYS = new Set([
 ]);
 
 const JWT_LIKE_REGEX = /\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
+const BEARER_TOKEN_REGEX = /\bBearer\s+([A-Za-z0-9._~+/=-]{8,})\b/gi;
+const FORM_LIKE_LINE_REGEX =
+	/(^|[&\s])(?:access_token|id_token|refresh_token|token|password|client_secret|code|code_verifier|signature|api_key|authorization|cookie)\s*=/i;
 
 function normalizeKey(key) {
 	return String(key).toLowerCase().replace(/[^a-z0-9_]+/g, '');
@@ -39,11 +47,13 @@ function decodeRedactedAngleBrackets(text) {
 }
 
 export function redactJwtLikeStrings(text) {
-	return String(text).replace(JWT_LIKE_REGEX, (match) => {
-		const parts = match.split('.');
-		if (parts.length !== 3) return '<redacted.jwt>';
-		return parts.map((p) => `${p.slice(0, 8)}…`).join('.');
-	});
+	return String(text)
+		.replace(JWT_LIKE_REGEX, (match) => {
+			const parts = match.split('.');
+			if (parts.length !== 3) return '<redacted.jwt>';
+			return parts.map((p) => `${p.slice(0, 8)}…`).join('.');
+		})
+		.replace(BEARER_TOKEN_REGEX, 'Bearer <redacted>');
 }
 
 export function redactUrl(url) {
@@ -105,18 +115,45 @@ export function redactFormUrlEncoded(text) {
 	return decodeRedactedAngleBrackets(params.toString());
 }
 
+function redactJsonString(text) {
+	try {
+		const parsed = JSON.parse(text);
+		const redacted = redactUnknown(parsed);
+		return JSON.stringify(redacted);
+	} catch {
+		return null;
+	}
+}
+
+function redactPlainTextBody(text) {
+	const trimmed = text.trim();
+	const looksLikeJson = trimmed.startsWith('{') || trimmed.startsWith('[');
+	if (looksLikeJson) {
+		const redactedJson = redactJsonString(trimmed);
+		if (redactedJson !== null) return redactedJson;
+	}
+
+	if (FORM_LIKE_LINE_REGEX.test(text)) {
+		return text
+			.split(/(\r?\n)/)
+			.map((part) => (part.includes('=') ? redactFormUrlEncoded(part) : redactJwtLikeStrings(part)))
+			.join('');
+	}
+
+	return redactJwtLikeStrings(text);
+}
+
 export function redactUnknown(value) {
 	if (value === null || value === undefined) return value;
 
 	if (typeof value === 'string') {
 		const trimmed = value.trim();
-		const looksLikeJson = trimmed.startsWith('{') || trimmed.startsWith('[');
-		if (!looksLikeJson && trimmed.includes('=') && !trimmed.includes('\n')) {
+		if (trimmed.includes('=') && !trimmed.includes('\n')) {
 			const redactedForm = redactFormUrlEncoded(trimmed);
 			if (redactedForm !== trimmed) return redactedForm;
 		}
 
-		return redactJwtLikeStrings(value);
+		return redactPlainTextBody(value);
 	}
 	if (typeof value === 'number' || typeof value === 'boolean') return value;
 
