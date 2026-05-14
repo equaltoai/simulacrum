@@ -956,13 +956,11 @@ export function createPreviewAppState({
 export async function loadClientAppState({
 	page,
 	agentHint,
-	authToken,
 	hostToken,
 	signal,
 }: {
 	page: AppPageDescriptor;
 	agentHint?: string | null;
-	authToken?: string | null;
 	hostToken?: string | null;
 	signal?: AbortSignal;
 }): Promise<ClientAppState> {
@@ -1069,38 +1067,47 @@ export async function loadClientAppState({
 			}
 
 			if (shouldShowReachability) {
-				const [channelsResult, preferencesResult] = await Promise.allSettled([
-					loadChannels(lesserHostBaseUrl, boundSoulAgentId, authToken, signal),
-					loadPreferences(lesserHostBaseUrl, boundSoulAgentId, authToken, signal),
-				]);
+				const reachabilityToken = hostToken?.trim() ?? '';
 
-				if (channelsResult.status === 'fulfilled') {
-					channelsResponse = channelsResult.value;
-					channelsUpdatedAt = channelsResult.value.updatedAt ?? null;
-				}
-
-				if (preferencesResult.status === 'fulfilled') {
-					preferencesResponse = preferencesResult.value;
-				}
-
-				if (channelsResult.status !== 'fulfilled') {
+				if (!reachabilityToken) {
 					reachabilityNotice = {
-						title: 'Reachability lookup failed',
-						message: describeAuthorityFailure(
-							'reachability lookup',
-							boundSoulAgentId,
-							channelsResult.reason
-						),
+						title: 'Reachability control-plane token required',
+						message: SOUL_WORKFLOW_HOST_AUTH_NOTE,
 					};
-				} else if (preferencesResult.status !== 'fulfilled') {
-					reachabilityNotice = {
-						title: 'Contact preferences unavailable',
-						message: describeAuthorityFailure(
-							'contact preferences lookup',
-							boundSoulAgentId,
-							preferencesResult.reason
-						),
-					};
+				} else {
+					const [channelsResult, preferencesResult] = await Promise.allSettled([
+						loadChannels(lesserHostBaseUrl, boundSoulAgentId, reachabilityToken, signal),
+						loadPreferences(lesserHostBaseUrl, boundSoulAgentId, reachabilityToken, signal),
+					]);
+
+					if (channelsResult.status === 'fulfilled') {
+						channelsResponse = channelsResult.value;
+						channelsUpdatedAt = channelsResult.value.updatedAt ?? null;
+					}
+
+					if (preferencesResult.status === 'fulfilled') {
+						preferencesResponse = preferencesResult.value;
+					}
+
+					if (channelsResult.status !== 'fulfilled') {
+						reachabilityNotice = {
+							title: 'Reachability lookup failed',
+							message: describeAuthorityFailure(
+								'reachability lookup',
+								boundSoulAgentId,
+								channelsResult.reason
+							),
+						};
+					} else if (preferencesResult.status !== 'fulfilled') {
+						reachabilityNotice = {
+							title: 'Contact preferences unavailable',
+							message: describeAuthorityFailure(
+								'contact preferences lookup',
+								boundSoulAgentId,
+								preferencesResult.reason
+							),
+						};
+					}
 				}
 			}
 		} else if (boundSoulAgentId && !lesserHostBaseUrl) {
@@ -1181,27 +1188,27 @@ export async function loadClientAppState({
 async function loadChannels(
 	baseUrl: string,
 	agentId: string,
-	authToken?: string | null,
+	hostToken?: string | null,
 	signal?: AbortSignal
 ): Promise<SoulAgentChannelsResponse> {
-	const client = createAuthorizedLesserHostSoulClient(baseUrl, authToken);
+	const client = createControlPlaneLesserHostSoulClient(baseUrl, hostToken);
 	return await client.getAgentChannels(agentId);
 }
 
 async function loadPreferences(
 	baseUrl: string,
 	agentId: string,
-	authToken?: string | null,
+	hostToken?: string | null,
 	signal?: AbortSignal
 ): Promise<SoulAgentChannelPreferencesResponse> {
-	const client = createAuthorizedLesserHostSoulClient(baseUrl, authToken);
+	const client = createControlPlaneLesserHostSoulClient(baseUrl, hostToken);
 	return await client.getAgentChannelPreferences(agentId);
 }
 
-function createAuthorizedLesserHostSoulClient(baseUrl: string, authToken?: string | null) {
-	const token = authToken?.trim();
+function createControlPlaneLesserHostSoulClient(baseUrl: string, hostToken?: string | null) {
+	const token = hostToken?.trim();
 	if (!token) {
-		throw new Error('Sign in before loading reachability channels.');
+		throw new Error('A lesser-host control-plane bearer token is required for reachability.');
 	}
 	return createLesserHostSoulClient({
 		baseUrl,

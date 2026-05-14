@@ -32,6 +32,7 @@ const STORAGE_KEYS = {
 	oauthClientDefault: 'simulacrum:oauth_client_default',
 	oauthClientAdmin: 'simulacrum:oauth_client_admin',
 	oauthClientBucket: 'simulacrum:oauth_client_bucket',
+	oauthClientId: 'simulacrum:oauth_public_client_id',
 	oauthState: 'simulacrum:oauth_state',
 	oauthVerifier: 'simulacrum:oauth_verifier',
 	oauthReturnTo: 'simulacrum:oauth_return_to',
@@ -130,6 +131,7 @@ export function clearAuthSession() {
 
 	sessionStorage.removeItem(STORAGE_KEYS.session);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBucket);
+	sessionStorage.removeItem(STORAGE_KEYS.oauthClientId);
 	authSession.set(null);
 }
 
@@ -294,6 +296,10 @@ export async function startOAuthLogin({
 
 	sessionStorage.setItem(STORAGE_KEYS.oauthState, state);
 	sessionStorage.setItem(STORAGE_KEYS.oauthClientBucket, clientBucket);
+	// OAuth public-client identifiers are sent in the authorization URL and are
+	// not bearer credentials. Persist the exact identifier used for this PKCE
+	// request so callback exchange cannot drift to a different cached client.
+	sessionStorage.setItem(STORAGE_KEYS.oauthClientId, client.clientId);
 	sessionStorage.setItem(STORAGE_KEYS.oauthVerifier, codeVerifier);
 	sessionStorage.setItem(
 		STORAGE_KEYS.oauthReturnTo,
@@ -344,6 +350,7 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 
 	const expectedState = sessionStorage.getItem(STORAGE_KEYS.oauthState);
 	const clientBucket = sessionStorage.getItem(STORAGE_KEYS.oauthClientBucket);
+	const storedClientId = sessionStorage.getItem(STORAGE_KEYS.oauthClientId)?.trim() ?? '';
 	const codeVerifier = sessionStorage.getItem(STORAGE_KEYS.oauthVerifier);
 	const resource = sessionStorage.getItem(STORAGE_KEYS.oauthResource);
 
@@ -359,15 +366,19 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	}
 
 	const redirectUri = getRedirectUri();
-	const client = await ensureOAuthClient({
-		redirectUri,
-		scope: clientBucket === 'admin' ? ADMIN_OAUTH_SCOPE : DEFAULT_OAUTH_SCOPE,
-	});
+	let clientId = storedClientId;
+	if (!clientId) {
+		const client = await ensureOAuthClient({
+			redirectUri,
+			scope: clientBucket === 'admin' ? ADMIN_OAUTH_SCOPE : DEFAULT_OAUTH_SCOPE,
+		});
+		clientId = client.clientId;
+	}
 
 	const tokenBody = new URLSearchParams({
 		grant_type: 'authorization_code',
 		code,
-		client_id: client.clientId,
+		client_id: clientId,
 		redirect_uri: redirectUri,
 		code_verifier: codeVerifier,
 	});
@@ -424,6 +435,7 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 
 	sessionStorage.removeItem(STORAGE_KEYS.oauthState);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBucket);
+	sessionStorage.removeItem(STORAGE_KEYS.oauthClientId);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthVerifier);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthResource);
 
