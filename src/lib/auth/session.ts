@@ -32,7 +32,7 @@ const STORAGE_KEYS = {
 	oauthClientDefault: 'simulacrum:oauth_client_default',
 	oauthClientAdmin: 'simulacrum:oauth_client_admin',
 	oauthClientBucket: 'simulacrum:oauth_client_bucket',
-	oauthClientId: 'simulacrum:oauth_public_client_id',
+	oauthClientCreatedAt: 'simulacrum:oauth_client_created_at',
 	oauthState: 'simulacrum:oauth_state',
 	oauthVerifier: 'simulacrum:oauth_verifier',
 	oauthReturnTo: 'simulacrum:oauth_return_to',
@@ -131,7 +131,7 @@ export function clearAuthSession() {
 
 	sessionStorage.removeItem(STORAGE_KEYS.session);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBucket);
-	sessionStorage.removeItem(STORAGE_KEYS.oauthClientId);
+	sessionStorage.removeItem(STORAGE_KEYS.oauthClientCreatedAt);
 	authSession.set(null);
 }
 
@@ -296,10 +296,10 @@ export async function startOAuthLogin({
 
 	sessionStorage.setItem(STORAGE_KEYS.oauthState, state);
 	sessionStorage.setItem(STORAGE_KEYS.oauthClientBucket, clientBucket);
-	// OAuth public-client identifiers are sent in the authorization URL and are
-	// not bearer credentials. Persist the exact identifier used for this PKCE
-	// request so callback exchange cannot drift to a different cached client.
-	sessionStorage.setItem(STORAGE_KEYS.oauthClientId, client.clientId);
+	// Store non-secret cache metadata for the public client used by this PKCE
+	// request. If another tab rotates the cached client before callback, fail
+	// closed instead of exchanging the code with the wrong client_id.
+	sessionStorage.setItem(STORAGE_KEYS.oauthClientCreatedAt, String(client.createdAt));
 	sessionStorage.setItem(STORAGE_KEYS.oauthVerifier, codeVerifier);
 	sessionStorage.setItem(
 		STORAGE_KEYS.oauthReturnTo,
@@ -350,7 +350,7 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 
 	const expectedState = sessionStorage.getItem(STORAGE_KEYS.oauthState);
 	const clientBucket = sessionStorage.getItem(STORAGE_KEYS.oauthClientBucket);
-	const storedClientId = sessionStorage.getItem(STORAGE_KEYS.oauthClientId)?.trim() ?? '';
+	const storedClientCreatedAt = Number(sessionStorage.getItem(STORAGE_KEYS.oauthClientCreatedAt));
 	const codeVerifier = sessionStorage.getItem(STORAGE_KEYS.oauthVerifier);
 	const resource = sessionStorage.getItem(STORAGE_KEYS.oauthResource);
 
@@ -366,19 +366,21 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	}
 
 	const redirectUri = getRedirectUri();
-	let clientId = storedClientId;
-	if (!clientId) {
-		const client = await ensureOAuthClient({
-			redirectUri,
-			scope: clientBucket === 'admin' ? ADMIN_OAUTH_SCOPE : DEFAULT_OAUTH_SCOPE,
-		});
-		clientId = client.clientId;
+	const client = await ensureOAuthClient({
+		redirectUri,
+		scope: clientBucket === 'admin' ? ADMIN_OAUTH_SCOPE : DEFAULT_OAUTH_SCOPE,
+	});
+	if (Number.isFinite(storedClientCreatedAt) && client.createdAt !== storedClientCreatedAt) {
+		return {
+			ok: false as const,
+			error: 'OAuth client changed before callback. Please sign in again.',
+		};
 	}
 
 	const tokenBody = new URLSearchParams({
 		grant_type: 'authorization_code',
 		code,
-		client_id: clientId,
+		client_id: client.clientId,
 		redirect_uri: redirectUri,
 		code_verifier: codeVerifier,
 	});
@@ -435,7 +437,7 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 
 	sessionStorage.removeItem(STORAGE_KEYS.oauthState);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBucket);
-	sessionStorage.removeItem(STORAGE_KEYS.oauthClientId);
+	sessionStorage.removeItem(STORAGE_KEYS.oauthClientCreatedAt);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthVerifier);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthResource);
 
