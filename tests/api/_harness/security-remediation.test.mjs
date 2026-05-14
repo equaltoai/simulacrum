@@ -17,10 +17,10 @@ test('FaceTheory reachability uses host workflow tokens, not Lesser OAuth tokens
 test('OAuth callback fails closed when the cached public client changes before callback', async () => {
 	const source = await readFile(new URL('../../../src/lib/auth/session.ts', import.meta.url), 'utf8');
 
-	assert.match(source, /oauthClientCreatedAt: 'simulacrum:oauth_client_created_at'/);
-	assert.match(source, /sessionStorage\.setItem\(STORAGE_KEYS\.oauthClientCreatedAt, String\(client\.createdAt\)\)/);
-	assert.match(source, /const storedClientCreatedAt = Number\(sessionStorage\.getItem\(STORAGE_KEYS\.oauthClientCreatedAt\)\)/);
-	assert.match(source, /client\.createdAt !== storedClientCreatedAt/);
+	assert.match(source, /oauthClientNotAfter: 'simulacrum:oauth_client_not_after'/);
+	assert.match(source, /sessionStorage\.setItem\(STORAGE_KEYS\.oauthClientNotAfter, String\(Date\.now\(\)\)\)/);
+	assert.match(source, /const clientNotAfter = Number\(sessionStorage\.getItem\(STORAGE_KEYS\.oauthClientNotAfter\)\)/);
+	assert.match(source, /client\.createdAt > clientNotAfter/);
 	assert.match(source, /OAuth client changed before callback/);
 	assert.match(source, /client_id: client\.clientId/);
 });
