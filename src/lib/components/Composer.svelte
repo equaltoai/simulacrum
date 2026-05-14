@@ -3,6 +3,7 @@
 	import { api } from '$lib/api';
 	import MediaComposer, { type MediaComposerAttachment } from '$lib/patterns/MediaComposer.svelte';
 	import CustomEmojiPicker, { type CustomEmoji } from '$lib/patterns/CustomEmojiPicker.svelte';
+	import { renderComposerEmojiSelection } from './composerEmoji';
 	import type { Status } from '$lib/types';
 	import type { UploadMediaInput, Visibility } from '$lib/greater/adapters/graphql';
 
@@ -171,10 +172,13 @@
 	}
 
 	function onEmojiSelect(emoji: CustomEmoji) {
-		const shortcode = emoji.shortcode.trim();
-		if (!shortcode) return;
+		const insertion = renderComposerEmojiSelection(emoji);
+		if (!insertion) return;
 
-		insertAtCursor(`:${shortcode}:`);
+		insertAtCursor(insertion);
+		if (emoji.isUnicode) return;
+
+		const shortcode = emoji.shortcode.trim();
 		recentEmojis = [shortcode, ...recentEmojis.filter((value) => value !== shortcode)].slice(0, 50);
 		saveEmojiPrefs();
 	}
