@@ -9,7 +9,7 @@
  * @example Form-based authentication
  * ```svelte
  * <script>
- *   import * as Auth from '$lib/components/auth';
+ *   import * as Auth from '@equaltoai/greater-components-auth';
  *
  *   const handlers = {
  *     onLogin: async (credentials) => {
@@ -29,8 +29,8 @@
  * @example OAuth sign-in card
  * ```svelte
  * <script>
- *   import { SignInCard } from '$lib/components/auth';
- *   import { GithubIcon } from '$lib/greater/icons';
+ *   import { SignInCard } from '@equaltoai/greater-components-auth';
+ *   import { GithubIcon } from '@equaltoai/greater-components-icons';
  *
  *   const providers = [
  *     { id: 'github', name: 'GitHub', icon: GithubIcon },
@@ -47,7 +47,7 @@
  * @example User button with menu
  * ```svelte
  * <script>
- *   import { UserButton } from '$lib/components/auth';
+ *   import { UserButton } from '@equaltoai/greater-components-auth';
  *
  *   const user = { name: 'Jane', email: 'jane@example.com' };
  * </script>

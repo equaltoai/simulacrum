@@ -15,7 +15,7 @@
  * @example Basic chat interface
  * ```svelte
  * <script>
- *   import * as Chat from '$lib/components/chat';
+ *   import * as Chat from '@equaltoai/greater-components-chat';
  *
  *   let messages = $state([]);
  *
