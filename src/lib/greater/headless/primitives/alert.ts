@@ -7,7 +7,7 @@
  * @example
  * ```svelte
  * <script>
- *   import { createAlert } from '$lib/greater/headless/alert';
+ *   import { createAlert } from '@equaltoai/greater-components-headless/alert';
  *
  *   const alert = createAlert({
  *     variant: 'error',
