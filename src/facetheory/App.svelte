@@ -26,6 +26,7 @@
 
 	import FinalizeSigningPanel from './components/FinalizeSigningPanel.svelte';
 	import DronesPage from './components/DronesPage.svelte';
+	import HostedBoundSoulActivationPanel from './components/HostedBoundSoulActivationPanel.svelte';
 	import HostTokenPanel from './components/HostTokenPanel.svelte';
 	import IdentityQuarantinePanel from './components/IdentityQuarantinePanel.svelte';
 	import IdentitySoulBindingPanel from './components/IdentitySoulBindingPanel.svelte';
@@ -354,6 +355,13 @@
 				{#if isAuthenticated}
 					{#if currentPage.key === 'identity'}
 						<IdentityQuarantinePanel agent={appState.activeAgent} onUpdated={refreshLiveState} />
+						<HostedBoundSoulActivationPanel
+							agentUsername={appState.actionContext.activeUsername}
+							anchorAssurance={appState.activationDisclosure.anchorAssurance}
+							boundSoulAgentId={appState.actionContext.activeSoulAgentId}
+							channels={appState.faces.identity.channels}
+							showReachability={Boolean(appState.faces.identity.showReachability)}
+						/>
 						<IdentitySoulBindingPanel
 							boundSoulAgentId={appState.actionContext.activeSoulAgentId}
 							displayName={appState.activeAgent?.displayName ?? null}

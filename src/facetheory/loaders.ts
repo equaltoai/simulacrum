@@ -71,7 +71,7 @@ import type {
 	MessageParticipant,
 	MessagingWorkflowConversationSummary,
 } from '$lib/components/messaging';
-import type { SoulChannels, SoulContactPreferences } from '$lib/components/soul';
+import type { SoulAnchorAssurance, SoulChannels, SoulContactPreferences } from '$lib/components/soul';
 
 import { buildConversationComposeHref, getPageHref } from './routing';
 import type {
@@ -185,6 +185,7 @@ interface PublishedSoulAgentRecord {
 			selected?: boolean;
 		}>;
 	};
+	anchor_assurance?: SoulAnchorAssurance | null;
 	principal_address?: string;
 	principal_signature?: string;
 	principal_declaration?: string;
@@ -1762,6 +1763,11 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		workflow,
 		hostWorkflow: input.hostWorkflow,
 		actionContext,
+		activationDisclosure: {
+			anchorAssurance: resolveAnchorAssurance(input),
+			publicLaunchStatus: 'blocked',
+			reviewState: 'prototype',
+		},
 		currentUserId: input.viewer.id,
 		currentUserName: input.viewer.name,
 		agentCount: input.myAgents.length,
@@ -1770,6 +1776,17 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		reviewCount: input.myReviews.length,
 		isPreview: input.isPreview,
 	};
+}
+
+function resolveAnchorAssurance(input: AssembleAppStateInput): SoulAnchorAssurance | null {
+	const published = input.publishedSoulProfile?.agent.anchor_assurance;
+	if (published) return published;
+
+	for (const event of [...input.hostWorkflow.lifecycleEvents].reverse()) {
+		if (event.anchor_assurance) return event.anchor_assurance;
+	}
+
+	return null;
 }
 
 function pickActiveAgent(

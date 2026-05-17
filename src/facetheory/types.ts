@@ -12,6 +12,7 @@ import type {
 	SoulAgentPromotionLifecycleEvent,
 	SoulMintConversation,
 } from '$lib/api/soulWorkflowHost';
+import type { SoulAnchorAssurance } from '$lib/components/soul';
 
 export type AppPageKey =
 	| 'dashboard'
@@ -69,6 +70,12 @@ export interface AppActionContext {
 	expectedWallet: string | null;
 }
 
+export interface HostedBoundSoulActivationDisclosureData {
+	anchorAssurance: SoulAnchorAssurance | null;
+	publicLaunchStatus: 'blocked';
+	reviewState: 'prototype';
+}
+
 export interface FaceCollection {
 	dashboard: NexusDashboardData;
 	souls: SoulRequestCenterData;
@@ -84,6 +91,7 @@ export interface ClientAppState {
 	workflow: AgentWorkflowSurface | null;
 	hostWorkflow: HostWorkflowState;
 	actionContext: AppActionContext;
+	activationDisclosure: HostedBoundSoulActivationDisclosureData;
 	currentUserId: string;
 	currentUserName: string;
 	agentCount: number;
