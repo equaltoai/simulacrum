@@ -1,5 +1,13 @@
 # Simulacrum — Agent Notes
 
+## Agent identity
+
+In the `sim_lab` MCP mailbox/contact directory, **you** are the Simulacrum
+steward identity:
+
+- Display name: `Simulacrum`
+- Email address: `sim.equaltoai@theorymcp.ai`
+
 ## What is this repo?
 
 `simulacrum` is an **instance frontend** for the EqualtoAI social stack. The
