@@ -14,6 +14,7 @@
 	import { truncateMiddle } from '$lib/greater/utils';
 
 	import AnchorAssuranceBadge from './AnchorAssuranceBadge.svelte';
+	import { describeSoulEmailAddress } from './email.js';
 	import type { SoulAnchorAssurance, SoulChannels } from './types.js';
 
 	interface Props {
@@ -115,9 +116,20 @@
 				{@const email = channels.email}
 				{@const emailVerification = verificationBadge(Boolean(email.verified))}
 				{@const emailStatus = email.status ? statusBadge(email.status) : null}
+				{@const emailAddressMeta = describeSoulEmailAddress(email.address, {
+					context: 'current-public-channel',
+				})}
 				<div class="soul-channels__row">
 					<a class="soul-channels__link" href={`mailto:${email.address}`}>{email.address}</a>
 					<div class="soul-channels__badges">
+						{#if emailAddressMeta.badgeLabel}
+							<Badge
+								variant="outlined"
+								size="sm"
+								color={emailAddressMeta.badgeColor}
+								label={emailAddressMeta.badgeLabel}
+							/>
+						{/if}
 						<Badge
 							variant="outlined"
 							size="sm"
@@ -136,6 +148,9 @@
 				</div>
 				<Text size="sm" color="secondary" class="soul-channels__meta">
 					Capabilities: {email.capabilities.join(', ')}
+					{#if emailAddressMeta.description}
+						· {emailAddressMeta.description}
+					{/if}
 					{#if email.verifiedAt}
 						· Verified {formatDateTime(email.verifiedAt)}
 					{/if}

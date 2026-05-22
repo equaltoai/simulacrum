@@ -8,6 +8,8 @@ export { default as ContactPreferencesEditor } from './ContactPreferencesEditor.
 export { default as BestWayToContact } from './BestWayToContact.svelte';
 export { default as AnchorAssuranceBadge } from './AnchorAssuranceBadge.svelte';
 
+export { describeSoulEmailAddress } from './email.js';
+
 export type {
 	SoulAgentId,
 	SoulChannels,
@@ -23,6 +25,14 @@ export type {
 	AdapterSoulAnchorAssuranceContract,
 	AdapterSoulAnchorEvidenceContract,
 } from './types.js';
+
+export type {
+	DescribeSoulEmailAddressOptions,
+	SoulEmailAddressContext,
+	SoulEmailAddressKind,
+	SoulEmailAddressMeta,
+	SoulEmailBadgeColor,
+} from './email.js';
 
 export {
 	getAvailabilityStatus,
