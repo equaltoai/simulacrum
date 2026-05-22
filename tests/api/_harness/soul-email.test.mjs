@@ -39,7 +39,7 @@ const emailFirstPreferences = {
 	},
 };
 
-test('soul email metadata labels current compound addresses and legacy aliases', () => {
+test('soul email metadata labels current compound addresses and explicit legacy aliases', () => {
 	assert.deepEqual(
 		describeSoulEmailAddress(COMPOUND_SOUL_EMAIL, { context: 'current-public-channel' }),
 		{
@@ -72,11 +72,21 @@ test('soul email metadata labels current compound addresses and legacy aliases',
 	});
 
 	assert.deepEqual(describeSoulEmailAddress(LEGACY_SOUL_EMAIL), {
-		kind: 'legacy-inbound-alias',
-		badgeLabel: 'Legacy inbound alias',
-		badgeColor: 'warning',
-		description: 'Inbound-only alias; current public channel uses agent.instance@lessersoul.ai.',
+		kind: 'lesser-soul-email',
+		badgeLabel: 'Lesser Soul email',
+		badgeColor: 'gray',
+		description: 'Managed Lesser Soul email; current-vs-legacy status requires Host channel context.',
 	});
+
+	assert.deepEqual(
+		describeSoulEmailAddress(LEGACY_SOUL_EMAIL, { context: 'legacy-inbound-alias' }),
+		{
+			kind: 'legacy-inbound-alias',
+			badgeLabel: 'Legacy inbound alias',
+			badgeColor: 'warning',
+			description: 'Inbound-only alias; current public channel uses agent.instance@lessersoul.ai.',
+		}
+	);
 
 	assert.equal(describeSoulEmailAddress('operator@example.com').kind, 'external-or-unknown');
 });
@@ -103,7 +113,7 @@ test('contact recommendation preserves compound soul email addresses as opaque s
 	assert.equal('instanceSlug' in recommendation.recommended, false);
 });
 
-test('contact and notification components render compound and legacy soul email labels', async (t) => {
+test('contact and notification components render managed soul email addresses opaquely', async (t) => {
 	const server = await createServer({
 		server: { middlewareMode: true },
 		appType: 'custom',
@@ -129,15 +139,15 @@ test('contact and notification components render compound and legacy soul email 
 	}).html;
 	assert.ok(channelsHtml.includes(COMPOUND_SOUL_EMAIL));
 	assert.ok(channelsHtml.includes(`mailto:${COMPOUND_SOUL_EMAIL}`));
-	assert.match(channelsHtml, /Instance-scoped/);
-	assert.match(channelsHtml, /Current public Lesser Soul email channel/);
+	assert.doesNotMatch(channelsHtml, /Instance-scoped/);
+	assert.doesNotMatch(channelsHtml, /Current public Lesser Soul email channel/);
 
 	const legacyChannelsHtml = render(ChannelsDisplay, {
 		props: { channels: channelsFor(LEGACY_SOUL_EMAIL), showCopy: false },
 	}).html;
 	assert.ok(legacyChannelsHtml.includes(LEGACY_SOUL_EMAIL));
-	assert.match(legacyChannelsHtml, /Legacy inbound alias/);
-	assert.match(legacyChannelsHtml, /Inbound-only alias/);
+	assert.doesNotMatch(legacyChannelsHtml, /Legacy inbound alias/);
+	assert.doesNotMatch(legacyChannelsHtml, /Inbound-only alias/);
 
 	const bestWayHtml = render(BestWayToContact, {
 		props: {
@@ -146,7 +156,7 @@ test('contact and notification components render compound and legacy soul email 
 		},
 	}).html;
 	assert.ok(bestWayHtml.includes(COMPOUND_SOUL_EMAIL));
-	assert.match(bestWayHtml, /Instance-scoped/);
+	assert.doesNotMatch(bestWayHtml, /Instance-scoped/);
 
 	const notificationHtml = render(CommunicationNotificationItem, {
 		props: {
@@ -174,8 +184,7 @@ test('contact and notification components render compound and legacy soul email 
 		},
 	}).html;
 	assert.match(notificationHtml, /Arch/);
-	assert.ok(notificationHtml.includes(COMPOUND_SOUL_EMAIL));
-	assert.match(notificationHtml, /Lesser Soul email/);
+	assert.doesNotMatch(notificationHtml, /Instance-scoped|Legacy inbound alias/);
 });
 
 test('canonical FaceTheory notifications surface uses the sim-owned labeled renderer', async () => {

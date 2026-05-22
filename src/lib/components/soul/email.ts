@@ -62,14 +62,10 @@ export function describeSoulEmailAddress(
 		return legacyAliasMeta();
 	}
 
-	if (!localPart.includes('.')) {
-		return legacyAliasMeta();
-	}
-
 	// Host v0.4.3 makes `<agent-local-id>.<instance-slug>@lessersoul.ai` the current
 	// public channel, but dotted agent local IDs can also exist. Therefore a dot in
 	// the email local-part is never enough by itself to infer instance scope.
-	if (options.context === 'current-public-channel') {
+	if (options.context === 'current-public-channel' && localPart.includes('.')) {
 		return {
 			kind: 'instance-scoped-managed',
 			badgeLabel: 'Instance-scoped',
