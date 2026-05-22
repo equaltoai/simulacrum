@@ -8,7 +8,6 @@ Safe by default: message previews are rendered as plain text.
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { sanitizeForPreview } from '$lib/greater/utils';
-	import { describeSoulEmailAddress } from '$lib/components/soul/email.js';
 
 	interface CommunicationFrom {
 		address: string;
@@ -31,7 +30,11 @@ Safe by default: message previews are rendered as plain text.
 	interface CommunicationNotification {
 		channel: string;
 		from: CommunicationFrom;
-		to?: { address: string } | null;
+		to?: {
+			address: string;
+			soulAgentId?: string | null;
+			soul_agent_id?: string;
+		} | null;
 		attachments?: CommunicationAttachment[];
 		subject?: string | null;
 		body?: string | null;
@@ -89,14 +92,6 @@ Safe by default: message previews are rendered as plain text.
 		if (!comm) return '';
 		return (comm.from.displayName || comm.from.display_name || comm.from.address).trim();
 	});
-
-	const fromAddress = $derived(comm?.from.address.trim() ?? '');
-	const showFromAddress = $derived(Boolean(fromAddress && fromAddress !== fromLabel));
-	const fromAddressMeta = $derived(
-		channel === 'email'
-			? describeSoulEmailAddress(fromAddress, { context: 'observed-message' })
-			: null
-	);
 
 	const receivedAt = $derived.by(() => {
 		if (!comm) return createdAt;
@@ -162,17 +157,6 @@ Safe by default: message previews are rendered as plain text.
 			{:else}
 				<div class="lesser-notification-item__header">
 					<span class="lesser-notification-item__account">{fromLabel}</span>
-					{#if showFromAddress}
-						<span class="communication-notification__address">{fromAddress}</span>
-					{/if}
-					{#if fromAddressMeta?.badgeLabel}
-						<span
-							class={`communication-notification__badge communication-notification__badge--${fromAddressMeta.badgeColor}`}
-							title={fromAddressMeta.description ?? fromAddressMeta.badgeLabel}
-						>
-							{fromAddressMeta.badgeLabel}
-						</span>
-					{/if}
 					<span class="lesser-notification-item__time">{formatDate(receivedAt)}</span>
 				</div>
 
@@ -227,21 +211,6 @@ Safe by default: message previews are rendered as plain text.
 		background: var(--notification-bg-secondary, #f7f9fa);
 		border: 1px solid var(--notification-border, #e1e8ed);
 		color: var(--notification-text-secondary, #536471);
-	}
-
-	.communication-notification__badge--warning {
-		border-color: var(--gr-color-warning-300, #fbbf24);
-		color: var(--gr-color-warning-800, #92400e);
-	}
-
-	.communication-notification__badge--primary {
-		border-color: var(--gr-color-primary-300, #93c5fd);
-		color: var(--gr-color-primary-800, #1e40af);
-	}
-
-	.communication-notification__address {
-		color: var(--notification-text-secondary, #536471);
-		overflow-wrap: anywhere;
 	}
 
 	.communication-notification__subject {

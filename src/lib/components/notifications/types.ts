@@ -54,6 +54,7 @@ export interface CommunicationFrom {
 
 export interface CommunicationTo {
 	address: string;
+	soulAgentId?: string | null;
 }
 
 export interface CommunicationAttachment {
@@ -214,7 +215,6 @@ export type Notification =
 	| TrustUpdateNotification
 	| CostAlertNotification
 	| ModerationActionNotification
-	| CommunicationInboundNotification
 	| WorkflowEventNotification;
 
 export interface QuoteNotification extends BaseNotification {
@@ -255,11 +255,6 @@ export interface ModerationActionNotification extends BaseNotification {
 	status?: Status;
 	action: string;
 	reason: string;
-}
-
-export interface CommunicationInboundNotification extends BaseNotification {
-	type: 'communication_inbound';
-	communication: CommunicationNotification;
 }
 
 export interface WorkflowEventNotification extends BaseNotification {
