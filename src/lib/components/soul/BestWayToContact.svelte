@@ -13,6 +13,7 @@
 	} from '$lib/greater/primitives';
 
 	import type { SoulChannels, SoulContactPreferences, ContactTarget } from './types.js';
+	import { describeSoulEmailAddress } from './email.js';
 	import { formatAvailabilitySummary, recommendContactTarget } from './utils.js';
 
 	interface Props {
@@ -55,6 +56,11 @@
 				return null;
 		}
 	}
+
+	function emailAddressMeta(target: ContactTarget) {
+		if (target.channel !== 'email') return null;
+		return describeSoulEmailAddress(target.address);
+	}
 </script>
 
 <Card variant="outlined" padding="lg" class={`soul-best-contact ${className}`}>
@@ -74,12 +80,21 @@
 		{@const recommended = rec.recommended}
 		{@const recommendedHref = contactHref(recommended)}
 		{@const recommendedValue = contactValue(recommended)}
+		{@const recommendedEmailMeta = emailAddressMeta(recommended)}
 		<DefinitionList density="sm">
 			<DefinitionItem label="Recommended">
 				<div class="soul-best-contact__row">
 					<Badge variant="outlined" size="sm" color="primary" label={recommended.label} />
 					{#if recommendedHref && recommendedValue}
 						<a class="soul-best-contact__link" href={recommendedHref}>{recommendedValue}</a>
+					{/if}
+					{#if recommendedEmailMeta?.badgeLabel}
+						<Badge
+							variant="outlined"
+							size="sm"
+							color={recommendedEmailMeta.badgeColor}
+							label={recommendedEmailMeta.badgeLabel}
+						/>
 					{/if}
 					{#if 'verified' in recommended}
 						<Badge
@@ -120,12 +135,21 @@
 				<DefinitionItem label="Alternatives">
 					<ul class="soul-best-contact__alts">
 						{#each rec.alternatives as alt (alt.channel)}
+							{@const altEmailMeta = emailAddressMeta(alt)}
 							<li class="soul-best-contact__alt">
 								<Badge variant="outlined" size="sm" color="gray" label={alt.label} />
 								{#if contactHref(alt) && contactValue(alt)}
 									<a class="soul-best-contact__link" href={contactHref(alt) as string}
 										>{contactValue(alt)}</a
 									>
+								{/if}
+								{#if altEmailMeta?.badgeLabel}
+									<Badge
+										variant="outlined"
+										size="sm"
+										color={altEmailMeta.badgeColor}
+										label={altEmailMeta.badgeLabel}
+									/>
 								{/if}
 								{#if 'verified' in alt}
 									<Badge

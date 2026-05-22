@@ -44,6 +44,7 @@ export function generateMockNotifications(count: number): Notification[] {
 		'poll',
 		'status',
 		'update',
+		'communication_inbound',
 		'admin.sign_up',
 		'admin.report',
 	];
@@ -81,6 +82,26 @@ export function generateMockNotifications(count: number): Notification[] {
 				return {
 					...common,
 					type,
+				} as Notification;
+			case 'communication_inbound':
+				return {
+					...common,
+					type,
+					communication: {
+						channel: 'email',
+						from: {
+							address: 'arch.simulacrum@lessersoul.ai',
+							displayName: null,
+							soulAgentId: '0xarch',
+						},
+						to: { address: 'sim.simulacrum@lessersoul.ai' },
+						attachments: [],
+						subject: 'Project coordination',
+						body: 'Compound managed soul email fixture.',
+						receivedAt: common.createdAt,
+						messageId: `communication-message-${index}`,
+						threadId: `communication-thread-${index}`,
+					},
 				} as Notification;
 			case 'admin.sign_up':
 				return {

@@ -5,6 +5,7 @@
 	import { toNotification } from '$lib/api/adapters';
 	import { getStreamingAdapter } from '$lib/realtime/adapter';
 	import ContentRenderer from '$lib/components/ContentRenderer.svelte';
+	import { describeSoulEmailAddress } from '$lib/components/soul/email.js';
 	import type { CommunicationInboundNotification, Notification, Status } from '$lib/types';
 
 	let items = $state<Notification[]>([]);
@@ -38,6 +39,11 @@
 	function getCommunication(notification: Notification): CommunicationInboundNotification['communication'] | null {
 		if (notification.type !== 'communication_inbound') return null;
 		return (notification as CommunicationInboundNotification).communication ?? null;
+	}
+
+	function communicationEmailMeta(communication: CommunicationInboundNotification['communication']) {
+		if (communication.channel.toLowerCase() !== 'email') return null;
+		return describeSoulEmailAddress(communication.from.address);
 	}
 
 	function formatTimestamp(value: string | Date): string {
@@ -187,9 +193,20 @@
 							<div class="notification-card__byline">
 								<span class="notification-card__type">{notification.type}</span>
 								{#if communication}
+									{@const emailMeta = communicationEmailMeta(communication)}
 									<span class="notification-card__author">
 										{communication.from.displayName || communication.from.address}
 									</span>
+									{#if communication.from.displayName && communication.from.address}
+										<span class="notification-card__handle">{communication.from.address}</span>
+									{/if}
+									{#if emailMeta?.badgeLabel}
+										<span
+											class={`notification-card__badge notification-card__badge--${emailMeta.badgeColor}`}
+											title={emailMeta.description ?? emailMeta.badgeLabel}
+											>{emailMeta.badgeLabel}</span
+										>
+									{/if}
 									{#if communication.from.soulAgentId}
 										<a
 											class="notification-card__handle"
@@ -293,3 +310,24 @@
 		{/if}
 	{/if}
 </section>
+
+<style>
+	.notification-card__badge {
+		display: inline-block;
+		border: 1px solid var(--gr-color-border, #d1d5db);
+		border-radius: 999px;
+		padding: 0.1rem 0.45rem;
+		font-size: 0.75rem;
+		color: var(--gr-color-text-muted, #6b7280);
+	}
+
+	.notification-card__badge--warning {
+		border-color: var(--gr-color-warning-300, #fbbf24);
+		color: var(--gr-color-warning-800, #92400e);
+	}
+
+	.notification-card__badge--primary {
+		border-color: var(--gr-color-primary-300, #93c5fd);
+		color: var(--gr-color-primary-800, #1e40af);
+	}
+</style>

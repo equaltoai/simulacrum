@@ -84,6 +84,7 @@ export type {
 	CommunicationFrom,
 	CommunicationTo,
 	CommunicationAttachment,
+	CommunicationInboundNotification,
 	WorkflowEventKind,
 	WorkflowEventPayload,
 	WorkflowEventNotification,
