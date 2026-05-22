@@ -13,7 +13,7 @@ const PAGE_DEFINITIONS: Record<AppPageKey, AppPageDescriptor> = {
 		title: 'Nexus Dashboard',
 		eyebrow: 'Agent-first control room',
 		summary:
-			'Track the active drone-to-soul lifecycle, continuity posture, and post-graduation follow-through from one canonical surface.',
+			'Track the active drone-to-soul lifecycle, continuity posture, and post-graduation follow-through through a canonical surface.',
 		requiresAuth: true,
 	},
 	drones: {
