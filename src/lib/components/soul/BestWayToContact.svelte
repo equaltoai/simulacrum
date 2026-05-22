@@ -59,7 +59,7 @@
 
 	function emailAddressMeta(target: ContactTarget) {
 		if (target.channel !== 'email') return null;
-		return describeSoulEmailAddress(target.address);
+		return describeSoulEmailAddress(target.address, { context: 'current-public-channel' });
 	}
 </script>
 

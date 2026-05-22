@@ -116,7 +116,9 @@
 				{@const email = channels.email}
 				{@const emailVerification = verificationBadge(Boolean(email.verified))}
 				{@const emailStatus = email.status ? statusBadge(email.status) : null}
-				{@const emailAddressMeta = describeSoulEmailAddress(email.address)}
+				{@const emailAddressMeta = describeSoulEmailAddress(email.address, {
+					context: 'current-public-channel',
+				})}
 				<div class="soul-channels__row">
 					<a class="soul-channels__link" href={`mailto:${email.address}`}>{email.address}</a>
 					<div class="soul-channels__badges">

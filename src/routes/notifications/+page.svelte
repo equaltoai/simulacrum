@@ -43,7 +43,7 @@
 
 	function communicationEmailMeta(communication: CommunicationInboundNotification['communication']) {
 		if (communication.channel.toLowerCase() !== 'email') return null;
-		return describeSoulEmailAddress(communication.from.address);
+		return describeSoulEmailAddress(communication.from.address, { context: 'observed-message' });
 	}
 
 	function formatTimestamp(value: string | Date): string {

@@ -10,7 +10,6 @@
 	} from '$lib/greater/faces/agent';
 	import TimelinePage from '$lib/greater/faces/agent/TimelinePage.svelte';
 	import ConversationsPage from '$lib/greater/faces/agent/ConversationsPage.svelte';
-	import NotificationsPage from '$lib/greater/faces/agent/NotificationsPage.svelte';
 	import ExplorePage from '$lib/greater/faces/agent/ExplorePage.svelte';
 	import ProfilePage from '$lib/greater/faces/agent/ProfilePage.svelte';
 	import StatusPage from '$lib/greater/faces/agent/StatusPage.svelte';
@@ -31,6 +30,7 @@
 	import IdentityQuarantinePanel from './components/IdentityQuarantinePanel.svelte';
 	import IdentitySoulBindingPanel from './components/IdentitySoulBindingPanel.svelte';
 	import MintConversationPanel from './components/MintConversationPanel.svelte';
+	import NotificationsPage from './components/NotificationsPage.svelte';
 	import SoulRequestActionPanel from './components/SoulRequestActionPanel.svelte';
 	import {
 		HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,

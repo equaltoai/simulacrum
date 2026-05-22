@@ -40,7 +40,31 @@ const emailFirstPreferences = {
 };
 
 test('soul email metadata labels current compound addresses and legacy aliases', () => {
+	assert.deepEqual(
+		describeSoulEmailAddress(COMPOUND_SOUL_EMAIL, { context: 'current-public-channel' }),
+		{
+			kind: 'instance-scoped-managed',
+			badgeLabel: 'Instance-scoped',
+			badgeColor: 'primary',
+			description: 'Current public Lesser Soul email channel.',
+		}
+	);
+
 	assert.deepEqual(describeSoulEmailAddress(COMPOUND_SOUL_EMAIL), {
+		kind: 'lesser-soul-email',
+		badgeLabel: 'Lesser Soul email',
+		badgeColor: 'gray',
+		description: 'Managed Lesser Soul email; current-vs-legacy status requires Host channel context.',
+	});
+
+	assert.deepEqual(describeSoulEmailAddress('ops.v2@lessersoul.ai'), {
+		kind: 'lesser-soul-email',
+		badgeLabel: 'Lesser Soul email',
+		badgeColor: 'gray',
+		description: 'Managed Lesser Soul email; current-vs-legacy status requires Host channel context.',
+	});
+
+	assert.notDeepEqual(describeSoulEmailAddress('ops.v2@lessersoul.ai'), {
 		kind: 'instance-scoped-managed',
 		badgeLabel: 'Instance-scoped',
 		badgeColor: 'primary',
@@ -151,5 +175,22 @@ test('contact and notification components render compound and legacy soul email 
 	}).html;
 	assert.match(notificationHtml, /Arch/);
 	assert.ok(notificationHtml.includes(COMPOUND_SOUL_EMAIL));
-	assert.match(notificationHtml, /Instance-scoped/);
+	assert.match(notificationHtml, /Lesser Soul email/);
+});
+
+test('canonical FaceTheory notifications surface uses the sim-owned labeled renderer', async () => {
+	const appSource = await readFile(new URL('../../../src/facetheory/App.svelte', import.meta.url), 'utf8');
+	const notificationsSource = await readFile(
+		new URL('../../../src/facetheory/components/NotificationsPage.svelte', import.meta.url),
+		'utf8'
+	);
+
+	assert.ok(appSource.includes("import NotificationsPage from './components/NotificationsPage.svelte';"));
+	assert.equal(
+		appSource.includes("import NotificationsPage from '$lib/greater/faces/agent/NotificationsPage.svelte';"),
+		false
+	);
+	assert.match(notificationsSource, /describeSoulEmailAddress/);
+	assert.match(notificationsSource, /context: 'observed-message'/);
+	assert.match(notificationsSource, /communication\.from\.displayName && communication\.from\.address/);
 });

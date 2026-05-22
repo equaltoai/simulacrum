@@ -26,7 +26,13 @@ export type {
 	AdapterSoulAnchorEvidenceContract,
 } from './types.js';
 
-export type { SoulEmailAddressKind, SoulEmailAddressMeta, SoulEmailBadgeColor } from './email.js';
+export type {
+	DescribeSoulEmailAddressOptions,
+	SoulEmailAddressContext,
+	SoulEmailAddressKind,
+	SoulEmailAddressMeta,
+	SoulEmailBadgeColor,
+} from './email.js';
 
 export {
 	getAvailabilityStatus,

@@ -93,7 +93,9 @@ Safe by default: message previews are rendered as plain text.
 	const fromAddress = $derived(comm?.from.address.trim() ?? '');
 	const showFromAddress = $derived(Boolean(fromAddress && fromAddress !== fromLabel));
 	const fromAddressMeta = $derived(
-		channel === 'email' ? describeSoulEmailAddress(fromAddress) : null
+		channel === 'email'
+			? describeSoulEmailAddress(fromAddress, { context: 'observed-message' })
+			: null
 	);
 
 	const receivedAt = $derived.by(() => {
