@@ -14,6 +14,7 @@ import {
 import { createSvelteFace } from '@theory-cloud/facetheory/svelte';
 
 import App from './App.svelte';
+import { queryFromSearchString } from './query-parser';
 import {
 	resolveConversationComposeActorId,
 	resolvePage,
@@ -70,17 +71,6 @@ function queryToSearchString(query?: Query): string {
 		}
 	}
 	return params.toString();
-}
-
-function queryFromSearchString(search: string): Query {
-	const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
-	const query: Query = Object.create(null);
-	for (const [key, value] of params) {
-		const values = query[key] ?? [];
-		values.push(value);
-		query[key] = values;
-	}
-	return query;
 }
 
 function hydrationDataUrlForRequest(path: string, query?: Query): string {
