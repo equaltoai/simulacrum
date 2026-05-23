@@ -185,6 +185,10 @@ test('contact and notification components render managed soul email addresses op
 	}).html;
 	assert.match(notificationHtml, /Arch/);
 	assert.doesNotMatch(notificationHtml, /Instance-scoped|Legacy inbound alias/);
+
+	// CSR-019: address is visible alongside displayName
+	assert.match(notificationHtml, /arch\.simulacrum@lessersoul\.ai/);
+	assert.match(notificationHtml, /communication-notification__address/);
 });
 
 test('canonical FaceTheory notifications surface uses the sim-owned labeled renderer', async () => {
