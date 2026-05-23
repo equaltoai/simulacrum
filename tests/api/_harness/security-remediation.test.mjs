@@ -37,9 +37,12 @@ test('CSR-023: OAuth callback binds clientId across login/callback lifecycle', a
 	// Callback: stored clientId read from sessionStorage
 	assert.match(source, /const storedClientId = sessionStorage\.getItem\(STORAGE_KEYS\.oauthClientId\)/);
 
-	// Callback: clientId mismatch fails closed before token exchange
-	assert.match(source, /storedClientId && client\.clientId !== storedClientId/);
+	// Callback: missing or mismatched clientId fails closed before token exchange
+	assert.match(source, /!storedClientId \|\| client\.clientId !== storedClientId/);
 	assert.match(source, /OAuth client identifier mismatch/);
+
+	// Callback: missing-binding case fails closed (not degraded to timing-only guard)
+	assert.match(source, /!storedClientId/);
 
 	// Cleanup: clientId removed after successful token exchange
 	assert.match(source, /sessionStorage\.removeItem\(STORAGE_KEYS\.oauthClientId\)/);

@@ -379,7 +379,7 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 			error: 'OAuth client changed before callback. Please sign in again.',
 		};
 	}
-	if (storedClientId && client.clientId !== storedClientId) {
+	if (!storedClientId || client.clientId !== storedClientId) {
 		return {
 			ok: false as const,
 			error: 'OAuth client identifier mismatch. Please sign in again.',
