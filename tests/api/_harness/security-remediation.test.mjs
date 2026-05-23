@@ -24,3 +24,27 @@ test('OAuth callback fails closed when the cached public client changes before c
 	assert.match(source, /OAuth client changed before callback/);
 	assert.match(source, /client_id: client\.clientId/);
 });
+
+test('CSR-023: OAuth callback binds clientId across login/callback lifecycle', async () => {
+	const source = await readFile(new URL('../../../src/lib/auth/session.ts', import.meta.url), 'utf8');
+
+	// Storage key defined
+	assert.match(source, /oauthClientId: 'simulacrum:oauth_client_id'/);
+
+	// Login-time: clientId stored in sessionStorage alongside the PKCE state
+	assert.match(source, /sessionStorage\.setItem\(STORAGE_KEYS\.oauthClientId, client\.clientId\)/);
+
+	// Callback: stored clientId read from sessionStorage
+	assert.match(source, /const storedClientId = sessionStorage\.getItem\(STORAGE_KEYS\.oauthClientId\)/);
+
+	// Callback: clientId mismatch fails closed before token exchange
+	assert.match(source, /storedClientId && client\.clientId !== storedClientId/);
+	assert.match(source, /OAuth client identifier mismatch/);
+
+	// Cleanup: clientId removed after successful token exchange
+	assert.match(source, /sessionStorage\.removeItem\(STORAGE_KEYS\.oauthClientId\)/);
+
+	// Defense-in-depth: both timing guard and identity guard are present
+	assert.match(source, /client\.createdAt > clientNotAfter/);
+	assert.match(source, /client\.clientId !== storedClientId/);
+});
