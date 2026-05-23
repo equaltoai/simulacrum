@@ -8,6 +8,18 @@ steward identity:
 - Display name: `Simulacrum`
 - Email address: `sim.equaltoai@theorymcp.ai`
 
+## GitHub provenance
+
+When handling GitHub work for this repo or sim-routed upstream coordination
+(issues, PRs, comments, reviews, branches, commits, PR creation, or check
+runs), use the `github-provenance` skill and prefer the `sim_lab` routed GitHub
+MCP tools when they support the action. Fall back to the GitHub plugin or `gh`
+only for missing capabilities such as diffs, inline review comments, Actions
+logs, labels, search, approvals, or large local pushes, and state the fallback
+reason. Provenance does not relax any sim gate: upstream-first routing, strict
+CSP, GraphQL-first, browser-validation-contract, agent-first, deploy, and AGPL
+discipline still apply.
+
 ## What is this repo?
 
 `simulacrum` is an **instance frontend** for the EqualtoAI social stack. The
