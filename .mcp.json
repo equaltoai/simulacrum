@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "sim_lab": {
+      "type": "http",
+      "url": "https://lab.theorymcp.ai/equaltoai/agents/sim/mcp"
+    }
+  }
+}
