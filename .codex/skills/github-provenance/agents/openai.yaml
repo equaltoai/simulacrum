@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Provenance"
+  short_description: "Route sim GitHub work through MCP provenance"
+  default_prompt: "Use $github-provenance to handle sim GitHub work with routed provenance-aware tools first."
