@@ -38,6 +38,14 @@ const BEARER_TOKEN_REGEX = /\bBearer\s+([A-Za-z0-9._~+/=-]{8,})\b/gi;
 const FORM_LIKE_LINE_REGEX =
 	/(^|[&\s])(?:access_token|id_token|refresh_token|token|password|client_secret|code|code_verifier|signature|api_key|authorization|cookie)\s*=/i;
 
+// CSR-016: catch non-JWT, non-form plain-text secrets in request bodies.
+// Long hex tokens (≥32 hex chars, common for 128-bit+ secrets).
+const HEX_TOKEN_REGEX = /\b[0-9a-fA-F]{32,}\b/g;
+// Long base64-like tokens (≥40 chars from the base64url alphabet, no spaces).
+const BASE64_TOKEN_REGEX = /\b[A-Za-z0-9_-]{40,}\b/g;
+// Common API key / token prefixes (hyphen or underscore separator).
+const API_KEY_PREFIX_REGEX = /\b(?:(?:sk|pk|api|key|token|secret|auth|pat|rk)[-_][A-Za-z0-9_-]{16,}|[A-Za-z0-9_-]{16,}[-_](?:key|token|secret))\b/g;
+
 function normalizeKey(key) {
 	return String(key).toLowerCase().replace(/[^a-z0-9_]+/g, '');
 }
@@ -143,6 +151,19 @@ function redactPlainTextBody(text) {
 	return redactJwtLikeStrings(text);
 }
 
+// CSR-016: catch plain-text secrets that slip past key-name and JWT checks.
+// Applied as a final fallback after key-based, form-encoded, JSON, and JWT redaction.
+export function redactTokenLikeStrings(text) {
+	let result = String(text);
+	if (result.includes(' ')) return result; // skip natural-language-looking strings
+
+	result = result.replace(HEX_TOKEN_REGEX, '<redacted.hex>');
+	result = result.replace(API_KEY_PREFIX_REGEX, '<redacted.key>');
+	result = result.replace(BASE64_TOKEN_REGEX, '<redacted.token>');
+
+	return result;
+}
+
 export function redactUnknown(value) {
 	if (value === null || value === undefined) return value;
 
@@ -153,7 +174,11 @@ export function redactUnknown(value) {
 			if (redactedForm !== trimmed) return redactedForm;
 		}
 
-		return redactPlainTextBody(value);
+		const afterPlain = redactPlainTextBody(value);
+		// CSR-016: final fallback for token-like plain strings (API keys, hex tokens, base64 secrets)
+		// that weren't caught by key-name, form-encoded, JSON, or JWT redaction.
+		const afterToken = redactTokenLikeStrings(afterPlain);
+		return afterToken;
 	}
 	if (typeof value === 'number' || typeof value === 'boolean') return value;
 

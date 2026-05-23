@@ -33,6 +33,7 @@ const STORAGE_KEYS = {
 	oauthClientAdmin: 'simulacrum:oauth_client_admin',
 	oauthClientBucket: 'simulacrum:oauth_client_bucket',
 	oauthClientNotAfter: 'simulacrum:oauth_client_not_after',
+	oauthClientId: 'simulacrum:oauth_client_id',
 	oauthState: 'simulacrum:oauth_state',
 	oauthVerifier: 'simulacrum:oauth_verifier',
 	oauthReturnTo: 'simulacrum:oauth_return_to',
@@ -300,6 +301,7 @@ export async function startOAuthLogin({
 	// another tab rotates the cached client after this PKCE request starts,
 	// fail closed instead of exchanging the code with the wrong client_id.
 	sessionStorage.setItem(STORAGE_KEYS.oauthClientNotAfter, String(Date.now()));
+	sessionStorage.setItem(STORAGE_KEYS.oauthClientId, client.clientId);
 	sessionStorage.setItem(STORAGE_KEYS.oauthVerifier, codeVerifier);
 	sessionStorage.setItem(
 		STORAGE_KEYS.oauthReturnTo,
@@ -353,6 +355,7 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	const clientNotAfter = Number(sessionStorage.getItem(STORAGE_KEYS.oauthClientNotAfter));
 	const codeVerifier = sessionStorage.getItem(STORAGE_KEYS.oauthVerifier);
 	const resource = sessionStorage.getItem(STORAGE_KEYS.oauthResource);
+	const storedClientId = sessionStorage.getItem(STORAGE_KEYS.oauthClientId);
 
 	if (!expectedState || state !== expectedState) {
 		return { ok: false as const, error: 'OAuth state mismatch. Please try again.' };
@@ -374,6 +377,12 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 		return {
 			ok: false as const,
 			error: 'OAuth client changed before callback. Please sign in again.',
+		};
+	}
+	if (!storedClientId || client.clientId !== storedClientId) {
+		return {
+			ok: false as const,
+			error: 'OAuth client identifier mismatch. Please sign in again.',
 		};
 	}
 
@@ -439,6 +448,7 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBucket);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthClientNotAfter);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthVerifier);
+	sessionStorage.removeItem(STORAGE_KEYS.oauthClientId);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthResource);
 
 	const returnTo = sessionStorage.getItem(STORAGE_KEYS.oauthReturnTo) ?? `${base}/`;
