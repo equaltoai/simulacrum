@@ -74,7 +74,7 @@ function queryToSearchString(query?: Query): string {
 
 function queryFromSearchString(search: string): Query {
 	const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
-	const query: Query = {};
+	const query: Query = Object.create(null);
 	for (const [key, value] of params) {
 		const values = query[key] ?? [];
 		values.push(value);
