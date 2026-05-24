@@ -33,7 +33,6 @@ const STORAGE_KEYS = {
 	oauthClientAdmin: 'simulacrum:oauth_client_admin',
 	oauthClientBucket: 'simulacrum:oauth_client_bucket',
 	oauthClientNotAfter: 'simulacrum:oauth_client_not_after',
-	oauthClientBinding: 'simulacrum:oauth_client_binding',
 	oauthState: 'simulacrum:oauth_state',
 	oauthVerifier: 'simulacrum:oauth_verifier',
 	oauthReturnTo: 'simulacrum:oauth_return_to',
@@ -79,6 +78,20 @@ async function digestOAuthClientBinding({
 		byte.toString(16).padStart(2, '0')
 	).join('');
 	return `sha256:${fingerprint}`;
+}
+
+function createOAuthState(stateNonce: string, clientBinding: string): string {
+	return `${stateNonce}.${clientBinding}`;
+}
+
+function parseOAuthState(state: string): { stateNonce: string; clientBinding: string } | null {
+	const separatorIndex = state.indexOf('.');
+	if (separatorIndex <= 0 || separatorIndex === state.length - 1) return null;
+
+	return {
+		stateNonce: state.slice(0, separatorIndex),
+		clientBinding: state.slice(separatorIndex + 1),
+	};
 }
 
 function decodeBase64Url(value: string): string {
@@ -151,7 +164,6 @@ export function clearAuthSession() {
 
 	sessionStorage.removeItem(STORAGE_KEYS.session);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBucket);
-	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBinding);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthClientNotAfter);
 	authSession.set(null);
 }
@@ -312,20 +324,21 @@ export async function startOAuthLogin({
 		throw new Error('Unsupported OAuth scope for Simulacrum login.');
 	}
 	const client = await ensureOAuthClient({ redirectUri, scope });
-	const state = generateRandomString(16);
+	const stateNonce = generateRandomString(16);
+	const state = createOAuthState(
+		stateNonce,
+		await digestOAuthClientBinding({ state: stateNonce, clientId: client.clientId })
+	);
 	const { codeVerifier, codeChallenge } = await createPkcePair();
 
-	sessionStorage.setItem(STORAGE_KEYS.oauthState, state);
+	sessionStorage.setItem(STORAGE_KEYS.oauthState, stateNonce);
 	sessionStorage.setItem(STORAGE_KEYS.oauthClientBucket, clientBucket);
-	// Store non-secret local bindings for the public client cache. If another
-	// tab rotates the cached client after this PKCE request starts, fail closed
-	// instead of exchanging the code with the wrong client_id. The client
-	// identifier binding is a state-salted SHA-256 fingerprint, not the client_id.
+	// Store a non-secret local time bound for the public client cache. If
+	// another tab rotates the cached client after this PKCE request starts,
+	// fail closed instead of exchanging the code with the wrong client_id.
+	// The client identifier binding travels in OAuth state as a state-salted
+	// SHA-256 fingerprint so the raw client_id is never written to storage.
 	sessionStorage.setItem(STORAGE_KEYS.oauthClientNotAfter, String(Date.now()));
-	sessionStorage.setItem(
-		STORAGE_KEYS.oauthClientBinding,
-		await digestOAuthClientBinding({ state, clientId: client.clientId })
-	);
 	sessionStorage.setItem(STORAGE_KEYS.oauthVerifier, codeVerifier);
 	sessionStorage.setItem(
 		STORAGE_KEYS.oauthReturnTo,
@@ -379,9 +392,9 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	const clientNotAfter = Number(sessionStorage.getItem(STORAGE_KEYS.oauthClientNotAfter));
 	const codeVerifier = sessionStorage.getItem(STORAGE_KEYS.oauthVerifier);
 	const resource = sessionStorage.getItem(STORAGE_KEYS.oauthResource);
-	const storedClientBinding = sessionStorage.getItem(STORAGE_KEYS.oauthClientBinding);
+	const parsedState = parseOAuthState(state);
 
-	if (!expectedState || state !== expectedState) {
+	if (!parsedState || !expectedState || parsedState.stateNonce !== expectedState) {
 		return { ok: false as const, error: 'OAuth state mismatch. Please try again.' };
 	}
 
@@ -403,8 +416,11 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 			error: 'OAuth client changed before callback. Please sign in again.',
 		};
 	}
-	const clientBinding = await digestOAuthClientBinding({ state, clientId: client.clientId });
-	if (!storedClientBinding || clientBinding !== storedClientBinding) {
+	const clientBinding = await digestOAuthClientBinding({
+		state: parsedState.stateNonce,
+		clientId: client.clientId,
+	});
+	if (clientBinding !== parsedState.clientBinding) {
 		return {
 			ok: false as const,
 			error: 'OAuth client identifier mismatch. Please sign in again.',
@@ -473,7 +489,6 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBucket);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthClientNotAfter);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthVerifier);
-	sessionStorage.removeItem(STORAGE_KEYS.oauthClientBinding);
 	sessionStorage.removeItem(STORAGE_KEYS.oauthResource);
 
 	const returnTo = sessionStorage.getItem(STORAGE_KEYS.oauthReturnTo) ?? `${base}/`;

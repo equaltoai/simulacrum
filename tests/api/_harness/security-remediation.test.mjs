@@ -65,39 +65,31 @@ test('queryFromSearchString handles prototype keys (toString, constructor, __pro
 test('CSR-023: OAuth callback binds client fingerprint across login/callback lifecycle', async () => {
 	const source = await readFile(new URL('../../../src/lib/auth/session.ts', import.meta.url), 'utf8');
 
-	// Storage key defined
-	assert.match(source, /oauthClientBinding: 'simulacrum:oauth_client_binding'/);
+	// Login-time: only the random nonce is stored; the client fingerprint travels in OAuth state.
+	assert.match(source, /const stateNonce = generateRandomString\(16\)/);
+	assert.match(source, /const state = createOAuthState\(/);
+	assert.match(source, /sessionStorage\.setItem\(STORAGE_KEYS\.oauthState, stateNonce\)/);
+	assert.match(source, /await digestOAuthClientBinding\(\{ state: stateNonce, clientId: client\.clientId \}\)/);
 
-	// Login-time: state-salted client fingerprint stored in sessionStorage alongside the PKCE state
-	assert.match(source, /sessionStorage\.setItem\(\s*STORAGE_KEYS\.oauthClientBinding,/);
-	assert.match(source, /await digestOAuthClientBinding\(\{ state, clientId: client\.clientId \}\)/);
+	// Callback: returned OAuth state is parsed and the random nonce is checked against storage.
+	assert.match(source, /const parsedState = parseOAuthState\(state\)/);
+	assert.match(source, /parsedState\.stateNonce !== expectedState/);
 
-	// Callback: stored client fingerprint read from sessionStorage
+	// Callback: mismatched client fingerprint fails closed before token exchange.
 	assert.match(
 		source,
-		/const storedClientBinding = sessionStorage\.getItem\(STORAGE_KEYS\.oauthClientBinding\)/
+		/state: parsedState\.stateNonce,\s*clientId: client\.clientId,/s
 	);
-
-	// Callback: missing or mismatched client fingerprint fails closed before token exchange
-	assert.match(
-		source,
-		/const clientBinding = await digestOAuthClientBinding\(\{ state, clientId: client\.clientId \}\)/
-	);
-	assert.match(source, /!storedClientBinding \|\| clientBinding !== storedClientBinding/);
+	assert.match(source, /clientBinding !== parsedState\.clientBinding/);
 	assert.match(source, /OAuth client identifier mismatch/);
-
-	// Callback: missing-binding case fails closed (not degraded to timing-only guard)
-	assert.match(source, /!storedClientBinding/);
-
-	// Cleanup: client binding removed after successful token exchange
-	assert.match(source, /sessionStorage\.removeItem\(STORAGE_KEYS\.oauthClientBinding\)/);
 
 	// Defense-in-depth: both timing guard and identity guard are present
 	assert.match(source, /client\.createdAt > clientNotAfter/);
-	assert.match(source, /clientBinding !== storedClientBinding/);
+	assert.match(source, /clientBinding !== parsedState\.clientBinding/);
 
 	// CodeQL guard: do not store the raw client_id in sessionStorage.
 	assert.doesNotMatch(source, /oauthClientId: 'simulacrum:oauth_client_id'/);
+	assert.doesNotMatch(source, /oauthClientBinding: 'simulacrum:oauth_client_binding'/);
 	assert.doesNotMatch(source, /sessionStorage\.setItem\(STORAGE_KEYS\.oauthClientId, client\.clientId\)/);
 });
 
