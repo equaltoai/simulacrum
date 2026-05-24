@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { redactFormUrlEncoded, redactHeaders, redactJwtLikeStrings, redactUnknown, redactUrl } from './redact.mjs';
+import { redactFormUrlEncoded, redactHeaders, redactJwtLikeStrings, redactTokenLikeStrings, redactUnknown, redactUrl } from './redact.mjs';
 
 test('redactHeaders redacts authorization + cookie', () => {
 	const output = redactHeaders({
@@ -119,4 +119,111 @@ test('redactUrl redacts sensitive query params', () => {
 	assert.match(output, /code=<redacted>/);
 	assert.match(output, /access_token=<redacted>/);
 	assert.match(output, /ok=1/);
+});
+
+// CSR-016: plain-text secret strings
+test('CSR-016: redactTokenLikeStrings redacts long hex tokens', () => {
+	const input = 'abc123def4567890abc123def4567890'; // 32 hex chars
+	const output = redactTokenLikeStrings(input);
+
+	assert.match(output, /<redacted\.hex>/);
+	assert.doesNotMatch(output, /abc123def4567890abc123def4567890/);
+});
+
+test('CSR-016: redactTokenLikeStrings redacts long base64url tokens', () => {
+	const input = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEF'; // 42 base64url chars
+	const output = redactTokenLikeStrings(input);
+
+	assert.match(output, /<redacted\.token>/);
+});
+
+test('CSR-016: redactTokenLikeStrings redacts API-key-prefixed strings', () => {
+	const outputs = [
+		redactTokenLikeStrings('sk-abc123def4567890ghijkl'),
+		redactTokenLikeStrings('pk_example_abc123def4567890ghijkl'),
+		redactTokenLikeStrings('api_abc123def4567890ghijkl'),
+		redactTokenLikeStrings('key_abc123def4567890ghijklmnop'),
+		redactTokenLikeStrings('token_abc123def4567890ghijkl'),
+		redactTokenLikeStrings('secret_abc123def4567890ghijkl'),
+		redactTokenLikeStrings('auth_abc123def4567890ghijklmn'),
+		redactTokenLikeStrings('pat_abc123def4567890ghijklmnop'),
+	];
+
+	for (const output of outputs) {
+		assert.match(output, /<redacted\.key>/);
+	}
+});
+
+test('CSR-016: redactTokenLikeStrings preserves natural-language strings', () => {
+	const natural = 'Hello this is a natural language sentence with spaces and punctuation!';
+	const output = redactTokenLikeStrings(natural);
+
+	assert.equal(output, natural);
+});
+
+test('CSR-016: redactTokenLikeStrings skips short tokens', () => {
+	const shortHex = 'abc123de'; // 8 hex chars
+	const shortBase64 = 'abc123def456'; // 12 base64url chars
+
+	assert.equal(redactTokenLikeStrings(shortHex), shortHex);
+	assert.equal(redactTokenLikeStrings(shortBase64), shortBase64);
+});
+
+test('CSR-016: redactUnknown redacts plain-text hex token body', () => {
+	const hexToken = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6'; // 32 hex chars
+	const output = redactUnknown(hexToken);
+
+	assert.match(output, /<redacted\.hex>/);
+	assert.doesNotMatch(output, /a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6/);
+});
+
+test('CSR-016: redactUnknown redacts API key in plain text body', () => {
+	const body = 'sk_example_abc123def4567890ghijklmnopqrstuv';
+	const output = redactUnknown(body);
+
+	assert.match(output, /<redacted\.key>/);
+	assert.doesNotMatch(output, /sk_example_abc123/);
+});
+
+test('CSR-016: redactUnknown redacts token-like strings nested in object under unknown keys', () => {
+	const input = {
+		proof: 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6', // hex token under non-sensitive key
+		challenge: 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEF', // base64url token under non-sensitive key
+		normalField: 'ok value',
+	};
+	const output = redactUnknown(input);
+
+	assert.match(output.proof, /<redacted\.hex>/);
+	assert.doesNotMatch(output.proof, /a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6/);
+	assert.match(output.challenge, /<redacted\.token>/);
+	assert.doesNotMatch(output.challenge, /abcdefghijklmnopqrstuvwxyz0123456789ABCDEF/);
+	assert.equal(output.normalField, 'ok value');
+});
+
+test('CSR-016: redactUnknown does not redact natural language in response bodies', () => {
+	// Simulates a status content response — natural text should not be redacted
+	const input = {
+		content: 'This is a status update with normal text content that happens to be longer than forty characters but has spaces',
+		id: '01JQ0EXYZW8RK9NRSDV83TBH5N', // 26-char ULID — below hex threshold (32)
+	};
+	const output = redactUnknown(input);
+
+	assert.equal(output.content, input.content);
+	assert.equal(output.id, input.id); // ULID is 26 chars, below 32-char hex threshold
+});
+
+test('CSR-016: redactUnknown redacts token-like values in GraphQL variable-like object', () => {
+	// Simulates GraphQL variables with secret-like values under non-standard keys
+	const variables = {
+		input: {
+			apiGatewayKey: 'sk_example_abc123def4567890ghijklmnopqrstuvwxyz',
+			proof: 'abcdef0123456789abcdef0123456789', // 32 hex
+			displayName: 'Test Bot',
+		},
+	};
+	const output = redactUnknown(variables);
+
+	assert.match(output.input.apiGatewayKey, /<redacted\.key>/);
+	assert.match(output.input.proof, /<redacted\.hex>/);
+	assert.equal(output.input.displayName, 'Test Bot');
 });

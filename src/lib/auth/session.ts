@@ -61,6 +61,39 @@ function oauthClientStorageKey(bucket: OAuthClientCacheBucket): string {
 	return bucket === 'admin' ? STORAGE_KEYS.oauthClientAdmin : STORAGE_KEYS.oauthClientDefault;
 }
 
+async function digestOAuthClientBinding({
+	state,
+	clientId,
+}: {
+	state: string;
+	clientId: string;
+}): Promise<string> {
+	if (!browser || !globalThis.crypto?.subtle) {
+		throw new Error('OAuth client binding requires browser Web Crypto support');
+	}
+
+	const encoded = new TextEncoder().encode(`simulacrum.oauth-client.v1:${state}:${clientId}`);
+	const digest = await globalThis.crypto.subtle.digest('SHA-256', encoded);
+	const fingerprint = Array.from(new Uint8Array(digest), (byte) =>
+		byte.toString(16).padStart(2, '0')
+	).join('');
+	return `sha256:${fingerprint}`;
+}
+
+function createOAuthState(stateNonce: string, clientBinding: string): string {
+	return `${stateNonce}.${clientBinding}`;
+}
+
+function parseOAuthState(state: string): { stateNonce: string; clientBinding: string } | null {
+	const separatorIndex = state.indexOf('.');
+	if (separatorIndex <= 0 || separatorIndex === state.length - 1) return null;
+
+	return {
+		stateNonce: state.slice(0, separatorIndex),
+		clientBinding: state.slice(separatorIndex + 1),
+	};
+}
+
 function decodeBase64Url(value: string): string {
 	const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
 	const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
@@ -291,14 +324,20 @@ export async function startOAuthLogin({
 		throw new Error('Unsupported OAuth scope for Simulacrum login.');
 	}
 	const client = await ensureOAuthClient({ redirectUri, scope });
-	const state = generateRandomString(16);
+	const stateNonce = generateRandomString(16);
+	const state = createOAuthState(
+		stateNonce,
+		await digestOAuthClientBinding({ state: stateNonce, clientId: client.clientId })
+	);
 	const { codeVerifier, codeChallenge } = await createPkcePair();
 
-	sessionStorage.setItem(STORAGE_KEYS.oauthState, state);
+	sessionStorage.setItem(STORAGE_KEYS.oauthState, stateNonce);
 	sessionStorage.setItem(STORAGE_KEYS.oauthClientBucket, clientBucket);
 	// Store a non-secret local time bound for the public client cache. If
 	// another tab rotates the cached client after this PKCE request starts,
 	// fail closed instead of exchanging the code with the wrong client_id.
+	// The client identifier binding travels in OAuth state as a state-salted
+	// SHA-256 fingerprint so the raw client_id is never written to storage.
 	sessionStorage.setItem(STORAGE_KEYS.oauthClientNotAfter, String(Date.now()));
 	sessionStorage.setItem(STORAGE_KEYS.oauthVerifier, codeVerifier);
 	sessionStorage.setItem(
@@ -353,8 +392,9 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 	const clientNotAfter = Number(sessionStorage.getItem(STORAGE_KEYS.oauthClientNotAfter));
 	const codeVerifier = sessionStorage.getItem(STORAGE_KEYS.oauthVerifier);
 	const resource = sessionStorage.getItem(STORAGE_KEYS.oauthResource);
+	const parsedState = parseOAuthState(state);
 
-	if (!expectedState || state !== expectedState) {
+	if (!parsedState || !expectedState || parsedState.stateNonce !== expectedState) {
 		return { ok: false as const, error: 'OAuth state mismatch. Please try again.' };
 	}
 
@@ -374,6 +414,16 @@ export async function completeOAuthCallback(searchParams: URLSearchParams) {
 		return {
 			ok: false as const,
 			error: 'OAuth client changed before callback. Please sign in again.',
+		};
+	}
+	const clientBinding = await digestOAuthClientBinding({
+		state: parsedState.stateNonce,
+		clientId: client.clientId,
+	});
+	if (clientBinding !== parsedState.clientBinding) {
+		return {
+			ok: false as const,
+			error: 'OAuth client identifier mismatch. Please sign in again.',
 		};
 	}
 
