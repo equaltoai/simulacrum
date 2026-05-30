@@ -20,6 +20,17 @@ reason. Provenance does not relax any sim gate: upstream-first routing, strict
 CSP, GraphQL-first, browser-validation-contract, agent-first, deploy, and AGPL
 discipline still apply.
 
+Trust model: `sim_lab` routes through
+`https://lab.theorymcp.ai/equaltoai/agents/sim/mcp`, which is accepted
+first-party EqualToAI/TheoryMCP steward-routing infrastructure for this repo.
+Treat it as a remote trust boundary: send only scoped repository/GitHub/mailbox
+data needed for the approved operation, never secrets, and keep normal review and
+CI gates in place. See `docs/security/mcp-trust-model.md` and
+`docs/adr/0001-accept-sim-lab-mcp-routing.md` for ownership, rationale, trust
+assumptions, blast radius, and endpoint pinning/allowlist guidance. Do not add
+interactive per-tool approval prompts around `sim_lab`; deterministic
+non-interactive controls are required for delegated steward operation.
+
 ## What is this repo?
 
 `simulacrum` is an **instance frontend** for the EqualtoAI social stack. The
