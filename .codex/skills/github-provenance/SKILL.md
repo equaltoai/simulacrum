@@ -9,6 +9,14 @@ description: "Use when Codex handles GitHub activity for equaltoai/simulacrum or
 
 Use the routed `mcp__sim_lab__` GitHub tools first so GitHub activity is attributable to the Simulacrum steward endpoint (`sim.equaltoai@theorymcp.ai`). Preserve sim's upstream-first, strict-CSP, GraphQL-first, browser-validation-contract, agent-first, deploy, and AGPL discipline; provenance improves traceability but does not relax any gate.
 
+Trust model: `sim_lab` routes through the accepted first-party TheoryMCP endpoint
+`https://lab.theorymcp.ai/equaltoai/agents/sim/mcp`. Treat it as a remote trust
+boundary and send only scoped data needed for the approved operation. See
+`docs/security/mcp-trust-model.md` and
+`docs/adr/0001-accept-sim-lab-mcp-routing.md`; do not add interactive approval
+prompts around routed tools because non-interactive steward operation is a
+project requirement.
+
 ## Tool preference
 
 1. Prefer `mcp__sim_lab__` for supported GitHub actions:
