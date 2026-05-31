@@ -93,16 +93,6 @@ Safe by default: message previews are rendered as plain text.
 		return (comm.from.displayName || comm.from.display_name || comm.from.address).trim();
 	});
 
-	const senderAddress = $derived.by(() => {
-		if (!comm) return '';
-		return (comm.from.address ?? '').trim();
-	});
-
-	const hasDisplayName = $derived.by(() => {
-		if (!comm) return false;
-		return Boolean((comm.from.displayName || comm.from.display_name)?.trim());
-	});
-
 	const receivedAt = $derived.by(() => {
 		if (!comm) return createdAt;
 		return comm.receivedAt ?? comm.received_at ?? createdAt;
@@ -166,12 +156,7 @@ Safe by default: message previews are rendered as plain text.
 				{@render content()}
 			{:else}
 				<div class="lesser-notification-item__header">
-					<div class="lesser-notification-item__sender">
-						<span class="lesser-notification-item__account">{fromLabel}</span>
-						{#if hasDisplayName && senderAddress}
-							<span class="communication-notification__address">{senderAddress}</span>
-						{/if}
-					</div>
+					<span class="lesser-notification-item__account">{fromLabel}</span>
 					<span class="lesser-notification-item__time">{formatDate(receivedAt)}</span>
 				</div>
 
@@ -226,16 +211,6 @@ Safe by default: message previews are rendered as plain text.
 		background: var(--notification-bg-secondary, #f7f9fa);
 		border: 1px solid var(--notification-border, #e1e8ed);
 		color: var(--notification-text-secondary, #536471);
-	}
-
-	.communication-notification__address {
-		display: block;
-		font-size: 0.8rem;
-		color: var(--notification-text-secondary, #536471);
-		margin-top: 0.1rem;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 
 	.communication-notification__subject {
