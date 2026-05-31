@@ -113,7 +113,7 @@ test('contact recommendation preserves compound soul email addresses as opaque s
 	assert.equal('instanceSlug' in recommendation.recommended, false);
 });
 
-test('contact and notification components render managed soul email addresses opaquely', async (t) => {
+test('contact components render managed soul email addresses opaquely', async (t) => {
 	const server = await createServer({
 		server: { middlewareMode: true },
 		appType: 'custom',
@@ -130,10 +130,6 @@ test('contact and notification components render managed soul email addresses op
 	const { default: BestWayToContact } = await server.ssrLoadModule(
 		'/src/lib/components/soul/BestWayToContact.svelte'
 	);
-	const { default: CommunicationNotificationItem } = await server.ssrLoadModule(
-		'/src/lib/components/notifications/CommunicationNotificationItem.svelte'
-	);
-
 	const channelsHtml = render(ChannelsDisplay, {
 		props: { channels: channelsFor(COMPOUND_SOUL_EMAIL), showCopy: false },
 	}).html;
@@ -157,38 +153,6 @@ test('contact and notification components render managed soul email addresses op
 	}).html;
 	assert.ok(bestWayHtml.includes(COMPOUND_SOUL_EMAIL));
 	assert.doesNotMatch(bestWayHtml, /Instance-scoped/);
-
-	const notificationHtml = render(CommunicationNotificationItem, {
-		props: {
-			notification: {
-				id: 'notification-compound-email',
-				type: 'communication_inbound',
-				createdAt: '2026-05-22T18:11:32Z',
-				read: false,
-				communication: {
-					channel: 'email',
-					from: {
-						address: COMPOUND_SOUL_EMAIL,
-						displayName: 'Arch',
-						soulAgentId: '0xarch',
-					},
-					to: { address: 'sim.simulacrum@lessersoul.ai' },
-					attachments: [],
-					subject: 'Project coordination',
-					body: 'Compound managed soul email fixture.',
-					receivedAt: '2026-05-22T18:11:32Z',
-					messageId: 'message-compound-email',
-					threadId: 'thread-compound-email',
-				},
-			},
-		},
-	}).html;
-	assert.match(notificationHtml, /Arch/);
-	assert.doesNotMatch(notificationHtml, /Instance-scoped|Legacy inbound alias/);
-
-	// CSR-019: address is visible alongside displayName
-	assert.match(notificationHtml, /arch\.simulacrum@lessersoul\.ai/);
-	assert.match(notificationHtml, /communication-notification__address/);
 });
 
 test('canonical FaceTheory notifications surface uses the sim-owned labeled renderer', async () => {
@@ -205,5 +169,9 @@ test('canonical FaceTheory notifications surface uses the sim-owned labeled rend
 	);
 	assert.match(notificationsSource, /describeSoulEmailAddress/);
 	assert.match(notificationsSource, /context: 'observed-message'/);
+
+	// CSR-019 belongs to the sim-owned FaceTheory notification surface, not a
+	// local patch to the vendored Greater notification component.
 	assert.match(notificationsSource, /communication\.from\.displayName && communication\.from\.address/);
+	assert.match(notificationsSource, /<small>\{communication\.from\.address\}<\/small>/);
 });
