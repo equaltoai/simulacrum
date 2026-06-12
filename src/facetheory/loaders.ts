@@ -1959,7 +1959,7 @@ function buildNavItems(
 			{
 				id: 'nav-explore',
 				label: 'Explore',
-				icon: 'explore',
+				icon: 'compass',
 				href: getPageHref('explore', activeUsername),
 				active: page.key === 'explore',
 			},
@@ -1970,14 +1970,14 @@ function buildNavItems(
 		{
 			id: 'nav-dashboard',
 			label: 'Dashboard',
-			icon: 'space_dashboard',
+			icon: 'grid',
 			href: getPageHref('dashboard', activeUsername),
 			active: page.key === 'dashboard',
 		},
 		{
 			id: 'nav-drones',
 			label: 'Drones',
-			icon: 'robot_2',
+			icon: 'cpu',
 			href: getPageHref('drones', activeUsername),
 			active: page.key === 'drones',
 			badge: agentCount ? String(agentCount) : soulCount ? '!' : undefined,
@@ -1985,7 +1985,7 @@ function buildNavItems(
 		{
 			id: 'nav-souls',
 			label: 'Soul Requests',
-			icon: 'smart_toy',
+			icon: 'users',
 			href: getPageHref('souls', activeUsername),
 			active: page.key === 'souls',
 			badge: requestCount ? String(requestCount) : undefined,
@@ -1993,7 +1993,7 @@ function buildNavItems(
 		{
 			id: 'nav-genesis',
 			label: 'Genesis',
-			icon: 'auto_awesome',
+			icon: 'zap',
 			href: getPageHref('genesis', activeUsername),
 			active: page.key === 'genesis',
 			badge: conversationCount ? String(conversationCount) : undefined,
@@ -2001,7 +2001,7 @@ function buildNavItems(
 		{
 			id: 'nav-approvals',
 			label: 'Approvals',
-			icon: 'verified',
+			icon: 'check-circle',
 			href: getPageHref('approvals', activeUsername),
 			active: page.key === 'approvals',
 			badge: conversationCount ? 'sign' : undefined,
@@ -2009,7 +2009,7 @@ function buildNavItems(
 		{
 			id: 'nav-identity',
 			label: 'Identity',
-			icon: 'fingerprint',
+			icon: 'key',
 			href: getPageHref('identity', activeUsername),
 			active: page.key === 'identity',
 			badge: soulCount ? String(soulCount) : undefined,
@@ -2029,21 +2029,21 @@ function buildNavItems(
 		{
 			id: 'nav-conversations',
 			label: 'Messages',
-			icon: 'chat',
+			icon: 'message-circle',
 			href: getPageHref('conversations', activeUsername),
 			active: page.key === 'conversations',
 		},
 		{
 			id: 'nav-notifications',
 			label: 'Notifications',
-			icon: 'notifications',
+			icon: 'bell',
 			href: getPageHref('notifications', activeUsername),
 			active: page.key === 'notifications',
 		},
 		{
 			id: 'nav-explore',
 			label: 'Explore',
-			icon: 'explore',
+			icon: 'compass',
 			href: getPageHref('explore', activeUsername),
 			active: page.key === 'explore',
 		},

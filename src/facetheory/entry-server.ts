@@ -94,12 +94,10 @@ function createFaceForRoute(route: string) {
 			const manifest = await manifestPromise;
 			const assets = viteAssetsForEntry(manifest, CLIENT_ENTRY, {
 				base: CLIENT_ASSET_BASE,
-				includeAssets: true,
 			});
 			const props = data as InitialRouteProps;
 			const hydration = externalHydrationForEntry(manifest, CLIENT_ENTRY, props, {
 				base: CLIENT_ASSET_BASE,
-				includeAssets: true,
 				dataUrl: hydrationDataUrlForRequest(ctx.request.path, ctx.request.query),
 			});
 
