@@ -20,6 +20,25 @@ test('FaceTheory reachability uses host workflow tokens, not Lesser OAuth tokens
 	assert.match(loaderSource, /createControlPlaneLesserHostSoulClient/);
 });
 
+
+test('browser Host workflow bridge cannot be enabled with build-time env', async () => {
+	const flagsSource = await readFile(new URL('../../../src/facetheory/flags.ts', import.meta.url), 'utf8');
+	const loaderSource = await readFile(new URL('../../../src/facetheory/loaders.ts', import.meta.url), 'utf8');
+
+	assert.match(flagsSource, /export const HOST_WORKFLOW_BRIDGE_ENABLED = false;/);
+	assert.doesNotMatch(flagsSource, /import\.meta\.env/);
+	assert.doesNotMatch(flagsSource, /VITE_SIMULACRUM_ENABLE_HOST_WORKFLOW_BRIDGE/);
+	assert.doesNotMatch(flagsSource, /normalizeBooleanEnv/);
+	assert.match(flagsSource, /lesser#1154/);
+	assert.match(flagsSource, /lesser-host#703/);
+	assert.match(flagsSource, /will not ask the browser for lesser-host control-plane credentials/);
+
+	assert.doesNotMatch(
+		loaderSource,
+		/Connect a lesser-host control-plane token to start the Simulacrum-led hosted\/off-chain creation lane/
+	);
+});
+
 test('OAuth callback fails closed when the cached public client changes before callback', async () => {
 	const source = await readFile(new URL('../../../src/lib/auth/session.ts', import.meta.url), 'utf8');
 
