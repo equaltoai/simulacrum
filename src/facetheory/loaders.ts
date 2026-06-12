@@ -24,11 +24,17 @@ import {
 } from '$lib/api';
 import {
 	SOUL_WORKFLOW_HOST_AUTH_NOTE,
+	getMintConversation,
 	getAgentMintConversation,
 	getAgentPromotion,
+	isHostSoulAgentId,
 	listAgentMintConversations,
 	listAgentPromotionLifecycleEvents,
+	listMyPromotionLifecycleEvents,
+	listMyPromotions,
 	type SoulAgentPromotion,
+	type SoulAgentAnchorState,
+	type SoulAgentOnchainBindingStatus,
 	type SoulAgentPromotionLifecycleEvent,
 	type SoulMintConversation,
 } from '$lib/api/soulWorkflowHost';
@@ -186,6 +192,10 @@ interface PublishedSoulAgentRecord {
 		}>;
 	};
 	anchor_assurance?: SoulAnchorAssurance | null;
+	anchor_state?: SoulAgentAnchorState;
+	onchain_binding_status?: SoulAgentOnchainBindingStatus;
+	onchain_binding_available?: boolean;
+	hosted_offchain_finalizable?: boolean;
 	principal_address?: string;
 	principal_signature?: string;
 	principal_declaration?: string;
@@ -822,6 +832,8 @@ const PREVIEW_HOST_WORKFLOW: HostWorkflowState = {
 		? SOUL_WORKFLOW_HOST_AUTH_NOTE
 		: HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
 	baseUrl: null,
+	registrationId: 'preview-registration-lyra',
+	hostAgentId: null,
 	promotion: null,
 	lifecycleEvents: [
 		{
@@ -1017,7 +1029,9 @@ export async function loadClientAppState({
 		const activeUsername = selectedAgent?.username ?? null;
 		const boundSoul = activeUsername ? findBoundSoul(mySouls, activeUsername) : null;
 		const boundSoulAgentId = boundSoul?.agent.agentId ?? null;
+		const boundHostSoulAgentId = isHostSoulAgentId(boundSoulAgentId) ? boundSoulAgentId : null;
 		const lesserHostBaseUrl = await loadLesserHostBaseUrl(signal);
+		const instanceDomain = resolveCurrentInstanceDomain();
 
 		// Register all soul agents for avatar resolution by both localId and binding username.
 		setSoulAvatarBaseUrl(lesserHostBaseUrl);
@@ -1049,10 +1063,10 @@ export async function loadClientAppState({
 		let reachabilityNotice: AuthorityNotice | null = null;
 		let publishedSoulError: string | null = null;
 
-		if (boundSoulAgentId && lesserHostBaseUrl) {
+		if (boundHostSoulAgentId && lesserHostBaseUrl) {
 			const publishedSoulResult = await loadPublishedSoulProfile(
 				lesserHostBaseUrl,
-				boundSoulAgentId,
+				boundHostSoulAgentId,
 				signal
 			)
 				.then((value) => ({ status: 'fulfilled' as const, value }))
@@ -1062,7 +1076,7 @@ export async function loadClientAppState({
 			} else {
 				publishedSoulError = describeAuthorityFailure(
 					'published soul lookup',
-					boundSoulAgentId,
+					boundHostSoulAgentId,
 					publishedSoulResult.reason
 				);
 			}
@@ -1077,8 +1091,8 @@ export async function loadClientAppState({
 					};
 				} else {
 					const [channelsResult, preferencesResult] = await Promise.allSettled([
-						loadChannels(lesserHostBaseUrl, boundSoulAgentId, reachabilityToken, signal),
-						loadPreferences(lesserHostBaseUrl, boundSoulAgentId, reachabilityToken, signal),
+						loadChannels(lesserHostBaseUrl, boundHostSoulAgentId, reachabilityToken, signal),
+						loadPreferences(lesserHostBaseUrl, boundHostSoulAgentId, reachabilityToken, signal),
 					]);
 
 					if (channelsResult.status === 'fulfilled') {
@@ -1095,7 +1109,7 @@ export async function loadClientAppState({
 							title: 'Reachability lookup failed',
 							message: describeAuthorityFailure(
 								'reachability lookup',
-								boundSoulAgentId,
+								boundHostSoulAgentId,
 								channelsResult.reason
 							),
 						};
@@ -1104,14 +1118,14 @@ export async function loadClientAppState({
 							title: 'Contact preferences unavailable',
 							message: describeAuthorityFailure(
 								'contact preferences lookup',
-								boundSoulAgentId,
+								boundHostSoulAgentId,
 								preferencesResult.reason
 							),
 						};
 					}
 				}
 			}
-		} else if (boundSoulAgentId && !lesserHostBaseUrl) {
+		} else if (boundHostSoulAgentId && !lesserHostBaseUrl) {
 			publishedSoulError =
 				'Simulacrum could not resolve the managed lesser-host base URL from Lesser, so it cannot load the bound soul declaration or reachability records.';
 			if (shouldShowReachability) {
@@ -1121,7 +1135,7 @@ export async function loadClientAppState({
 				};
 			}
 		} else if (shouldShowReachability) {
-			reachabilityNotice = boundSoulAgentId
+			reachabilityNotice = boundHostSoulAgentId
 				? {
 						title: 'Reachability authority unavailable',
 						message:
@@ -1137,14 +1151,20 @@ export async function loadClientAppState({
 
 		const hostWorkflow = !HOST_WORKFLOW_BRIDGE_ENABLED
 			? emptyHostWorkflow(false, false, lesserHostBaseUrl)
-			: boundSoulAgentId
+			: boundHostSoulAgentId
 				? await loadHostWorkflow({
 						token: hostToken ?? null,
 						baseUrl: lesserHostBaseUrl,
-						agentId: boundSoulAgentId,
+						agentId: boundHostSoulAgentId,
 						signal,
 					})
-				: emptyHostWorkflow(Boolean(hostToken?.trim()), true, lesserHostBaseUrl);
+				: await loadBootstrapHostWorkflow({
+						token: hostToken ?? null,
+						baseUrl: lesserHostBaseUrl,
+						activeUsername,
+						instanceDomain,
+						signal,
+					});
 
 		return assembleAppState({
 			page,
@@ -1232,6 +1252,12 @@ async function loadLesserHostBaseUrl(signal?: AbortSignal): Promise<string | nul
 	} catch {
 		return null;
 	}
+}
+
+function resolveCurrentInstanceDomain(): string | null {
+	if (typeof window === 'undefined') return null;
+	const hostname = window.location.hostname.trim();
+	return hostname || null;
 }
 
 async function requestPublicSoulJson<T>(
@@ -1358,12 +1384,94 @@ async function loadHostWorkflow({
 			tokenConfigured: true,
 			authNote: SOUL_WORKFLOW_HOST_AUTH_NOTE,
 			baseUrl,
+			registrationId: promotion?.registration_id ?? null,
+			hostAgentId: agentId,
 			promotion,
 			lifecycleEvents: lifecycleResponse.events ?? [],
 			conversations: conversationsResponse.conversations ?? [],
 			selectedConversation: fullConversation ?? null,
 			transcript,
 			producedDeclarations,
+			expectedWallet: promotion?.wallet ?? null,
+		};
+	} catch {
+		return emptyHostWorkflow(true, true, baseUrl);
+	}
+}
+
+async function loadBootstrapHostWorkflow({
+	token,
+	baseUrl,
+	activeUsername,
+	instanceDomain,
+	signal,
+}: {
+	token: string | null;
+	baseUrl: string | null;
+	activeUsername: string | null;
+	instanceDomain: string | null;
+	signal?: AbortSignal;
+}): Promise<HostWorkflowState> {
+	if (!token?.trim()) {
+		return emptyHostWorkflow(false, true, baseUrl);
+	}
+
+	if (!baseUrl?.trim()) {
+		return emptyHostWorkflow(true, true, null);
+	}
+
+	if (!activeUsername?.trim()) {
+		return emptyHostWorkflow(true, true, baseUrl);
+	}
+
+	try {
+		const [promotionsResponse, lifecycleResponse] = await Promise.all([
+			listMyPromotions({ token, baseUrl, signal }).catch(() => ({
+				promotions: [] as SoulAgentPromotion[],
+			})),
+			listMyPromotionLifecycleEvents({ token, baseUrl, signal }).catch(() => ({
+				events: [] as SoulAgentPromotionLifecycleEvent[],
+			})),
+		]);
+
+		const promotion = findHostPromotionForLocalBody(
+			promotionsResponse.promotions ?? [],
+			activeUsername,
+			instanceDomain
+		);
+		const registrationId = promotion?.registration_id?.trim() || null;
+		const selectedConversationId = promotion?.latest_conversation_id?.trim() || null;
+		const selectedConversation =
+			registrationId && selectedConversationId
+				? await getMintConversation({
+						token,
+						baseUrl,
+						registrationId,
+						conversationId: selectedConversationId,
+						signal,
+					}).catch(() => null)
+				: null;
+		const lifecycleEvents = filterPromotionLifecycleEvents(
+			lifecycleResponse.events ?? [],
+			promotion,
+			activeUsername,
+			instanceDomain
+		);
+
+		return {
+			bridgeEnabled: true,
+			tokenConfigured: true,
+			authNote: SOUL_WORKFLOW_HOST_AUTH_NOTE,
+			baseUrl,
+			registrationId,
+			// Before Lesser returns a bound soul, keep Host actions registration-scoped.
+			hostAgentId: null,
+			promotion: promotion ?? null,
+			lifecycleEvents,
+			conversations: selectedConversation ? [selectedConversation] : [],
+			selectedConversation,
+			transcript: parseTranscript(selectedConversation),
+			producedDeclarations: parseProducedDeclarations(selectedConversation),
 			expectedWallet: promotion?.wallet ?? null,
 		};
 	} catch {
@@ -1381,6 +1489,8 @@ function emptyHostWorkflow(
 		tokenConfigured,
 		authNote: bridgeEnabled ? SOUL_WORKFLOW_HOST_AUTH_NOTE : HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
 		baseUrl,
+		registrationId: null,
+		hostAgentId: null,
 		promotion: null,
 		lifecycleEvents: [],
 		conversations: [],
@@ -1527,10 +1637,10 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 			...(input.mySouls.length > 0 && input.myAgents.length === 0
 					? [{
 						id: 'request-note-drones',
-						title: 'Create a drone body before binding souls',
+						title: 'Create a drone body before soul bootstrap',
 						summary: `${input.mySouls.length} soul${
 							input.mySouls.length === 1 ? '' : 's'
-						} already exist on this instance, but Simulacrum only binds them to local drone bodies. Create a drone body first, then open that body's Identity page to bind a soul in context.`,
+						} already exist on this instance, but Simulacrum preserves continuity through local drone bodies. Create or select a body first, then open its Identity page to bind or bootstrap a hosted/off-chain soul in context.`,
 						tone: 'warning' as const,
 					}]
 				: []),
@@ -1626,11 +1736,11 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 			...(input.mySouls.length > 0 && input.myAgents.length === 0
 					? [{
 						id: 'dashboard-note-drones',
-						title: 'Souls are waiting for bodies',
+						title: 'Soul bootstrap starts with a body',
 						summary: `This instance already exposes ${input.mySouls.length} soul${
 							input.mySouls.length === 1 ? '' : 's'
-						}, but the historic flow still applies: create a local drone body first, then open its Identity page to bind a soul.`,
-						meta: 'Historic flow preserved in the new shell: create body -> open identity -> bind soul',
+						}, and Simulacrum keeps continuity explicit by attaching or creating souls from a local drone identity page.`,
+						meta: 'Simulacrum-led path: create/select body -> open identity -> bootstrap or bind soul',
 						tone: 'warning' as const,
 					}]
 				: []),
@@ -1738,10 +1848,19 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		],
 	};
 
+	const boundHostAgentId = isHostSoulAgentId(input.boundSoul?.agent.agentId)
+		? input.boundSoul.agent.agentId
+		: null;
+	const workflowHostAgentId =
+		input.hostWorkflow.hostAgentId && isHostSoulAgentId(input.hostWorkflow.hostAgentId)
+			? input.hostWorkflow.hostAgentId
+			: null;
 	const actionContext: AppActionContext = {
 		activeUsername,
 		activeAgentId: activeAgent?.id ?? null,
 		activeSoulAgentId: input.boundSoul?.agent.agentId ?? null,
+		activeHostAgentId: boundHostAgentId ?? workflowHostAgentId,
+		activeRegistrationId: input.hostWorkflow.registrationId ?? null,
 		activeConversationId:
 			input.hostWorkflow.selectedConversation?.conversation_id ??
 			workflow?.conversation?.conversationId ??
@@ -1820,6 +1939,61 @@ function findBoundSoul(
 	);
 }
 
+function normalizeDomain(value?: string | null): string | null {
+	const normalized = value?.trim().toLowerCase().replace(/\.$/, '');
+	return normalized || null;
+}
+
+function promotionMatchesLocalBody(
+	promotion: SoulAgentPromotion | null | undefined,
+	activeUsername: string | null,
+	instanceDomain: string | null
+): boolean {
+	const localId = activeUsername?.trim().toLowerCase();
+	if (!promotion || !localId) return false;
+	if (promotion.local_id?.trim().toLowerCase() !== localId) return false;
+
+	const expectedDomain = normalizeDomain(instanceDomain);
+	if (!expectedDomain) return true;
+
+	return normalizeDomain(promotion.domain) === expectedDomain;
+}
+
+function findHostPromotionForLocalBody(
+	promotions: readonly SoulAgentPromotion[],
+	activeUsername: string | null,
+	instanceDomain: string | null
+): SoulAgentPromotion | null {
+	const localId = activeUsername?.trim().toLowerCase();
+	if (!localId) return null;
+
+	return (
+		promotions.find((promotion) =>
+			promotionMatchesLocalBody(promotion, activeUsername, instanceDomain)
+		) ??
+		promotions.find((promotion) => promotion.local_id?.trim().toLowerCase() === localId) ??
+		null
+	);
+}
+
+function filterPromotionLifecycleEvents(
+	events: readonly SoulAgentPromotionLifecycleEvent[],
+	promotion: SoulAgentPromotion | null | undefined,
+	activeUsername: string | null,
+	instanceDomain: string | null
+): readonly SoulAgentPromotionLifecycleEvent[] {
+	if (!promotion) return [];
+	const registrationId = promotion.registration_id?.trim();
+	const agentId = isHostSoulAgentId(promotion.agent_id) ? promotion.agent_id.toLowerCase() : null;
+
+	return events.filter((event) => {
+		const eventPromotion = event.promotion;
+		if (registrationId && eventPromotion.registration_id?.trim() === registrationId) return true;
+		if (agentId && eventPromotion.agent_id?.trim().toLowerCase() === agentId) return true;
+		return promotionMatchesLocalBody(eventPromotion, activeUsername, instanceDomain);
+	});
+}
+
 function findExpectedWallet(boundSoul: SoulInventoryRecord | null): string | null {
 	return boundSoul?.agent.wallet?.trim() || null;
 }
@@ -1836,9 +2010,33 @@ function buildIdentityDeclarationNotice({
 	hostWorkflow: HostWorkflowState;
 }): AuthorityNotice {
 	if (!boundSoul) {
+		if (hostWorkflow.bridgeEnabled) {
+			if (!hostWorkflow.tokenConfigured) {
+				return {
+					title: 'Agent creation lane needs Host configuration',
+					message:
+						'No soul is bound yet. Connect a lesser-host control-plane token to start the Simulacrum-led hosted/off-chain creation lane for this body.',
+				};
+			}
+
+			if (hostWorkflow.promotion) {
+				return {
+					title: 'Hosted/off-chain bootstrap in progress',
+					message:
+						'This body has a lesser-host registration or promotion snapshot. Continue the Simulacrum bootstrap lane to publish the hosted/off-chain soul, then Lesser will bind the returned agent id.',
+				};
+			}
+
+			return {
+				title: 'Ready to create a hosted/off-chain soul',
+				message:
+					'No soul is bound yet. Use the bootstrap lane on this identity page to register, review, and finalize a first-class hosted/off-chain agent without waiting for on-chain mint execution.',
+			};
+		}
+
 		return {
 			title: 'No bound soul returned by Lesser',
-			message: `Lesser did not return a bound soul record for @${activeUsername}, so Simulacrum cannot resolve a lesser-host declaration for this body.`,
+			message: `Lesser did not return a bound soul record for @${activeUsername}. This build has the Host workflow bridge disabled, so hosted/off-chain creation is intentionally hidden.`,
 		};
 	}
 
@@ -2129,6 +2327,8 @@ function buildStatusChips(
 ): readonly AgentFaceStatusChip[] {
 	const semantics = workflow?.identitySemantics ?? activeAgent?.identitySemantics;
 	const quarantineChip = buildQuarantineStatusChip(activeAgent);
+	const anchorChip = buildAnchorStatusChip(hostWorkflow.promotion);
+	const onchainChip = buildOnchainBindingStatusChip(hostWorkflow.promotion);
 	return [
 		...(semantics ? [
 			{
@@ -2160,7 +2360,65 @@ function buildStatusChips(
 					: 'warning'
 				: 'accent',
 		},
+		...(anchorChip ? [anchorChip] : []),
+		...(onchainChip ? [onchainChip] : []),
 	];
+}
+
+function buildAnchorStatusChip(promotion: SoulAgentPromotion | null): AgentFaceStatusChip | null {
+	if (!promotion?.anchor_state) return null;
+	if (promotion.anchor_state === 'immutable_onchain') {
+		return {
+			label: 'Immutable on-chain',
+			detail: 'anchor binding executed',
+			tone: 'success',
+		};
+	}
+
+	return {
+		label: 'Hosted/off-chain',
+		detail: promotion.hosted_offchain_finalizable
+			? 'primary finalize path ready'
+			: 'first-class hosted anchor',
+		tone: promotion.hosted_offchain_finalizable ? 'success' : 'accent',
+	};
+}
+
+function buildOnchainBindingStatusChip(
+	promotion: SoulAgentPromotion | null
+): AgentFaceStatusChip | null {
+	const status = promotion?.onchain_binding_status;
+	if (!status) return null;
+
+	if (status === 'executed') {
+		return {
+			label: 'On-chain binding',
+			detail: 'executed',
+			tone: 'success',
+		};
+	}
+
+	if (status === 'failed') {
+		return {
+			label: 'On-chain upgrade',
+			detail: 'retryable after repair',
+			tone: 'warning',
+		};
+	}
+
+	if (promotion.onchain_binding_available || promotion.next_actions?.includes('record_mint_execution')) {
+		return {
+			label: 'On-chain upgrade',
+			detail: status === 'unavailable' ? 'optional when available' : `${status}, optional`,
+			tone: status === 'unavailable' ? 'neutral' : 'accent',
+		};
+	}
+
+	return {
+		label: 'On-chain upgrade',
+		detail: 'not required for creation',
+		tone: 'neutral',
+	};
 }
 
 function buildQuarantineStatusChip(activeAgent: DroneAgentState | null): AgentFaceStatusChip | null {
@@ -2694,13 +2952,26 @@ function buildPublishedSoulArtifacts(
 				: 'Published soul record returned from lesser-host.',
 			emphasis: 'reference',
 		},
+		...(profile.agent.anchor_state
+			? [
+					{
+						id: `anchor-state-${profile.agent.agent_id}`,
+						title: 'Anchor state',
+						description:
+							profile.agent.anchor_state === 'immutable_onchain'
+								? 'Immutable on-chain binding has been recorded for this published soul.'
+								: 'Hosted/off-chain publication is active; on-chain binding remains an optional upgrade.',
+						emphasis: 'reference' as const,
+					},
+				]
+			: []),
 		...(avatarStyles.length || currentAvatarStyle
 			? [
 					{
 						id: `avatar-styles-${profile.agent.agent_id}`,
-						title: 'On-chain avatar styles',
+						title: 'Avatar styles',
 						description: currentAvatarStyle
-							? `Current on-chain style: ${currentAvatarStyle}. ${avatarStyles.length} structured avatar variant${avatarStyles.length === 1 ? '' : 's'} returned for the client.`
+							? `Current style: ${currentAvatarStyle}. ${avatarStyles.length} structured avatar variant${avatarStyles.length === 1 ? '' : 's'} returned for the client.`
 							: `${avatarStyles.length} structured avatar variant${avatarStyles.length === 1 ? '' : 's'} returned for the client.`,
 						emphasis: 'reference' as const,
 					},

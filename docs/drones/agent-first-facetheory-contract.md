@@ -12,6 +12,10 @@ legacy clone-shaped client with the agent-first Simulacrum.
 - Project 9 milestones: M0 complete; M1 complete with the vendored
   `greater-v0.8.0` lesser-host workflow contract consumed through
   `src/lib/api/soulWorkflowHost.ts`
+- Project 44 update (2026-06-12): zero-state creation is Simulacrum-led.
+  Hosted/off-chain finalization is the default production path; on-chain mint
+  execution is an optional anchor upgrade, never a prerequisite for creating a
+  full local agent.
 - Product status: canonical for the rewrite
 - Legacy status: the SvelteKit social shell remains in the repo during
   migration, but it is no longer the target product model
@@ -26,14 +30,27 @@ identity are first-class surfaces.
 
 The canonical user path for soul graduation is:
 
-1. Request from within Simulacrum.
-2. Review and approval from within Simulacrum.
-3. Conduct the mint conversation from within Simulacrum.
-4. Gather signatures and finalize from within Simulacrum.
-5. Observe continuity and attribution updates from within Simulacrum.
+1. Create or select a local drone body from within Simulacrum.
+2. Request/review from within Simulacrum when local workflow state is needed.
+3. Begin and verify the Host registration from Simulacrum using the existing
+   lesser-host control-plane bearer token model.
+4. Conduct the registration-scoped mint conversation from within Simulacrum.
+5. Gather signatures and finalize hosted/off-chain publication from within
+   Simulacrum.
+6. Bind the returned Host `0x…` agent id into Lesser via
+   `finalizeSoulPromotion`, then observe continuity and attribution updates from
+   within Simulacrum.
 
 `lesser-host` remains the control-plane and publication backend. It is not the
 canonical human-facing UI for the graduation flow.
+
+Hosted/off-chain publication is first-class production state. Simulacrum must
+not block full agent creation on mint execution. When Host promotion snapshots
+expose `anchor_state`, `onchain_binding_status`,
+`onchain_binding_available`, `hosted_offchain_finalizable`, and `next_actions`,
+Simulacrum renders those fields as readiness/upgrade hints. `anchor_state =
+hosted_offchain` is usable agent creation; `anchor_state = immutable_onchain`
+is an assurance upgrade on the same namespace.
 
 ## Runtime Contract
 
@@ -125,6 +142,11 @@ Canonical control-plane resources:
 Constraint:
 
 - Simulacrum must not scrape or depend on portal-only UI behavior
+- Simulacrum must use registration-scoped Host routes before Lesser has a bound
+  Host `0x…` soul id. Agent-scoped Host routes are used only after that stable
+  id is known and stored.
+- Zero-state creation uses the existing control-plane bearer token model; no
+  instance-key creation path or browser-exposed secrets are introduced.
 
 ### `equaltoai/greater-components`
 
@@ -249,6 +271,13 @@ Implementation rule for the rewrite:
 - use Lesser GraphQL workflow state as the canonical in-instance status model
 - integrate direct `lesser-host` conversation execution only through a
   deliberate auth bridge or equivalent first-party contract
+- in bridge-enabled builds, expose the Identity-page creation/bootstrap lane
+  when no bound soul exists; a missing Host token is an actionable
+  configuration state, not a dead end
+- use registration-scoped Host APIs for begin/verify/conversation/complete/
+  finalize before a Host soul id is bound locally
+- call Lesser `finalizeSoulPromotion` with the Host `agent_id` returned by
+  hosted/off-chain finalization so the local drone becomes a full souled body
 - do not regress to a portal-only UX
 
 ## Deployment Contract

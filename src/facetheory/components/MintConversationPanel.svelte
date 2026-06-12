@@ -1,6 +1,9 @@
 <script lang="ts">
 	import {
+		completeMintConversation,
 		completeAgentMintConversation,
+		isHostSoulAgentId,
+		startMintConversationStream,
 		startAgentMintConversationStream,
 	} from '$lib/api/soulWorkflowHost';
 	import type { MintTranscriptMessage } from '../types';
@@ -8,7 +11,8 @@
 	interface Props {
 		hostToken?: string;
 		hostBaseUrl?: string | null;
-		agentId?: string | null;
+		hostAgentId?: string | null;
+		registrationId?: string | null;
 		initialConversationId?: string | null;
 		initialTranscript?: readonly MintTranscriptMessage[];
 		conversationStatus?: string | null;
@@ -23,7 +27,8 @@
 	let {
 		hostToken = '',
 		hostBaseUrl = null,
-		agentId = null,
+		hostAgentId = null,
+		registrationId = null,
 		initialConversationId = null,
 		initialTranscript = [],
 		conversationStatus = null,
@@ -37,6 +42,15 @@
 	let loading = $state(false);
 	let error: string | null = $state(null);
 	let success: string | null = $state(null);
+
+	const scopedRegistrationId = $derived(registrationId?.trim() || null);
+	const scopedHostAgentId = $derived(
+		isHostSoulAgentId(hostAgentId) ? hostAgentId.trim() : null
+	);
+	const useRegistrationScope = $derived(Boolean(scopedRegistrationId && !scopedHostAgentId));
+	const canCallHost = $derived(
+		Boolean(hostToken.trim() && hostBaseUrl?.trim() && (scopedHostAgentId || scopedRegistrationId))
+	);
 
 	$effect(() => {
 		if (!loading) {
@@ -93,7 +107,7 @@
 	}
 
 	async function submitTurn() {
-		if (!hostToken.trim() || !hostBaseUrl?.trim() || !agentId || !message.trim()) return;
+		if (!canCallHost || !message.trim()) return;
 
 		loading = true;
 		error = null;
@@ -113,15 +127,23 @@
 		let assistantText = '';
 
 		try {
-			const stream = startAgentMintConversationStream({
-				token: hostToken,
-				baseUrl: hostBaseUrl,
-				agentId,
-				input: {
-					conversation_id: conversationId ?? undefined,
-					message: inputMessage,
-				},
-			});
+			const input = {
+				conversation_id: conversationId ?? undefined,
+				message: inputMessage,
+			};
+			const stream = useRegistrationScope
+				? startMintConversationStream({
+						token: hostToken,
+						baseUrl: hostBaseUrl ?? undefined,
+						registrationId: scopedRegistrationId ?? '',
+						input,
+					})
+				: startAgentMintConversationStream({
+						token: hostToken,
+						baseUrl: hostBaseUrl ?? undefined,
+						agentId: scopedHostAgentId ?? '',
+						input,
+					});
 
 			const reader = stream.getReader();
 
@@ -181,19 +203,28 @@
 	}
 
 	async function markConversationComplete() {
-		if (!hostToken.trim() || !hostBaseUrl?.trim() || !agentId || !conversationId) return;
+		if (!canCallHost || !conversationId) return;
 
 		loading = true;
 		error = null;
 		success = null;
 
 		try {
-			await completeAgentMintConversation({
-				token: hostToken,
-				baseUrl: hostBaseUrl,
-				agentId,
-				conversationId,
-			});
+			if (useRegistrationScope) {
+				await completeMintConversation({
+					token: hostToken,
+					baseUrl: hostBaseUrl ?? undefined,
+					registrationId: scopedRegistrationId ?? '',
+					conversationId,
+				});
+			} else {
+				await completeAgentMintConversation({
+					token: hostToken,
+					baseUrl: hostBaseUrl ?? undefined,
+					agentId: scopedHostAgentId ?? '',
+					conversationId,
+				});
+			}
 			status = 'completed';
 			success = 'Conversation marked complete and ready for finalize.';
 			await onUpdated?.();
@@ -214,7 +245,7 @@
 			<p class="ft-panel__eyebrow">Streaming mint conversation</p>
 			<h2>Conversation actions</h2>
 		</div>
-		<span class="ft-panel__badge">{status}</span>
+		<span class="ft-panel__badge">{useRegistrationScope ? 'registration-scoped' : status}</span>
 	</header>
 
 	<p class="ft-panel__copy">
@@ -238,7 +269,7 @@
 		<span>Next turn</span>
 		<textarea
 			bind:value={message}
-			disabled={!hostToken.trim() || !hostBaseUrl?.trim() || !agentId || loading}
+			disabled={!canCallHost || loading}
 			placeholder="Describe the declaration, continuity, or boundary you want the mint conversation to explore."
 			rows="4"
 		></textarea>
@@ -247,7 +278,7 @@
 	<div class="ft-panel__actions">
 		<button
 			class="ft-button ft-button--primary"
-			disabled={!hostToken.trim() || !hostBaseUrl?.trim() || !agentId || !message.trim() || loading}
+			disabled={!canCallHost || !message.trim() || loading}
 			onclick={submitTurn}
 			type="button"
 		>
@@ -255,7 +286,7 @@
 		</button>
 		<button
 			class="ft-button"
-			disabled={!hostToken.trim() || !hostBaseUrl?.trim() || !agentId || !conversationId || loading}
+			disabled={!canCallHost || !conversationId || loading}
 			onclick={markConversationComplete}
 			type="button"
 		>

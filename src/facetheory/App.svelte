@@ -23,6 +23,7 @@
 		type AuthSession,
 	} from '$lib/auth/session';
 
+	import AgentFirstBootstrapPanel from './components/AgentFirstBootstrapPanel.svelte';
 	import FinalizeSigningPanel from './components/FinalizeSigningPanel.svelte';
 	import DronesPage from './components/DronesPage.svelte';
 	import HostedBoundSoulActivationPanel from './components/HostedBoundSoulActivationPanel.svelte';
@@ -355,6 +356,18 @@
 				{#if isAuthenticated}
 					{#if currentPage.key === 'identity'}
 						<IdentityQuarantinePanel agent={appState.activeAgent} onUpdated={refreshLiveState} />
+						{#if !appState.actionContext.activeSoulAgentId}
+							<AgentFirstBootstrapPanel
+								activeAgent={appState.activeAgent}
+								currentUserName={appState.currentUserName}
+								hostBaseUrl={appState.hostWorkflow.baseUrl}
+								hostToken={hostToken}
+								hostWorkflow={appState.hostWorkflow}
+								onUpdated={refreshLiveState}
+								username={appState.actionContext.activeUsername}
+								workflow={appState.workflow}
+							/>
+						{/if}
 						<HostedBoundSoulActivationPanel
 							agentUsername={appState.actionContext.activeUsername}
 							anchorAssurance={appState.activationDisclosure.anchorAssurance}
@@ -405,25 +418,27 @@
 
 					{#if HOST_WORKFLOW_BRIDGE_ENABLED && currentPage.key === 'genesis'}
 						<MintConversationPanel
-							agentId={appState.actionContext.activeAgentId}
 							conversationStatus={appState.hostWorkflow.selectedConversation?.status ?? null}
+							hostAgentId={appState.actionContext.activeHostAgentId}
 							hostBaseUrl={appState.hostWorkflow.baseUrl}
 							hostToken={hostToken}
 							initialConversationId={appState.actionContext.activeConversationId}
 							initialTranscript={appState.hostWorkflow.transcript}
 							onUpdated={refreshLiveState}
+							registrationId={appState.actionContext.activeRegistrationId}
 						/>
 					{/if}
 
 					{#if HOST_WORKFLOW_BRIDGE_ENABLED && currentPage.key === 'approvals'}
 						<FinalizeSigningPanel
 							activeSoulAgentId={appState.actionContext.activeSoulAgentId}
-							agentId={appState.actionContext.activeAgentId}
 							conversationId={appState.actionContext.activeConversationId}
 							expectedWallet={appState.actionContext.expectedWallet}
+							hostAgentId={appState.actionContext.activeHostAgentId}
 							hostBaseUrl={appState.hostWorkflow.baseUrl}
 							hostToken={hostToken}
 							onUpdated={refreshLiveState}
+							registrationId={appState.actionContext.activeRegistrationId}
 							username={appState.actionContext.activeUsername}
 							workflow={appState.workflow}
 						/>
