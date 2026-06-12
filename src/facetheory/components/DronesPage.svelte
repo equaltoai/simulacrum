@@ -162,7 +162,7 @@
 
 			createdAgentUsername = delegation.agent.username;
 			createSuccess = effectiveSoulCount
-				? `Drone @${delegation.agent.username} is ready. Open its Identity page next to bind or bootstrap a hosted/off-chain soul.`
+				? `Drone @${delegation.agent.username} is ready. Open its Identity page next to inspect and bind one of your existing souls.`
 				: `Drone @${delegation.agent.username} is ready for local setup.`;
 
 			createUsername = '';
@@ -217,8 +217,8 @@
 							<h2>Souls exist, but no drone bodies have been created yet</h2>
 						</header>
 						<p>
-							Simulacrum now starts from a local drone body: create the body first, then open that body's
-							Identity page to bind an existing soul or bootstrap a hosted/off-chain soul.
+							The historic flow still applies here: create a local drone body first, then open that body's
+							Identity page to inspect and bind an existing soul.
 						</p>
 						<div class="drones-page__pill-row">
 							<span class="drones-page__pill">{soulLabel}</span>
@@ -228,12 +228,12 @@
 				{:else if effectiveSoulCount > 0}
 					<section class="drones-page__panel drones-page__panel--accent">
 						<header class="drones-page__header">
-							<p>Identity-first bootstrap</p>
-							<h2>Use a drone identity page to bootstrap or bind a soul</h2>
+							<p>Identity-first binding</p>
+							<h2>Use a drone identity page to attach an existing soul</h2>
 						</header>
 						<p>
-							Drones remain the creation and roster surface. Soul inventory, hosted/off-chain creation, and
-							the explicit binding action now live on each body's Identity page.
+							Drones remain the creation and roster surface. Soul inventory, details, and the explicit binding
+							action now live on each body's Identity page.
 						</p>
 						{#if identityTargetUsername}
 							<div class="drones-page__panel-actions">

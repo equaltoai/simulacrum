@@ -4,38 +4,45 @@ This document captures the rollout posture for the Project 9 rewrite.
 
 ## Canonical Product Path
 
-Simulacrum is now the canonical in-instance UX for the drone-to-soul lifecycle:
+Simulacrum remains the canonical in-instance UX for the drone-to-soul lifecycle:
 
-1. create or select a local drone body from `/l/drones` or `/l/identity`
-2. request/review local workflow state from Simulacrum surfaces when needed
-3. begin and verify the Host registration from `/l/identity`
-4. conduct the registration-scoped mint conversation from `/l/souls/genesis`
-5. finalize and sign from `/l/approvals`
-6. inspect continuity, attribution, and reachability from `/l/identity`
+1. request a soul from `/l/souls`
+2. review request state and notifications from Simulacrum surfaces
+3. conduct the mint conversation from `/l/souls/genesis` once the backend
+   creation bridge is available
+4. finalize and sign from `/l/approvals` once the backend creation bridge is
+   available
+5. inspect continuity, attribution, and reachability from `/l/identity`
 
 `lesser-host` remains the publication and control-plane backend. Its portal is
-not the canonical user-facing workflow and is not an acceptable fallback for the
-production bootstrap path.
+not the canonical user-facing workflow.
 
-## Default Host Workflow Bridge
+## Current Creation Boundary
 
-The Host workflow bridge is part of the default production Simulacrum client.
-There is no deploy/install flag for enabling the bridge, and operators should not
-ship a build that hides the Simulacrum-led `/l/identity` bootstrap lane.
+Project 44 remediation removes the browser Host-token bridge from production
+rollout guidance. Simulacrum currently has no production browser path for
+creating souls because the required server-side contracts are not available yet.
 
-Live Host actions still require runtime configuration:
+Do not ship or canary a browser prompt for `lesser-host` control-plane
+credentials. Provisioned Lesser instances already hold their Host trust
+server-side; the installed client must wait for same-origin instance trust
+instead of asking the browser to carry a Host bearer token.
 
-- Lesser must expose the managed `lesser-host` trust base URL through the
-  instance configuration.
-- Authenticated operators must provide the existing `lesser-host` control-plane
-  bearer token in the Host token panel.
-- Missing base URL or missing token states are actionable configuration states in
-  the UI, not disabled-build states.
+Hosted/off-chain creation can return to Simulacrum only after both gates land:
 
-The client must continue to use the existing control-plane bearer token model
-until a first-party server-side proxy or equivalent contract replaces it. Do not
-reintroduce an instance-key zero-state creation path, and do not route operators
-to the Host portal as the production fallback.
+- Lesser exposes a same-origin instance-trust creation bridge for installed
+  clients.
+- Greater exposes adapters for that Lesser bridge so Simulacrum can consume it
+  without direct Host write wrappers.
+
+Until then:
+
+- request, review, identity, and continuity remain live in Simulacrum
+- the client renders the canonical FaceTheory route map
+- `/l/souls/genesis` and `/l/approvals` show the missing Lesser bridge and
+  Greater adapter gate rather than an operator-enableable flag
+- no deploy/install environment variable is a supported way to enable direct
+  Host control-plane writes from the browser
 
 ## Verification Scope
 
@@ -43,12 +50,12 @@ Before promoting a build as the active dev-stage release, verify:
 
 - FaceTheory SSR renders `/l/`, `/l/souls`, `/l/souls/genesis`,
   `/l/approvals`, and `/l/identity`
-- the `/l/identity` bootstrap lane is visible in a normal production build when
-  no Lesser bound soul exists
-- missing `lesser-host` base URL and missing control-plane token states render as
-  actionable configuration guidance
 - the request lane works from Simulacrum without sending the user to the
   `lesser-host` portal
+- mint conversation and finalize surfaces do not ask for a `lesser-host`
+  control-plane token
+- disabled-state copy names the missing Lesser instance-trust creation bridge
+  and Greater adapter gate
 - review, approval, and continuity states remain legible inside the FaceTheory
   surfaces
 - drone runtime boundaries remain explicit:
@@ -61,6 +68,9 @@ Before promoting a build as the active dev-stage release, verify:
 
 - treat the legacy SvelteKit shell as historical only
 - use `lesser client install` for releases; do not use `lesser client deploy`
-- run a normal `pnpm build` as the deploy proof; no bridge env var is required
+- do not enable a browser Host-token workflow bridge for verification or rollout
+  windows
+- route soul-creation enablement through the Lesser bridge and Greater adapter
+  milestones before restoring browser creation UX
 - if a release regresses the agent-first flow, roll back by reinstalling the
   previous good revision
