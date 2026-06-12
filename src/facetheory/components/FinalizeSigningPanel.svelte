@@ -4,11 +4,8 @@
 		type AgentWorkflowSurface,
 	} from '$lib/api';
 	import {
-		finalizeMintConversation,
 		finalizeAgentMintConversation,
-		getMintConversationFinalizePreflight,
 		getAgentMintConversationFinalizePreflight,
-		isHostSoulAgentId,
 		type SoulMintConversationFinalizePreflightResponse,
 	} from '$lib/api/soulWorkflowHost';
 	import { getInjectedProvider, personalSign, requestAccounts } from '$lib/tips/provider';
@@ -16,8 +13,7 @@
 	interface Props {
 		hostToken?: string;
 		hostBaseUrl?: string | null;
-		hostAgentId?: string | null;
-		registrationId?: string | null;
+		agentId?: string | null;
 		conversationId?: string | null;
 		username?: string | null;
 		expectedWallet?: string | null;
@@ -29,8 +25,7 @@
 	let {
 		hostToken = '',
 		hostBaseUrl = null,
-		hostAgentId = null,
-		registrationId = null,
+		agentId = null,
 		conversationId = null,
 		username = null,
 		expectedWallet = null,
@@ -44,17 +39,8 @@
 	let success = $state<string | null>(null);
 	let lastPublishedVersion = $state<number | null>(null);
 
-	const scopedRegistrationId = $derived(registrationId?.trim() || null);
-	const scopedHostAgentId = $derived(
-		isHostSoulAgentId(hostAgentId) ? hostAgentId.trim() : null
-	);
-	const useRegistrationScope = $derived(Boolean(scopedRegistrationId && !scopedHostAgentId));
-	const canCallHost = $derived(
-		Boolean(hostToken.trim() && hostBaseUrl?.trim() && conversationId && (scopedHostAgentId || scopedRegistrationId))
-	);
-
 	async function signAndFinalize() {
-		if (!canCallHost || !conversationId || !username?.trim()) return;
+		if (!hostToken.trim() || !hostBaseUrl?.trim() || !agentId || !conversationId || !username?.trim()) return;
 
 		loading = true;
 		error = null;
@@ -76,78 +62,46 @@
 				throw new Error(`Connected wallet does not match the expected wallet (${expectedWallet}).`);
 			}
 
-			const initialBegin = useRegistrationScope
-				? await getMintConversationFinalizePreflight({
-						token: hostToken,
-						baseUrl: hostBaseUrl ?? undefined,
-						registrationId: scopedRegistrationId ?? '',
-						conversationId,
-						input: {
-							boundary_signatures: {},
-						},
-					})
-				: await getAgentMintConversationFinalizePreflight({
-						token: hostToken,
-						baseUrl: hostBaseUrl ?? undefined,
-						agentId: scopedHostAgentId ?? '',
-						conversationId,
-						input: {
-							boundary_signatures: {},
-						},
-					});
+			const initialBegin = await getAgentMintConversationFinalizePreflight({
+				token: hostToken,
+				baseUrl: hostBaseUrl,
+				agentId,
+				conversationId,
+				input: {
+					boundary_signatures: {},
+				},
+			});
 
 			const boundarySignatures = await collectBoundarySignatures(provider, wallet, initialBegin);
-			const begin = useRegistrationScope
-				? await getMintConversationFinalizePreflight({
-						token: hostToken,
-						baseUrl: hostBaseUrl ?? undefined,
-						registrationId: scopedRegistrationId ?? '',
-						conversationId,
-						input: {
-							boundary_signatures: boundarySignatures,
-						},
-					})
-				: await getAgentMintConversationFinalizePreflight({
-						token: hostToken,
-						baseUrl: hostBaseUrl ?? undefined,
-						agentId: scopedHostAgentId ?? '',
-						conversationId,
-						input: {
-							boundary_signatures: boundarySignatures,
-						},
-					});
+			const begin = await getAgentMintConversationFinalizePreflight({
+				token: hostToken,
+				baseUrl: hostBaseUrl,
+				agentId,
+				conversationId,
+				input: {
+					boundary_signatures: boundarySignatures,
+				},
+			});
 
 			const selfAttestation = await personalSign(provider, {
 				address: wallet,
 				message: begin.digest_hex,
 			});
 
-			const finalizeInput = {
-				boundary_signatures: boundarySignatures,
-				issued_at: begin.issued_at,
-				expected_version: begin.expected_version,
-				self_attestation: selfAttestation,
-			};
-			const hostResult = useRegistrationScope
-				? await finalizeMintConversation({
-						token: hostToken,
-						baseUrl: hostBaseUrl ?? undefined,
-						registrationId: scopedRegistrationId ?? '',
-						conversationId,
-						input: finalizeInput,
-					})
-				: await finalizeAgentMintConversation({
-						token: hostToken,
-						baseUrl: hostBaseUrl ?? undefined,
-						agentId: scopedHostAgentId ?? '',
-						conversationId,
-						input: finalizeInput,
-					});
+			const hostResult = await finalizeAgentMintConversation({
+				token: hostToken,
+				baseUrl: hostBaseUrl,
+				agentId,
+				conversationId,
+				input: {
+					boundary_signatures: boundarySignatures,
+					issued_at: begin.issued_at,
+					expected_version: begin.expected_version,
+					self_attestation: selfAttestation,
+				},
+			});
 
 			lastPublishedVersion = hostResult.published_version;
-			const finalizedHostAgentId = isHostSoulAgentId(hostResult.agent.agent_id)
-				? hostResult.agent.agent_id
-				: null;
 
 			await finalizeSoulPromotion({
 				input: buildFinalizeInput({
@@ -155,7 +109,7 @@
 					begin,
 					workflow,
 					conversationId,
-					soulAgentId: activeSoulAgentId ?? finalizedHostAgentId,
+					soulAgentId: activeSoulAgentId ?? hostResult.agent.agent_id,
 				}),
 			});
 
@@ -287,16 +241,12 @@
 			<strong>{conversationId ? 'ready' : 'pending'}</strong>
 			<span>{conversationId ?? 'complete the mint conversation first'}</span>
 		</div>
-		<div>
-			<strong>{useRegistrationScope ? 'hosted/off-chain' : 'agent-scoped'}</strong>
-			<span>{useRegistrationScope ? scopedRegistrationId : scopedHostAgentId}</span>
-		</div>
 	</div>
 
 	<div class="ft-panel__actions">
 		<button
 			class="ft-button ft-button--primary"
-			disabled={!canCallHost || !username || loading}
+			disabled={!hostToken.trim() || !hostBaseUrl?.trim() || !agentId || !conversationId || !username || loading}
 			onclick={signAndFinalize}
 			type="button"
 		>
