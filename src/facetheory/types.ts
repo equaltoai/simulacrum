@@ -49,7 +49,6 @@ export interface MintTranscriptMessage {
 }
 
 export interface HostWorkflowState {
-	bridgeEnabled: boolean;
 	tokenConfigured: boolean;
 	authNote: string;
 	baseUrl: string | null;

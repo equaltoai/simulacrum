@@ -280,17 +280,21 @@ Current integration boundary:
 - `lesser-host` mint conversation endpoints are authenticated with a
   control-plane bearer token
 - Simulacrum currently authenticates users with a Lesser OAuth bearer token
-- until a server-side bridge or first-party instance proxy exists, Simulacrum
-  must not assume the browser can directly call `lesser-host` workflow routes
+- the default production client includes the Simulacrum-owned Host workflow
+  bridge; until a server-side proxy or replacement first-party contract exists,
+  that bridge uses the existing `lesser-host` control-plane bearer token model
 
 Implementation rule for the rewrite:
 
 - use Lesser GraphQL workflow state as the canonical in-instance status model
-- integrate direct `lesser-host` conversation execution only through a
-  deliberate auth bridge or equivalent first-party contract
-- in bridge-enabled builds, expose the Identity-page creation/bootstrap lane
-  when no bound soul exists; a missing Host token is an actionable
-  configuration state, not a dead end
+- expose the Identity-page creation/bootstrap lane in normal production builds
+  when no bound soul exists; do not require a deploy/install flag to reveal the
+  lane
+- treat a missing managed Host base URL or missing Host control-plane token as
+  actionable configuration states, not disabled-build states or a reason to fall
+  back to the Host portal
+- integrate direct `lesser-host` conversation execution only through the default
+  Simulacrum Host workflow bridge or an equivalent first-party contract
 - use registration-scoped Host APIs for begin/verify/conversation/complete/
   finalize before a Host soul id is bound locally
 - call Lesser `finalizeSoulPromotion` with the Host `agent_id` returned by
@@ -345,5 +349,5 @@ Canonical Stitch anchors:
 - `lesser-host` remains the control-plane publication backend.
 - Greater `faces/agent` and `shared/agent` are the canonical route-level and
   workflow UI surfaces.
-- Direct browser dependence on host-portal auth is out of scope unless a
-  first-party bridge is introduced.
+- The Simulacrum-owned Host workflow bridge is part of the default production
+  client; direct browser dependence on host-portal auth remains out of scope.

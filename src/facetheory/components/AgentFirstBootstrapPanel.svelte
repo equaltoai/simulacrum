@@ -89,7 +89,7 @@
 	const effectiveUsername = $derived(activeAgent?.username ?? username?.trim() ?? createdUsername ?? null);
 	const effectiveDisplayName = $derived(activeAgent?.displayName ?? effectiveUsername ?? 'this drone body');
 	const hasLocalBody = $derived(Boolean(activeAgent?.username));
-	const hasHostConfiguration = $derived(Boolean(hostWorkflow.bridgeEnabled && hostToken.trim() && hostBaseUrl?.trim()));
+	const hasHostConfiguration = $derived(Boolean(hostToken.trim() && hostBaseUrl?.trim()));
 	const promotion = $derived(hostWorkflow.promotion);
 	const activeRegistrationId = $derived(registrationId ?? hostWorkflow.registrationId);
 	const activeConversationId = $derived(conversationId ?? hostWorkflow.selectedConversation?.conversation_id ?? null);
@@ -767,12 +767,16 @@
 	<section class="bootstrap-panel__lane" class:bootstrap-panel__lane--warning={!hasHostConfiguration}>
 		<header>
 			<p>Configuration</p>
-			<h3>{hasHostConfiguration ? 'Host bridge is ready' : 'Host token required'}</h3>
+			<h3>
+				{hasHostConfiguration
+					? 'Host workflow is ready'
+					: !hostBaseUrl
+						? 'Host base URL required'
+						: 'Host token required'}
+			</h3>
 		</header>
 		<p>
-			{#if !hostWorkflow.bridgeEnabled}
-				This build intentionally keeps the Host workflow bridge disabled. Enable the bridge build flag to expose live hosted/off-chain creation.
-			{:else if !hostBaseUrl}
+			{#if !hostBaseUrl}
 				Lesser did not return a managed lesser-host base URL. Configure the instance trust base URL before starting hosted/off-chain creation.
 			{:else if !hostToken.trim()}
 				Connect a lesser-host control-plane bearer token in the Host token panel on this page. The token stays in browser session storage and is never replaced with instance-key creation.

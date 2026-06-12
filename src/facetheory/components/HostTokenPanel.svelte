@@ -2,6 +2,7 @@
 	interface Props {
 		token: string;
 		configured: boolean;
+		baseUrl?: string | null;
 		note: string;
 		conversationCount: number;
 		lifecycleEventCount: number;
@@ -14,6 +15,7 @@
 	let {
 		token = '',
 		configured = false,
+		baseUrl = null,
 		note,
 		conversationCount = 0,
 		lifecycleEventCount = 0,
@@ -28,6 +30,12 @@
 	$effect(() => {
 		draft = token;
 	});
+
+	const hasBaseUrl = $derived(Boolean(baseUrl?.trim()));
+	const workflowReady = $derived(Boolean(configured && hasBaseUrl));
+	const badgeLabel = $derived(
+		workflowReady ? 'Connected' : hasBaseUrl ? 'Token required' : 'Base URL required'
+	);
 
 	async function saveToken() {
 		await onSave?.(draft.trim());
@@ -45,8 +53,8 @@
 			<p class="ft-panel__eyebrow">Host workflow access</p>
 			<h2>Control-plane token</h2>
 		</div>
-		<span class:ft-panel__badge--success={configured} class="ft-panel__badge">
-			{configured ? 'Connected' : 'Required'}
+		<span class:ft-panel__badge--success={workflowReady} class="ft-panel__badge">
+			{badgeLabel}
 		</span>
 	</header>
 

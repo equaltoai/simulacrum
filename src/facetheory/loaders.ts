@@ -87,16 +87,37 @@ import type {
 	HostWorkflowState,
 	MintTranscriptMessage,
 } from './types';
-import {
-	HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
-	HOST_WORKFLOW_BRIDGE_ENABLED,
-} from './flags';
 
 interface ViewerInfo {
 	id: string;
 	name: string;
 	handle: string;
 	avatar?: string | null;
+}
+
+const HOST_WORKFLOW_BASE_URL_NOTE =
+	'Lesser did not return a managed lesser-host base URL. Configure the instance trust base URL before starting live hosted/off-chain creation, mint conversation, or finalize actions.';
+
+const HOST_WORKFLOW_CONNECTED_NOTE =
+	'The Host workflow bridge is part of the default Simulacrum client and uses the configured lesser-host control-plane bearer token for live hosted/off-chain creation, mint conversation, and finalize actions.';
+
+function hasHostWorkflowBaseUrl(baseUrl: string | null): boolean {
+	return Boolean(baseUrl?.trim());
+}
+
+function describeHostWorkflowConfigurationNote(
+	tokenConfigured: boolean,
+	baseUrl: string | null
+): string {
+	if (!hasHostWorkflowBaseUrl(baseUrl)) {
+		return HOST_WORKFLOW_BASE_URL_NOTE;
+	}
+
+	if (!tokenConfigured) {
+		return SOUL_WORKFLOW_HOST_AUTH_NOTE;
+	}
+
+	return HOST_WORKFLOW_CONNECTED_NOTE;
 }
 
 interface AgentRosterRecord {
@@ -826,11 +847,8 @@ const PREVIEW_MY_SOULS: readonly SoulInventoryRecord[] = [
 ];
 
 const PREVIEW_HOST_WORKFLOW: HostWorkflowState = {
-	bridgeEnabled: HOST_WORKFLOW_BRIDGE_ENABLED,
 	tokenConfigured: false,
-	authNote: HOST_WORKFLOW_BRIDGE_ENABLED
-		? SOUL_WORKFLOW_HOST_AUTH_NOTE
-		: HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+	authNote: describeHostWorkflowConfigurationNote(false, null),
 	baseUrl: null,
 	registrationId: 'preview-registration-lyra',
 	hostAgentId: null,
@@ -961,7 +979,7 @@ export function createPreviewAppState({
 		reachabilityNotice: null,
 		publishedSoulProfile: null,
 		publishedSoulError: null,
-		hostWorkflow: emptyHostWorkflow(false, false, null),
+		hostWorkflow: emptyHostWorkflow(false, null),
 		isPreview: true,
 	});
 }
@@ -1149,22 +1167,20 @@ export async function loadClientAppState({
 					};
 		}
 
-		const hostWorkflow = !HOST_WORKFLOW_BRIDGE_ENABLED
-			? emptyHostWorkflow(false, false, lesserHostBaseUrl)
-			: boundHostSoulAgentId
-				? await loadHostWorkflow({
-						token: hostToken ?? null,
-						baseUrl: lesserHostBaseUrl,
-						agentId: boundHostSoulAgentId,
-						signal,
-					})
-				: await loadBootstrapHostWorkflow({
-						token: hostToken ?? null,
-						baseUrl: lesserHostBaseUrl,
-						activeUsername,
-						instanceDomain,
-						signal,
-					});
+		const hostWorkflow = boundHostSoulAgentId
+			? await loadHostWorkflow({
+					token: hostToken ?? null,
+					baseUrl: lesserHostBaseUrl,
+					agentId: boundHostSoulAgentId,
+					signal,
+				})
+			: await loadBootstrapHostWorkflow({
+					token: hostToken ?? null,
+					baseUrl: lesserHostBaseUrl,
+					activeUsername,
+					instanceDomain,
+					signal,
+				});
 
 		return assembleAppState({
 			page,
@@ -1339,11 +1355,11 @@ async function loadHostWorkflow({
 	signal?: AbortSignal;
 }): Promise<HostWorkflowState> {
 	if (!token?.trim()) {
-		return emptyHostWorkflow(false, true, baseUrl);
+		return emptyHostWorkflow(false, baseUrl);
 	}
 
 	if (!baseUrl?.trim()) {
-		return emptyHostWorkflow(true, true, null);
+		return emptyHostWorkflow(true, null);
 	}
 
 	try {
@@ -1380,9 +1396,8 @@ async function loadHostWorkflow({
 		const producedDeclarations = parseProducedDeclarations(fullConversation);
 
 		return {
-			bridgeEnabled: true,
 			tokenConfigured: true,
-			authNote: SOUL_WORKFLOW_HOST_AUTH_NOTE,
+			authNote: describeHostWorkflowConfigurationNote(true, baseUrl),
 			baseUrl,
 			registrationId: promotion?.registration_id ?? null,
 			hostAgentId: agentId,
@@ -1395,7 +1410,7 @@ async function loadHostWorkflow({
 			expectedWallet: promotion?.wallet ?? null,
 		};
 	} catch {
-		return emptyHostWorkflow(true, true, baseUrl);
+		return emptyHostWorkflow(true, baseUrl);
 	}
 }
 
@@ -1413,15 +1428,15 @@ async function loadBootstrapHostWorkflow({
 	signal?: AbortSignal;
 }): Promise<HostWorkflowState> {
 	if (!token?.trim()) {
-		return emptyHostWorkflow(false, true, baseUrl);
+		return emptyHostWorkflow(false, baseUrl);
 	}
 
 	if (!baseUrl?.trim()) {
-		return emptyHostWorkflow(true, true, null);
+		return emptyHostWorkflow(true, null);
 	}
 
 	if (!activeUsername?.trim()) {
-		return emptyHostWorkflow(true, true, baseUrl);
+		return emptyHostWorkflow(true, baseUrl);
 	}
 
 	try {
@@ -1459,9 +1474,8 @@ async function loadBootstrapHostWorkflow({
 		);
 
 		return {
-			bridgeEnabled: true,
 			tokenConfigured: true,
-			authNote: SOUL_WORKFLOW_HOST_AUTH_NOTE,
+			authNote: describeHostWorkflowConfigurationNote(true, baseUrl),
 			baseUrl,
 			registrationId,
 			// Before Lesser returns a bound soul, keep Host actions registration-scoped.
@@ -1475,19 +1489,17 @@ async function loadBootstrapHostWorkflow({
 			expectedWallet: promotion?.wallet ?? null,
 		};
 	} catch {
-		return emptyHostWorkflow(true, true, baseUrl);
+		return emptyHostWorkflow(true, baseUrl);
 	}
 }
 
 function emptyHostWorkflow(
 	tokenConfigured: boolean,
-	bridgeEnabled: boolean,
 	baseUrl: string | null
 ): HostWorkflowState {
 	return {
-		bridgeEnabled,
 		tokenConfigured,
-		authNote: bridgeEnabled ? SOUL_WORKFLOW_HOST_AUTH_NOTE : HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+		authNote: describeHostWorkflowConfigurationNote(tokenConfigured, baseUrl),
 		baseUrl,
 		registrationId: null,
 		hostAgentId: null,
@@ -1528,12 +1540,10 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 	const identityDeclarationCard = identityDeclaration
 		? normalizeDeclarationCard(identityDeclaration)
 		: undefined;
-	const declarationNotice = input.isPreview
-		? null
-		: identityDeclarationCard
+	const declarationNotice =
+		input.isPreview || identityDeclarationCard
 			? null
 			: buildIdentityDeclarationNotice({
-					activeUsername,
 					boundSoul: input.boundSoul,
 					publishedSoulError: input.publishedSoulError ?? null,
 					hostWorkflow: input.hostWorkflow,
@@ -1621,11 +1631,11 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 			eyebrow: input.page.eyebrow,
 			title: input.page.title,
 			summary: `${input.page.summary} ${
-				input.hostWorkflow.bridgeEnabled
-					? input.hostWorkflow.tokenConfigured
-						? 'Host workflow data is connected.'
-						: 'Connect a lesser-host control-plane token to load the live mint lane.'
-					: 'This build keeps the host workflow bridge deliberately gated.'
+				input.hostWorkflow.tokenConfigured
+					? 'Host workflow data is connected.'
+					: hasHostWorkflowBaseUrl(input.hostWorkflow.baseUrl)
+						? 'Connect a lesser-host control-plane token to load the live mint lane.'
+						: 'Configure the instance lesser-host base URL to load the live mint lane.'
 			}`,
 		},
 		filters: buildRequestFilters(rawRequestQueue),
@@ -1646,18 +1656,14 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 				: []),
 			{
 				id: 'request-note-host',
-				title: input.hostWorkflow.bridgeEnabled
-					? input.hostWorkflow.tokenConfigured
-						? 'Host workflow linked'
-						: 'Host token required for mint lane'
-					: 'Host bridge disabled for this build',
+				title: input.hostWorkflow.tokenConfigured
+					? 'Host workflow linked'
+					: hasHostWorkflowBaseUrl(input.hostWorkflow.baseUrl)
+						? 'Host token required for mint lane'
+						: 'Host base URL required for mint lane',
 				summary: input.hostWorkflow.authNote,
 				meta: input.hostWorkflow.selectedConversation?.conversation_id ?? undefined,
-				tone: input.hostWorkflow.bridgeEnabled
-					? input.hostWorkflow.tokenConfigured
-						? 'success'
-						: 'warning'
-					: 'accent',
+				tone: input.hostWorkflow.tokenConfigured ? 'success' : 'warning',
 			},
 			{
 				id: 'request-note-entry',
@@ -1694,18 +1700,14 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		focusNotes: [
 			{
 				id: 'genesis-note-token',
-				title: input.hostWorkflow.bridgeEnabled
-					? input.hostWorkflow.tokenConfigured
-						? 'Streaming lane is unlocked'
-						: 'Connect lesser-host for live streaming'
-					: 'Streaming lane deliberately gated',
+				title: input.hostWorkflow.tokenConfigured
+					? 'Streaming lane is unlocked'
+					: hasHostWorkflowBaseUrl(input.hostWorkflow.baseUrl)
+						? 'Connect lesser-host for live streaming'
+						: 'Configure lesser-host base URL for live streaming',
 				summary: input.hostWorkflow.authNote,
 				meta: input.hostWorkflow.selectedConversation?.status ?? undefined,
-				tone: input.hostWorkflow.bridgeEnabled
-					? input.hostWorkflow.tokenConfigured
-						? 'success'
-						: 'warning'
-					: 'accent',
+				tone: input.hostWorkflow.tokenConfigured ? 'success' : 'warning',
 			},
 			{
 				id: 'genesis-note-llm',
@@ -1999,44 +2001,43 @@ function findExpectedWallet(boundSoul: SoulInventoryRecord | null): string | nul
 }
 
 function buildIdentityDeclarationNotice({
-	activeUsername,
 	boundSoul,
 	publishedSoulError,
 	hostWorkflow,
 }: {
-	activeUsername: string;
 	boundSoul: SoulInventoryRecord | null;
 	publishedSoulError: string | null;
 	hostWorkflow: HostWorkflowState;
 }): AuthorityNotice {
 	if (!boundSoul) {
-		if (hostWorkflow.bridgeEnabled) {
-			if (!hostWorkflow.tokenConfigured) {
-				return {
-					title: 'Agent creation lane needs Host configuration',
-					message:
-						'No soul is bound yet. Connect a lesser-host control-plane token to start the Simulacrum-led hosted/off-chain creation lane for this body.',
-				};
-			}
-
-			if (hostWorkflow.promotion) {
-				return {
-					title: 'Hosted/off-chain bootstrap in progress',
-					message:
-						'This body has a lesser-host registration or promotion snapshot. Continue the Simulacrum bootstrap lane to publish the hosted/off-chain soul, then Lesser will bind the returned agent id.',
-				};
-			}
-
+		if (!hasHostWorkflowBaseUrl(hostWorkflow.baseUrl)) {
 			return {
-				title: 'Ready to create a hosted/off-chain soul',
+				title: 'Agent creation lane needs Host base URL',
 				message:
-					'No soul is bound yet. Use the bootstrap lane on this identity page to register, review, and finalize a first-class hosted/off-chain agent without waiting for on-chain mint execution.',
+					'No soul is bound yet, and Lesser did not return a managed lesser-host base URL. Configure the instance trust base URL before starting the Simulacrum-led hosted/off-chain creation lane for this body.',
+			};
+		}
+
+		if (!hostWorkflow.tokenConfigured) {
+			return {
+				title: 'Agent creation lane needs Host token',
+				message:
+					'No soul is bound yet. Connect a lesser-host control-plane token to start the Simulacrum-led hosted/off-chain creation lane for this body.',
+			};
+		}
+
+		if (hostWorkflow.promotion) {
+			return {
+				title: 'Hosted/off-chain bootstrap in progress',
+				message:
+					'This body has a lesser-host registration or promotion snapshot. Continue the Simulacrum bootstrap lane to publish the hosted/off-chain soul, then Lesser will bind the returned agent id.',
 			};
 		}
 
 		return {
-			title: 'No bound soul returned by Lesser',
-			message: `Lesser did not return a bound soul record for @${activeUsername}. This build has the Host workflow bridge disabled, so hosted/off-chain creation is intentionally hidden.`,
+			title: 'Ready to create a hosted/off-chain soul',
+			message:
+				'No soul is bound yet. Use the bootstrap lane on this identity page to register, review, and finalize a first-class hosted/off-chain agent without waiting for on-chain mint execution.',
 		};
 	}
 
@@ -2344,21 +2345,17 @@ function buildStatusChips(
 		] : []),
 		...(quarantineChip ? [quarantineChip] : []),
 		{
-			label: hostWorkflow.bridgeEnabled
-				? hostWorkflow.tokenConfigured
-					? 'Host workflow linked'
-					: 'Host workflow gated'
-				: 'Host bridge disabled',
-			detail: hostWorkflow.bridgeEnabled
-				? hostWorkflow.tokenConfigured
-					? 'conversation and finalize actions unlocked'
-					: 'requires control-plane token'
-				: 'mint conversation and finalize intentionally gated',
-			tone: hostWorkflow.bridgeEnabled
-				? hostWorkflow.tokenConfigured
-					? 'success'
-					: 'warning'
-				: 'accent',
+			label: hostWorkflow.tokenConfigured
+				? 'Host workflow linked'
+				: hasHostWorkflowBaseUrl(hostWorkflow.baseUrl)
+					? 'Host token required'
+					: 'Host base URL required',
+			detail: hostWorkflow.tokenConfigured
+				? 'conversation and finalize actions unlocked'
+				: hasHostWorkflowBaseUrl(hostWorkflow.baseUrl)
+					? 'requires control-plane token'
+					: 'configure instance trust base URL',
+			tone: hostWorkflow.tokenConfigured ? 'success' : 'warning',
 		},
 		...(anchorChip ? [anchorChip] : []),
 		...(onchainChip ? [onchainChip] : []),
