@@ -12,10 +12,12 @@
 		completeMintConversation,
 		finalizeMintConversation,
 		getMintConversationFinalizePreflight,
+		getSoulAgentRegistrationPrincipalDeclarationPreflight,
 		isHostSoulAgentId,
 		startMintConversationStream,
 		verifySoulAgentRegistration,
 		type SoulAgentPromotion,
+		type SoulAgentRegistrationPrincipalDeclarationPreflightResponse,
 		type SoulMintConversationFinalizePreflightResponse,
 	} from '$lib/api/soulWorkflowHost';
 	import type { AgentType } from '$lib/greater/adapters/graphql';
@@ -48,6 +50,8 @@
 		{ value: 'BRIDGE', label: 'Bridge' },
 		{ value: 'CUSTOM', label: 'Custom' },
 	];
+	const EVM_ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
+	const PRINCIPAL_DECLARATION_MESSAGE_HEX_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 
 	let {
 		activeAgent = null,
@@ -146,6 +150,51 @@
 			return 'mint execution can be recorded later as an optional upgrade';
 		}
 		return 'not required for creation';
+	}
+
+	function validatePrincipalDeclarationPreflight(
+		preflight: SoulAgentRegistrationPrincipalDeclarationPreflightResponse,
+		connectedWallet: `0x${string}`
+	): { declaredAt: string; messageHex: `0x${string}`; principalAddress: `0x${string}` } {
+		if (typeof preflight.signing_method !== 'string' || preflight.signing_method !== 'eip191_personal_sign') {
+			throw new Error('lesser-host returned an unsupported principal declaration signing method.');
+		}
+		if (typeof preflight.message_encoding !== 'string' || preflight.message_encoding !== 'hex_bytes') {
+			throw new Error('lesser-host returned an unsupported principal declaration message encoding.');
+		}
+
+		const messageHex = typeof preflight.message_hex === 'string' ? preflight.message_hex.trim() : '';
+		if (!PRINCIPAL_DECLARATION_MESSAGE_HEX_PATTERN.test(messageHex)) {
+			throw new Error('lesser-host returned an invalid principal declaration signing payload.');
+		}
+
+		const digestHex = typeof preflight.digest_hex === 'string' ? preflight.digest_hex.trim() : '';
+		if (digestHex && digestHex.toLowerCase() !== messageHex.toLowerCase()) {
+			throw new Error('lesser-host returned mismatched principal declaration signing digests.');
+		}
+
+		const principalAddress =
+			typeof preflight.principal_address === 'string' ? preflight.principal_address.trim() : '';
+		const signerAddress = typeof preflight.signer_address === 'string' ? preflight.signer_address.trim() : '';
+		if (!EVM_ADDRESS_PATTERN.test(principalAddress) || !EVM_ADDRESS_PATTERN.test(signerAddress)) {
+			throw new Error('lesser-host returned an invalid principal signer address.');
+		}
+
+		const connected = connectedWallet.toLowerCase();
+		if (principalAddress.toLowerCase() !== connected || signerAddress.toLowerCase() !== connected) {
+			throw new Error('Principal declaration preflight does not match the connected wallet.');
+		}
+
+		const declaredAt = typeof preflight.declared_at === 'string' ? preflight.declared_at.trim() : '';
+		if (!declaredAt || Number.isNaN(Date.parse(declaredAt))) {
+			throw new Error('lesser-host returned an invalid principal declaration timestamp.');
+		}
+
+		return {
+			declaredAt,
+			messageHex: messageHex as `0x${string}`,
+			principalAddress: principalAddress as `0x${string}`,
+		};
 	}
 
 	function pushTranscriptMessage(next: MintTranscriptMessage) {
@@ -322,9 +371,21 @@
 				message: begin.wallet.message,
 			});
 			const declaration = principalDeclaration.trim() || buildPrincipalDeclaration();
+			status = 'principal preflight';
+			const principalPreflight = await getSoulAgentRegistrationPrincipalDeclarationPreflight({
+				token: hostToken,
+				baseUrl: hostBaseUrl ?? undefined,
+				registrationId: begin.registration.id,
+				input: {
+					principal_address: wallet,
+					principal_declaration: declaration,
+					declared_at: new Date().toISOString(),
+				},
+			});
+			const principalSigning = validatePrincipalDeclarationPreflight(principalPreflight, wallet);
 			const principalSignature = await personalSign(provider, {
 				address: wallet,
-				message: declaration,
+				message: principalSigning.messageHex,
 			});
 
 			const verified = await verifySoulAgentRegistration({
@@ -333,10 +394,10 @@
 				registrationId: begin.registration.id,
 				input: {
 					signature: registrationSignature,
-					principal_address: wallet,
+					principal_address: principalSigning.principalAddress,
 					principal_declaration: declaration,
 					principal_signature: principalSignature,
-					declared_at: new Date().toISOString(),
+					declared_at: principalSigning.declaredAt,
 				},
 			});
 
@@ -754,6 +815,10 @@
 			<span>Principal declaration</span>
 			<textarea bind:value={principalDeclaration} disabled={loading || !hasLocalBody} rows="4"></textarea>
 		</label>
+		<p class="ft-panel__copy">
+			Simulacrum sends this declaration to lesser-host for a registration-scoped signing preflight, then asks the
+			connected wallet to sign Host's canonical EIP-191 payload. Sim does not reconstruct the Host digest locally.
+		</p>
 		<div class="ft-panel__actions">
 			<button
 				class="ft-button ft-button--primary"

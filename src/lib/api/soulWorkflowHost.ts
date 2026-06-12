@@ -80,6 +80,27 @@ export type SoulAgentRegistrationBeginRequest =
 	components['schemas']['SoulAgentRegistrationBeginRequest'];
 export type SoulAgentRegistrationBeginResponse =
 	components['schemas']['SoulAgentRegistrationBeginResponse'];
+export type SoulAgentRegistrationPrincipalDeclarationPreflightRequest = {
+	/**
+	 * Project 44 consumes this endpoint before the vendored Greater OpenAPI
+	 * snapshot includes it. Keep the additive contract local to Simulacrum and
+	 * remove it when the Greater-generated lesser-host client is refreshed.
+	 */
+	principal_address: string;
+	principal_declaration: string;
+	declared_at: string;
+};
+export type SoulAgentRegistrationPrincipalDeclarationPreflightResponse = {
+	version: string;
+	principal_address: string;
+	signer_address: string;
+	signing_method: string;
+	message_encoding: string;
+	message_hex: string;
+	digest_hex: string;
+	canonical_json: string;
+	declared_at: string;
+};
 export type SoulAgentRegistrationVerifyRequest =
 	components['schemas']['SoulAgentRegistrationVerifyRequest'];
 export type SoulAgentRegistrationVerifyResponse =
@@ -290,6 +311,27 @@ export async function beginSoulAgentRegistration({
 		signal,
 		fetch,
 		path: '/api/v1/soul/agents/register/begin',
+		method: 'POST',
+		body: input,
+	});
+}
+
+export async function getSoulAgentRegistrationPrincipalDeclarationPreflight({
+	token,
+	registrationId,
+	input,
+	baseUrl,
+	signal,
+	fetch,
+}: RegistrationRequestOptions & {
+	input: SoulAgentRegistrationPrincipalDeclarationPreflightRequest;
+}): Promise<SoulAgentRegistrationPrincipalDeclarationPreflightResponse> {
+	return requestSoulWorkflowJson<SoulAgentRegistrationPrincipalDeclarationPreflightResponse>({
+		token,
+		baseUrl,
+		signal,
+		fetch,
+		path: `/api/v1/soul/agents/register/${encodeURIComponent(requireIdentifier(registrationId, 'registrationId'))}/principal-declaration/preflight`,
 		method: 'POST',
 		body: input,
 	});

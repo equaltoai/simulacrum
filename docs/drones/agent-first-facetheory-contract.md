@@ -33,7 +33,10 @@ The canonical user path for soul graduation is:
 1. Create or select a local drone body from within Simulacrum.
 2. Request/review from within Simulacrum when local workflow state is needed.
 3. Begin and verify the Host registration from Simulacrum using the existing
-   lesser-host control-plane bearer token model.
+   lesser-host control-plane bearer token model. Principal approval must use
+   Host's registration-scoped principal-declaration preflight; Simulacrum signs
+   the returned canonical EIP-191 payload and submits Host's canonical
+   `declared_at` instead of reconstructing the declaration digest locally.
 4. Conduct the registration-scoped mint conversation from within Simulacrum.
 5. Gather signatures and finalize hosted/off-chain publication from within
    Simulacrum.
@@ -147,6 +150,13 @@ Constraint:
   id is known and stored.
 - Zero-state creation uses the existing control-plane bearer token model; no
   instance-key creation path or browser-exposed secrets are introduced.
+- Principal declaration signing uses
+  `POST /api/v1/soul/agents/register/{id}/principal-declaration/preflight`.
+  Simulacrum signs the returned `message_hex` (`signing_method =
+  eip191_personal_sign`, `message_encoding = hex_bytes`) and forwards the
+  returned canonical `declared_at` to registration verify. Simulacrum must fail
+  closed on unexpected signing metadata or malformed signing bytes and must not
+  implement Host's JCS/digest calculation in the client.
 
 ### `equaltoai/greater-components`
 
@@ -245,6 +255,13 @@ The UX must make room for:
 The client may render signing readiness from Lesser workflow state and
 `lesser-host` finalize preflight payloads, but it must not invent signing
 inputs when canonical backend data already exists.
+
+For registration verification, the principal approval signing input is owned by
+`lesser-host`: Simulacrum calls the registration-scoped
+principal-declaration preflight, signs the returned 32-byte EIP-191
+`message_hex` with the connected principal wallet, and submits the preflight's
+canonical `declared_at` during verify. The declaration text remains
+operator-visible in Simulacrum, but Host owns the canonical JSON and digest.
 
 ## Conversation Contract
 
