@@ -1072,8 +1072,12 @@ export async function loadClientAppState({
 
 				if (!reachabilityToken) {
 					reachabilityNotice = {
-						title: 'Reachability control-plane token required',
-						message: SOUL_WORKFLOW_HOST_AUTH_NOTE,
+						title: HOST_WORKFLOW_BRIDGE_ENABLED
+							? 'Reachability control-plane token required'
+							: 'Reachability bridge pending',
+						message: HOST_WORKFLOW_BRIDGE_ENABLED
+							? SOUL_WORKFLOW_HOST_AUTH_NOTE
+							: HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
 					};
 				} else {
 					const [channelsResult, preferencesResult] = await Promise.allSettled([
@@ -1515,7 +1519,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 					? input.hostWorkflow.tokenConfigured
 						? 'Host workflow data is connected.'
 						: 'Connect a lesser-host control-plane token to load the live mint lane.'
-					: 'This build keeps the host workflow bridge deliberately gated.'
+					: 'Hosted soul creation is waiting on the Lesser instance-trust creation bridge and Greater adapters.'
 			}`,
 		},
 		filters: buildRequestFilters(rawRequestQueue),
@@ -1540,7 +1544,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 					? input.hostWorkflow.tokenConfigured
 						? 'Host workflow linked'
 						: 'Host token required for mint lane'
-					: 'Host bridge disabled for this build',
+					: 'Creation bridge pending',
 				summary: input.hostWorkflow.authNote,
 				meta: input.hostWorkflow.selectedConversation?.conversation_id ?? undefined,
 				tone: input.hostWorkflow.bridgeEnabled
@@ -1588,7 +1592,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 					? input.hostWorkflow.tokenConfigured
 						? 'Streaming lane is unlocked'
 						: 'Connect lesser-host for live streaming'
-					: 'Streaming lane deliberately gated',
+					: 'Streaming lane waiting on Lesser and Greater',
 				summary: input.hostWorkflow.authNote,
 				meta: input.hostWorkflow.selectedConversation?.status ?? undefined,
 				tone: input.hostWorkflow.bridgeEnabled
@@ -1858,7 +1862,7 @@ function buildIdentityDeclarationNotice({
 
 	return {
 		title: 'No published declaration returned by lesser-host',
-		message: `Soul ${boundSoul.agent.agentId} does not currently expose a published declaration record. Connect a lesser-host control-plane token to inspect the private mint conversation state if that declaration is still in review.`,
+		message: `Soul ${boundSoul.agent.agentId} does not currently expose a published declaration record. Private mint conversation inspection is waiting on the Lesser same-origin instance-trust creation bridge and matching Greater adapters; Simulacrum will not ask the browser for lesser-host control-plane credentials.`,
 	};
 }
 
@@ -2148,12 +2152,12 @@ function buildStatusChips(
 				? hostWorkflow.tokenConfigured
 					? 'Host workflow linked'
 					: 'Host workflow gated'
-				: 'Host bridge disabled',
+				: 'Creation bridge pending',
 			detail: hostWorkflow.bridgeEnabled
 				? hostWorkflow.tokenConfigured
 					? 'conversation and finalize actions unlocked'
 					: 'requires control-plane token'
-				: 'mint conversation and finalize intentionally gated',
+				: 'waiting on Lesser bridge and Greater adapters',
 			tone: hostWorkflow.bridgeEnabled
 				? hostWorkflow.tokenConfigured
 					? 'success'

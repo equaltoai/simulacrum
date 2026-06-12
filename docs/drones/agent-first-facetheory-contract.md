@@ -241,14 +241,18 @@ Current integration boundary:
 - `lesser-host` mint conversation endpoints are authenticated with a
   control-plane bearer token
 - Simulacrum currently authenticates users with a Lesser OAuth bearer token
-- until a server-side bridge or first-party instance proxy exists, Simulacrum
-  must not assume the browser can directly call `lesser-host` workflow routes
+- until Lesser exposes a same-origin instance-trust creation bridge and Greater
+  exposes matching adapters, Simulacrum has no production browser path for
+  creating souls
+- Simulacrum must not ask the browser to store or present `lesser-host`
+  control-plane credentials
 
 Implementation rule for the rewrite:
 
 - use Lesser GraphQL workflow state as the canonical in-instance status model
-- integrate direct `lesser-host` conversation execution only through a
-  deliberate auth bridge or equivalent first-party contract
+- restore mint/finalize execution only through the Lesser instance-trust
+  creation bridge plus Greater adapters, or an explicitly equivalent
+  first-party contract that keeps Host credentials server-side
 - do not regress to a portal-only UX
 
 ## Deployment Contract
@@ -299,5 +303,5 @@ Canonical Stitch anchors:
 - `lesser-host` remains the control-plane publication backend.
 - Greater `faces/agent` and `shared/agent` are the canonical route-level and
   workflow UI surfaces.
-- Direct browser dependence on host-portal auth is out of scope unless a
-  first-party bridge is introduced.
+- Direct browser dependence on host-portal auth is out of scope; soul creation
+  must resume through same-origin instance trust and Greater adapters.

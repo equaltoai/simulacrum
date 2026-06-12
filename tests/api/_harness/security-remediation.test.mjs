@@ -24,6 +24,11 @@ test('FaceTheory reachability uses host workflow tokens, not Lesser OAuth tokens
 test('browser Host workflow bridge cannot be enabled with build-time env', async () => {
 	const flagsSource = await readFile(new URL('../../../src/facetheory/flags.ts', import.meta.url), 'utf8');
 	const loaderSource = await readFile(new URL('../../../src/facetheory/loaders.ts', import.meta.url), 'utf8');
+	const appSource = await readFile(new URL('../../../src/facetheory/App.svelte', import.meta.url), 'utf8');
+	const rolloutSource = await readFile(
+		new URL('../../../docs/drones/agent-first-rollout.md', import.meta.url),
+		'utf8'
+	);
 
 	assert.match(flagsSource, /export const HOST_WORKFLOW_BRIDGE_ENABLED = false;/);
 	assert.doesNotMatch(flagsSource, /import\.meta\.env/);
@@ -31,12 +36,30 @@ test('browser Host workflow bridge cannot be enabled with build-time env', async
 	assert.doesNotMatch(flagsSource, /normalizeBooleanEnv/);
 	assert.match(flagsSource, /lesser#1154/);
 	assert.match(flagsSource, /lesser-host#703/);
+	assert.match(flagsSource, /Greater exposes the generated client\s+\*\s*adapters/);
 	assert.match(flagsSource, /will not ask the browser for lesser-host control-plane credentials/);
 
 	assert.doesNotMatch(
 		loaderSource,
 		/Connect a lesser-host control-plane token to start the Simulacrum-led hosted\/off-chain creation lane/
 	);
+	assert.match(loaderSource, /Lesser instance-trust creation bridge and Greater adapters/);
+	assert.match(loaderSource, /will not ask the browser for lesser-host control-plane credentials/);
+	assert.doesNotMatch(loaderSource, /This build keeps the host workflow bridge deliberately gated/);
+	assert.doesNotMatch(loaderSource, /Host bridge disabled for this build/);
+	assert.doesNotMatch(loaderSource, /Streaming lane deliberately gated/);
+
+	assert.match(appSource, /Instance-trust bridge pending/);
+	assert.match(appSource, /Soul creation is waiting on Lesser and Greater/);
+	assert.doesNotMatch(appSource, /Deliberate enablement/);
+	assert.doesNotMatch(appSource, /Host workflow bridge is disabled/);
+
+	assert.doesNotMatch(rolloutSource, /VITE_SIMULACRUM_ENABLE_HOST_WORKFLOW_BRIDGE/);
+	assert.doesNotMatch(rolloutSource, /When the flag is enabled/);
+	assert.doesNotMatch(rolloutSource, /prefer enabling the host workflow bridge/);
+	assert.match(rolloutSource, /same-origin instance-trust creation bridge/);
+	assert.match(rolloutSource, /Greater exposes adapters/);
+	assert.match(rolloutSource, /no deploy\/install environment variable is a supported way/);
 });
 
 test('OAuth callback fails closed when the cached public client changes before callback', async () => {

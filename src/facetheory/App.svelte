@@ -386,8 +386,8 @@
 						<section class="ft-panel">
 							<header class="ft-panel__header">
 								<div>
-									<p class="ft-panel__eyebrow">Deliberate enablement</p>
-									<h2>Host workflow bridge is disabled</h2>
+									<p class="ft-panel__eyebrow">Instance-trust bridge pending</p>
+									<h2>Soul creation is waiting on Lesser and Greater</h2>
 								</div>
 							</header>
 							<p class="ft-panel__copy">{HOST_WORKFLOW_BRIDGE_DISABLED_NOTE}</p>
