@@ -1,5 +1,15 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import type { Component, Snippet } from 'svelte';
+	import BellIcon from '$lib/greater/icons/icons/bell.svelte';
+	import CheckCircleIcon from '$lib/greater/icons/icons/check-circle.svelte';
+	import CompassIcon from '$lib/greater/icons/icons/compass.svelte';
+	import CpuIcon from '$lib/greater/icons/icons/cpu.svelte';
+	import GridIcon from '$lib/greater/icons/icons/grid.svelte';
+	import HomeIcon from '$lib/greater/icons/icons/home.svelte';
+	import KeyIcon from '$lib/greater/icons/icons/key.svelte';
+	import MessageCircleIcon from '$lib/greater/icons/icons/message-circle.svelte';
+	import UsersIcon from '$lib/greater/icons/icons/users.svelte';
+	import ZapIcon from '$lib/greater/icons/icons/zap.svelte';
 	import type {
 		AgentFaceAction,
 		AgentFaceBrand,
@@ -39,8 +49,36 @@
 		return `agent-face-frame__action agent-face-frame__action--${tone}`;
 	}
 
+	const navIconRegistry: Record<string, Component> = {
+		bell: BellIcon,
+		'check-circle': CheckCircleIcon,
+		compass: CompassIcon,
+		cpu: CpuIcon,
+		grid: GridIcon,
+		home: HomeIcon,
+		key: KeyIcon,
+		'message-circle': MessageCircleIcon,
+		users: UsersIcon,
+		zap: ZapIcon,
+
+		// Legacy Material Symbols names kept as CSP-safe aliases while callers migrate.
+		auto_awesome: ZapIcon,
+		chat: MessageCircleIcon,
+		explore: CompassIcon,
+		fingerprint: KeyIcon,
+		notifications: BellIcon,
+		robot_2: CpuIcon,
+		smart_toy: UsersIcon,
+		space_dashboard: GridIcon,
+		verified: CheckCircleIcon,
+	};
+
 	function chipClass(tone: AgentFaceStatusChip['tone'] = 'neutral'): string {
 		return `agent-face-frame__chip agent-face-frame__chip--${tone}`;
+	}
+
+	function navIconComponent(icon: string | undefined): Component | null {
+		return icon ? (navIconRegistry[icon] ?? null) : null;
 	}
 </script>
 
@@ -73,7 +111,12 @@
 								href={item.href ?? '#'}
 							>
 								{#if item.icon}
-									<span class="agent-face-frame__nav-icon material-symbols-outlined">{item.icon}</span>
+									{@const NavIcon = navIconComponent(item.icon)}
+									{#if NavIcon}
+										<span class="agent-face-frame__nav-icon" aria-hidden="true">
+											<NavIcon size={20} strokeWidth={2} class="agent-face-frame__nav-icon-svg" />
+										</span>
+									{/if}
 								{/if}
 								<span>{item.label}</span>
 								{#if item.badge}
@@ -286,12 +329,17 @@
 	}
 
 	.agent-face-frame__nav-icon {
-		font-size: 1.25rem;
-		font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+		display: inline-grid;
+		place-items: center;
+		flex: 0 0 auto;
+		width: 1.25rem;
+		height: 1.25rem;
 	}
 
-	.agent-face-frame__nav-link--active .agent-face-frame__nav-icon {
-		font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+	:global(.agent-face-frame__nav-icon-svg) {
+		display: block;
+		width: 1.25rem;
+		height: 1.25rem;
 	}
 
 	.agent-face-frame__nav-badge {
