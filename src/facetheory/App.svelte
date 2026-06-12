@@ -23,6 +23,7 @@
 		type AuthSession,
 	} from '$lib/auth/session';
 
+	import AgentFirstBootstrapPanel from './components/AgentFirstBootstrapPanel.svelte';
 	import FinalizeSigningPanel from './components/FinalizeSigningPanel.svelte';
 	import DronesPage from './components/DronesPage.svelte';
 	import HostedBoundSoulActivationPanel from './components/HostedBoundSoulActivationPanel.svelte';
@@ -32,10 +33,6 @@
 	import MintConversationPanel from './components/MintConversationPanel.svelte';
 	import NotificationsPage from './components/NotificationsPage.svelte';
 	import SoulRequestActionPanel from './components/SoulRequestActionPanel.svelte';
-	import {
-		HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
-		HOST_WORKFLOW_BRIDGE_ENABLED,
-	} from './flags';
 	import { createPreviewAppState, loadClientAppState } from './loaders';
 	import {
 		resolveConversationComposeActorId,
@@ -132,13 +129,11 @@
 	});
 
 	function readStoredHostToken(): string {
-		if (!HOST_WORKFLOW_BRIDGE_ENABLED) return '';
 		if (typeof window === 'undefined') return '';
 		return sessionStorage.getItem(HOST_TOKEN_STORAGE_KEY) ?? '';
 	}
 
 	function writeStoredHostToken(next: string): void {
-		if (!HOST_WORKFLOW_BRIDGE_ENABLED) return;
 		if (typeof window === 'undefined') return;
 		const trimmed = next.trim();
 		if (trimmed) {
@@ -355,6 +350,18 @@
 				{#if isAuthenticated}
 					{#if currentPage.key === 'identity'}
 						<IdentityQuarantinePanel agent={appState.activeAgent} onUpdated={refreshLiveState} />
+						{#if !appState.actionContext.activeSoulAgentId}
+							<AgentFirstBootstrapPanel
+								activeAgent={appState.activeAgent}
+								currentUserName={appState.currentUserName}
+								hostBaseUrl={appState.hostWorkflow.baseUrl}
+								hostToken={hostToken}
+								hostWorkflow={appState.hostWorkflow}
+								onUpdated={refreshLiveState}
+								username={appState.actionContext.activeUsername}
+								workflow={appState.workflow}
+							/>
+						{/if}
 						<HostedBoundSoulActivationPanel
 							agentUsername={appState.actionContext.activeUsername}
 							anchorAssurance={appState.activationDisclosure.anchorAssurance}
@@ -370,29 +377,18 @@
 						/>
 					{/if}
 
-					{#if HOST_WORKFLOW_BRIDGE_ENABLED}
-						<HostTokenPanel
-							busy={busy}
-							configured={appState.hostWorkflow.tokenConfigured}
-							conversationCount={appState.hostWorkflow.conversations.length}
-							lifecycleEventCount={appState.hostWorkflow.lifecycleEvents.length}
-							note={appState.hostWorkflow.authNote}
-							onClear={handleHostTokenClear}
-							onSave={handleHostTokenSave}
-							selectedConversationId={appState.actionContext.activeConversationId}
-							token={hostToken}
-						/>
-					{:else if currentPage.key === 'genesis' || currentPage.key === 'approvals'}
-						<section class="ft-panel">
-							<header class="ft-panel__header">
-								<div>
-									<p class="ft-panel__eyebrow">Deliberate enablement</p>
-									<h2>Host workflow bridge is disabled</h2>
-								</div>
-							</header>
-							<p class="ft-panel__copy">{HOST_WORKFLOW_BRIDGE_DISABLED_NOTE}</p>
-						</section>
-					{/if}
+					<HostTokenPanel
+						baseUrl={appState.hostWorkflow.baseUrl}
+						busy={busy}
+						configured={appState.hostWorkflow.tokenConfigured}
+						conversationCount={appState.hostWorkflow.conversations.length}
+						lifecycleEventCount={appState.hostWorkflow.lifecycleEvents.length}
+						note={appState.hostWorkflow.authNote}
+						onClear={handleHostTokenClear}
+						onSave={handleHostTokenSave}
+						selectedConversationId={appState.actionContext.activeConversationId}
+						token={hostToken}
+					/>
 
 					{#if currentPage.key === 'souls'}
 						<SoulRequestActionPanel
@@ -403,27 +399,29 @@
 						/>
 					{/if}
 
-					{#if HOST_WORKFLOW_BRIDGE_ENABLED && currentPage.key === 'genesis'}
+					{#if currentPage.key === 'genesis'}
 						<MintConversationPanel
-							agentId={appState.actionContext.activeAgentId}
 							conversationStatus={appState.hostWorkflow.selectedConversation?.status ?? null}
+							hostAgentId={appState.actionContext.activeHostAgentId}
 							hostBaseUrl={appState.hostWorkflow.baseUrl}
 							hostToken={hostToken}
 							initialConversationId={appState.actionContext.activeConversationId}
 							initialTranscript={appState.hostWorkflow.transcript}
 							onUpdated={refreshLiveState}
+							registrationId={appState.actionContext.activeRegistrationId}
 						/>
 					{/if}
 
-					{#if HOST_WORKFLOW_BRIDGE_ENABLED && currentPage.key === 'approvals'}
+					{#if currentPage.key === 'approvals'}
 						<FinalizeSigningPanel
 							activeSoulAgentId={appState.actionContext.activeSoulAgentId}
-							agentId={appState.actionContext.activeAgentId}
 							conversationId={appState.actionContext.activeConversationId}
 							expectedWallet={appState.actionContext.expectedWallet}
+							hostAgentId={appState.actionContext.activeHostAgentId}
 							hostBaseUrl={appState.hostWorkflow.baseUrl}
 							hostToken={hostToken}
 							onUpdated={refreshLiveState}
+							registrationId={appState.actionContext.activeRegistrationId}
 							username={appState.actionContext.activeUsername}
 							workflow={appState.workflow}
 						/>

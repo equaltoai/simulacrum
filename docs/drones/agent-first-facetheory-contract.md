@@ -12,6 +12,10 @@ legacy clone-shaped client with the agent-first Simulacrum.
 - Project 9 milestones: M0 complete; M1 complete with the vendored
   `greater-v0.8.0` lesser-host workflow contract consumed through
   `src/lib/api/soulWorkflowHost.ts`
+- Project 44 update (2026-06-12): zero-state creation is Simulacrum-led.
+  Hosted/off-chain finalization is the default production path; on-chain mint
+  execution is an optional anchor upgrade, never a prerequisite for creating a
+  full local agent.
 - Product status: canonical for the rewrite
 - Legacy status: the SvelteKit social shell remains in the repo during
   migration, but it is no longer the target product model
@@ -26,14 +30,30 @@ identity are first-class surfaces.
 
 The canonical user path for soul graduation is:
 
-1. Request from within Simulacrum.
-2. Review and approval from within Simulacrum.
-3. Conduct the mint conversation from within Simulacrum.
-4. Gather signatures and finalize from within Simulacrum.
-5. Observe continuity and attribution updates from within Simulacrum.
+1. Create or select a local drone body from within Simulacrum.
+2. Request/review from within Simulacrum when local workflow state is needed.
+3. Begin and verify the Host registration from Simulacrum using the existing
+   lesser-host control-plane bearer token model. Principal approval must use
+   Host's registration-scoped principal-declaration preflight; Simulacrum signs
+   the returned canonical EIP-191 payload and submits Host's canonical
+   `declared_at` instead of reconstructing the declaration digest locally.
+4. Conduct the registration-scoped mint conversation from within Simulacrum.
+5. Gather signatures and finalize hosted/off-chain publication from within
+   Simulacrum.
+6. Bind the returned Host `0x…` agent id into Lesser via
+   `finalizeSoulPromotion`, then observe continuity and attribution updates from
+   within Simulacrum.
 
 `lesser-host` remains the control-plane and publication backend. It is not the
 canonical human-facing UI for the graduation flow.
+
+Hosted/off-chain publication is first-class production state. Simulacrum must
+not block full agent creation on mint execution. When Host promotion snapshots
+expose `anchor_state`, `onchain_binding_status`,
+`onchain_binding_available`, `hosted_offchain_finalizable`, and `next_actions`,
+Simulacrum renders those fields as readiness/upgrade hints. `anchor_state =
+hosted_offchain` is usable agent creation; `anchor_state = immutable_onchain`
+is an assurance upgrade on the same namespace.
 
 ## Runtime Contract
 
@@ -125,6 +145,18 @@ Canonical control-plane resources:
 Constraint:
 
 - Simulacrum must not scrape or depend on portal-only UI behavior
+- Simulacrum must use registration-scoped Host routes before Lesser has a bound
+  Host `0x…` soul id. Agent-scoped Host routes are used only after that stable
+  id is known and stored.
+- Zero-state creation uses the existing control-plane bearer token model; no
+  instance-key creation path or browser-exposed secrets are introduced.
+- Principal declaration signing uses
+  `POST /api/v1/soul/agents/register/{id}/principal-declaration/preflight`.
+  Simulacrum signs the returned `message_hex` (`signing_method =
+  eip191_personal_sign`, `message_encoding = hex_bytes`) and forwards the
+  returned canonical `declared_at` to registration verify. Simulacrum must fail
+  closed on unexpected signing metadata or malformed signing bytes and must not
+  implement Host's JCS/digest calculation in the client.
 
 ### `equaltoai/greater-components`
 
@@ -224,6 +256,13 @@ The client may render signing readiness from Lesser workflow state and
 `lesser-host` finalize preflight payloads, but it must not invent signing
 inputs when canonical backend data already exists.
 
+For registration verification, the principal approval signing input is owned by
+`lesser-host`: Simulacrum calls the registration-scoped
+principal-declaration preflight, signs the returned 32-byte EIP-191
+`message_hex` with the connected principal wallet, and submits the preflight's
+canonical `declared_at` during verify. The declaration text remains
+operator-visible in Simulacrum, but Host owns the canonical JSON and digest.
+
 ## Conversation Contract
 
 The mint conversation is a first-class agent workflow surface.
@@ -241,14 +280,25 @@ Current integration boundary:
 - `lesser-host` mint conversation endpoints are authenticated with a
   control-plane bearer token
 - Simulacrum currently authenticates users with a Lesser OAuth bearer token
-- until a server-side bridge or first-party instance proxy exists, Simulacrum
-  must not assume the browser can directly call `lesser-host` workflow routes
+- the default production client includes the Simulacrum-owned Host workflow
+  bridge; until a server-side proxy or replacement first-party contract exists,
+  that bridge uses the existing `lesser-host` control-plane bearer token model
 
 Implementation rule for the rewrite:
 
 - use Lesser GraphQL workflow state as the canonical in-instance status model
-- integrate direct `lesser-host` conversation execution only through a
-  deliberate auth bridge or equivalent first-party contract
+- expose the Identity-page creation/bootstrap lane in normal production builds
+  when no bound soul exists; do not require a deploy/install flag to reveal the
+  lane
+- treat a missing managed Host base URL or missing Host control-plane token as
+  actionable configuration states, not disabled-build states or a reason to fall
+  back to the Host portal
+- integrate direct `lesser-host` conversation execution only through the default
+  Simulacrum Host workflow bridge or an equivalent first-party contract
+- use registration-scoped Host APIs for begin/verify/conversation/complete/
+  finalize before a Host soul id is bound locally
+- call Lesser `finalizeSoulPromotion` with the Host `agent_id` returned by
+  hosted/off-chain finalization so the local drone becomes a full souled body
 - do not regress to a portal-only UX
 
 ## Deployment Contract
@@ -299,5 +349,5 @@ Canonical Stitch anchors:
 - `lesser-host` remains the control-plane publication backend.
 - Greater `faces/agent` and `shared/agent` are the canonical route-level and
   workflow UI surfaces.
-- Direct browser dependence on host-portal auth is out of scope unless a
-  first-party bridge is introduced.
+- The Simulacrum-owned Host workflow bridge is part of the default production
+  client; direct browser dependence on host-portal auth remains out of scope.

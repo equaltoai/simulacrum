@@ -49,10 +49,11 @@ export interface MintTranscriptMessage {
 }
 
 export interface HostWorkflowState {
-	bridgeEnabled: boolean;
 	tokenConfigured: boolean;
 	authNote: string;
 	baseUrl: string | null;
+	registrationId: string | null;
+	hostAgentId: string | null;
 	promotion: SoulAgentPromotion | null;
 	lifecycleEvents: readonly SoulAgentPromotionLifecycleEvent[];
 	conversations: readonly SoulMintConversation[];
@@ -66,6 +67,8 @@ export interface AppActionContext {
 	activeUsername: string | null;
 	activeAgentId: string | null;
 	activeSoulAgentId: string | null;
+	activeHostAgentId: string | null;
+	activeRegistrationId: string | null;
 	activeConversationId: string | null;
 	expectedWallet: string | null;
 }

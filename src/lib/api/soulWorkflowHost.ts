@@ -21,18 +21,86 @@ export const SOUL_WORKFLOW_HOST_AUTH_NOTE =
 
 export type SoulAgentPromotionPrerequisites =
 	components['schemas']['SoulAgentPromotionPrerequisites'];
-export type SoulAgentPromotion = components['schemas']['SoulAgentPromotion'];
-export type SoulAgentPromotionResponse = components['schemas']['SoulAgentPromotionResponse'];
-export type SoulAgentPromotionListResponse = components['schemas']['SoulAgentPromotionListResponse'];
-export type SoulAgentPromotionLifecycleEvent =
+type GeneratedSoulAgentPromotion = components['schemas']['SoulAgentPromotion'];
+type GeneratedSoulAgentPromotionResponse = components['schemas']['SoulAgentPromotionResponse'];
+type GeneratedSoulAgentPromotionListResponse =
+	components['schemas']['SoulAgentPromotionListResponse'];
+type GeneratedSoulAgentPromotionLifecycleEvent =
 	components['schemas']['SoulAgentPromotionLifecycleEvent'];
-export type SoulAgentPromotionLifecycleEventListResponse =
+type GeneratedSoulAgentPromotionLifecycleEventListResponse =
 	components['schemas']['SoulAgentPromotionLifecycleEventListResponse'];
+export type SoulAgentAnchorState = 'hosted_offchain' | 'immutable_onchain';
+export type SoulAgentOnchainBindingStatus =
+	| 'unavailable'
+	| 'pending'
+	| 'proposed'
+	| 'executed'
+	| 'failed';
+export type SoulAgentPromotionNextAction =
+	| 'verify_request'
+	| 'record_mint_execution'
+	| 'start_review_conversation'
+	| 'complete_review_conversation'
+	| 'begin_finalize';
+export type SoulAgentPromotion = Omit<GeneratedSoulAgentPromotion, 'next_actions'> & {
+	/**
+	 * Project 44 fields are additive in lesser-host and may arrive before the
+	 * vendored Greater OpenAPI snapshot is refreshed. Keep the extension local
+	 * to Simulacrum rather than hand-editing vendored generated files.
+	 */
+	anchor_state?: SoulAgentAnchorState;
+	onchain_binding_status?: SoulAgentOnchainBindingStatus;
+	onchain_binding_available?: boolean;
+	hosted_offchain_finalizable?: boolean;
+	next_actions?: SoulAgentPromotionNextAction[];
+};
+export type SoulAgentPromotionResponse = Omit<GeneratedSoulAgentPromotionResponse, 'promotion'> & {
+	promotion: SoulAgentPromotion;
+};
+export type SoulAgentPromotionListResponse = Omit<
+	GeneratedSoulAgentPromotionListResponse,
+	'promotions'
+> & {
+	promotions: SoulAgentPromotion[];
+};
+export type SoulAgentPromotionLifecycleEvent = Omit<
+	GeneratedSoulAgentPromotionLifecycleEvent,
+	'promotion'
+> & {
+	promotion: SoulAgentPromotion;
+};
+export type SoulAgentPromotionLifecycleEventListResponse = Omit<
+	GeneratedSoulAgentPromotionLifecycleEventListResponse,
+	'events'
+> & {
+	events: SoulAgentPromotionLifecycleEvent[];
+};
 export type SoulAgentRegistration = components['schemas']['SoulAgentRegistration'];
 export type SoulAgentRegistrationBeginRequest =
 	components['schemas']['SoulAgentRegistrationBeginRequest'];
 export type SoulAgentRegistrationBeginResponse =
 	components['schemas']['SoulAgentRegistrationBeginResponse'];
+export type SoulAgentRegistrationPrincipalDeclarationPreflightRequest = {
+	/**
+	 * Project 44 consumes this endpoint before the vendored Greater OpenAPI
+	 * snapshot includes it. Keep the additive contract local to Simulacrum and
+	 * remove it when the Greater-generated lesser-host client is refreshed.
+	 */
+	principal_address: string;
+	principal_declaration: string;
+	declared_at: string;
+};
+export type SoulAgentRegistrationPrincipalDeclarationPreflightResponse = {
+	version: string;
+	principal_address: string;
+	signer_address: string;
+	signing_method: string;
+	message_encoding: string;
+	message_hex: string;
+	digest_hex: string;
+	canonical_json: string;
+	declared_at: string;
+};
 export type SoulAgentRegistrationVerifyRequest =
 	components['schemas']['SoulAgentRegistrationVerifyRequest'];
 export type SoulAgentRegistrationVerifyResponse =
@@ -77,6 +145,12 @@ interface AgentRequestOptions extends WorkflowRequestOptions {
 
 interface ConversationRequestOptions extends WorkflowRequestOptions {
 	conversationId: string;
+}
+
+const HOST_SOUL_AGENT_ID_PATTERN = /^0x[0-9a-fA-F]{64}$/;
+
+export function isHostSoulAgentId(value?: string | null): value is `0x${string}` {
+	return HOST_SOUL_AGENT_ID_PATTERN.test(value?.trim() ?? '');
 }
 
 function requireControlPlaneToken(token: string): string {
@@ -237,6 +311,27 @@ export async function beginSoulAgentRegistration({
 		signal,
 		fetch,
 		path: '/api/v1/soul/agents/register/begin',
+		method: 'POST',
+		body: input,
+	});
+}
+
+export async function getSoulAgentRegistrationPrincipalDeclarationPreflight({
+	token,
+	registrationId,
+	input,
+	baseUrl,
+	signal,
+	fetch,
+}: RegistrationRequestOptions & {
+	input: SoulAgentRegistrationPrincipalDeclarationPreflightRequest;
+}): Promise<SoulAgentRegistrationPrincipalDeclarationPreflightResponse> {
+	return requestSoulWorkflowJson<SoulAgentRegistrationPrincipalDeclarationPreflightResponse>({
+		token,
+		baseUrl,
+		signal,
+		fetch,
+		path: `/api/v1/soul/agents/register/${encodeURIComponent(requireIdentifier(registrationId, 'registrationId'))}/principal-declaration/preflight`,
 		method: 'POST',
 		body: input,
 	});
