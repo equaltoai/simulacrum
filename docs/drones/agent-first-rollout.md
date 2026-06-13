@@ -20,7 +20,7 @@ not the canonical user-facing workflow.
 ## Current Creation Boundary
 
 Project 44 remediation removes the browser Host-token bridge from production
-rollout guidance. M4.1 vendors the Greater `greater-v0.10.3` soul-bootstrap
+rollout guidance. M4.1 vendors the Greater `greater-v0.10.4` soul-bootstrap
 facade and routes Simulacrum's Project 44 API layer through Lesser same-origin
 GraphQL. M4.2 restores visible identity, genesis, and approvals lanes from the
 adapter-backed state model; M4.3 owns interactive signing controls.
