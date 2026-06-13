@@ -8,16 +8,28 @@ import { queryFromSearchString } from '../../../src/facetheory/query-parser.ts';
 import { redactTokenLikeStrings, redactUnknown } from './redact.mjs';
 import { EvidenceWriter } from './evidence.mjs';
 
-test('FaceTheory reachability uses host workflow tokens, not Lesser OAuth tokens', async () => {
+test('FaceTheory production path uses Greater soul-bootstrap facade, not raw Host writes', async () => {
 	const appSource = await readFile(new URL('../../../src/facetheory/App.svelte', import.meta.url), 'utf8');
 	const loaderSource = await readFile(new URL('../../../src/facetheory/loaders.ts', import.meta.url), 'utf8');
+	const routingSource = await readFile(new URL('../../../src/facetheory/routing.ts', import.meta.url), 'utf8');
+	const apiIndexSource = await readFile(new URL('../../../src/lib/api/index.ts', import.meta.url), 'utf8');
+	const soulBootstrapSource = await readFile(new URL('../../../src/lib/api/soulBootstrap.ts', import.meta.url), 'utf8');
 
 	assert.doesNotMatch(appSource, /authToken:\s*session\.accessToken/);
 	assert.doesNotMatch(loaderSource, /authToken\?:\s*string/);
-	assert.doesNotMatch(loaderSource, /loadChannels\([^)]*authToken/);
-	assert.match(loaderSource, /const reachabilityToken = hostToken\?\.trim\(\) \?\? '';/);
-	assert.match(loaderSource, /SOUL_WORKFLOW_HOST_AUTH_NOTE/);
-	assert.match(loaderSource, /createControlPlaneLesserHostSoulClient/);
+	assert.doesNotMatch(appSource, /HostTokenPanel/);
+	assert.doesNotMatch(appSource, /MintConversationPanel/);
+	assert.doesNotMatch(appSource, /FinalizeSigningPanel/);
+	assert.doesNotMatch(appSource, /hostToken/);
+	assert.doesNotMatch(routingSource, /requiresHostToken/);
+	assert.doesNotMatch(loaderSource, /soulWorkflowHost/);
+	assert.doesNotMatch(loaderSource, /createControlPlaneLesserHostSoulClient/);
+	assert.doesNotMatch(apiIndexSource, /soulWorkflowHost/);
+	assert.match(soulBootstrapSource, /createSoulBootstrapClient/);
+	assert.match(soulBootstrapSource, /httpEndpoint: endpoint/);
+	assert.ok(soulBootstrapSource.includes("endpoint = '/api/graphql'"));
+	assert.match(soulBootstrapSource, /SOUL_BOOTSTRAP_AUTH_NOTE/);
+	assert.doesNotMatch(soulBootstrapSource, /hostToken/);
 });
 
 
@@ -34,31 +46,30 @@ test('browser Host workflow bridge cannot be enabled with build-time env', async
 	assert.doesNotMatch(flagsSource, /import\.meta\.env/);
 	assert.doesNotMatch(flagsSource, /VITE_SIMULACRUM_ENABLE_HOST_WORKFLOW_BRIDGE/);
 	assert.doesNotMatch(flagsSource, /normalizeBooleanEnv/);
-	assert.match(flagsSource, /lesser#1154/);
-	assert.match(flagsSource, /lesser-host#703/);
-	assert.match(flagsSource, /Greater exposes the generated client\s+\*\s*adapters/);
+	assert.ok(flagsSource.includes('src/lib/api/soulBootstrap.ts'));
+	assert.match(flagsSource, /M4\.2\/M4\.3 UX work/);
 	assert.match(flagsSource, /will not ask the browser for lesser-host control-plane credentials/);
 
 	assert.doesNotMatch(
 		loaderSource,
 		/Connect a lesser-host control-plane token to start the Simulacrum-led hosted\/off-chain creation lane/
 	);
-	assert.match(loaderSource, /Lesser instance-trust creation bridge and Greater adapters/);
+	assert.match(loaderSource, /Lesser same-origin GraphQL/);
 	assert.match(loaderSource, /will not ask the browser for lesser-host control-plane credentials/);
 	assert.doesNotMatch(loaderSource, /This build keeps the host workflow bridge deliberately gated/);
 	assert.doesNotMatch(loaderSource, /Host bridge disabled for this build/);
 	assert.doesNotMatch(loaderSource, /Streaming lane deliberately gated/);
 
-	assert.match(appSource, /Instance-trust bridge pending/);
-	assert.match(appSource, /Soul creation is waiting on Lesser and Greater/);
+	assert.match(appSource, /Same-origin bootstrap boundary/);
+	assert.match(appSource, /Soul creation stays server-side/);
 	assert.doesNotMatch(appSource, /Deliberate enablement/);
 	assert.doesNotMatch(appSource, /Host workflow bridge is disabled/);
 
 	assert.doesNotMatch(rolloutSource, /VITE_SIMULACRUM_ENABLE_HOST_WORKFLOW_BRIDGE/);
 	assert.doesNotMatch(rolloutSource, /When the flag is enabled/);
 	assert.doesNotMatch(rolloutSource, /prefer enabling the host workflow bridge/);
-	assert.match(rolloutSource, /same-origin instance-trust creation bridge/);
-	assert.match(rolloutSource, /Greater exposes adapters/);
+	assert.match(rolloutSource, /Greater `greater-v0\.10\.3` soul-bootstrap/);
+	assert.match(rolloutSource, /M4\.2\/M4\.3 UX deferral/);
 	assert.match(rolloutSource, /no deploy\/install environment variable is a supported way/);
 });
 

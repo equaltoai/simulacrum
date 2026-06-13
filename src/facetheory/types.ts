@@ -8,10 +8,11 @@ import type {
 import type { MessageRole } from '$lib/components/chat';
 import type { AgentWorkflowSurface, DroneAgentState } from '$lib/api';
 import type {
-	SoulAgentPromotion,
-	SoulAgentPromotionLifecycleEvent,
-	SoulMintConversation,
-} from '$lib/api/soulWorkflowHost';
+	SoulBootstrapResult,
+	SoulBootstrapSigningCheckpoint,
+	SoulBootstrapState,
+	SoulBootstrapSurface,
+} from '$lib/api/soulBootstrap';
 import type { SoulAnchorAssurance } from '$lib/components/soul';
 
 export type AppPageKey =
@@ -37,7 +38,6 @@ export interface AppPageDescriptor {
 	eyebrow: string;
 	summary: string;
 	requiresAuth?: boolean;
-	requiresHostToken?: boolean;
 }
 
 export interface MintTranscriptMessage {
@@ -49,14 +49,19 @@ export interface MintTranscriptMessage {
 }
 
 export interface HostWorkflowState {
-	bridgeEnabled: boolean;
-	tokenConfigured: boolean;
+	hostBridgeAvailable: boolean | null;
+	creationReady: boolean;
 	authNote: string;
 	baseUrl: string | null;
-	promotion: SoulAgentPromotion | null;
-	lifecycleEvents: readonly SoulAgentPromotionLifecycleEvent[];
-	conversations: readonly SoulMintConversation[];
-	selectedConversation: SoulMintConversation | null;
+	result: SoulBootstrapResult | null;
+	surface: SoulBootstrapSurface | null;
+	state: SoulBootstrapState | null;
+	nextAction: string | null;
+	signingCheckpoints: readonly SoulBootstrapSigningCheckpoint[];
+	conversationCount: number;
+	lifecycleEventCount: number;
+	activeConversationId: string | null;
+	activeConversationStatus: string | null;
 	transcript: readonly MintTranscriptMessage[];
 	producedDeclarations: Record<string, unknown> | null;
 	expectedWallet: string | null;

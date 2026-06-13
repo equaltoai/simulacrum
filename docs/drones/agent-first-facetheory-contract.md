@@ -9,9 +9,12 @@ legacy clone-shaped client with the agent-first Simulacrum.
 
 - Date: 2026-03-29
 - Scope owner: `equaltoai/simulacrum`
-- Project 9 milestones: M0 complete; M1 complete with the vendored
-  `greater-v0.8.0` lesser-host workflow contract consumed through
-  `src/lib/api/soulWorkflowHost.ts`
+- Project 9 milestones: M0 complete; M1 complete with the historical
+  `greater-v0.8.0` lesser-host workflow contract. Project 44 M4.1 vendors
+  `greater-v0.10.3` and consumes the browser-safe Lesser soul-bootstrap facade
+  through `src/lib/api/soulBootstrap.ts`; the direct Host write wrapper
+  `src/lib/api/soulWorkflowHost.ts` is retained only as non-production legacy
+  quarantine for retired panels.
 - Product status: canonical for the rewrite
 - Legacy status: the SvelteKit social shell remains in the repo during
   migration, but it is no longer the target product model
@@ -236,22 +239,23 @@ Canonical responsibilities:
 - Lesser owns the instance-facing workflow projection used to keep the rest of
   the UI coherent
 
-Current integration boundary:
+Current integration boundary after Project 44 M4.1:
 
-- `lesser-host` mint conversation endpoints are authenticated with a
-  control-plane bearer token
-- Simulacrum currently authenticates users with a Lesser OAuth bearer token
-- until Lesser exposes a same-origin instance-trust creation bridge and Greater
-  exposes matching adapters, Simulacrum has no production browser path for
-  creating souls
+- Simulacrum authenticates users with a Lesser OAuth bearer token
+- the production creation boundary is the Greater `createSoulBootstrapClient`
+  facade over Lesser same-origin GraphQL
+- Lesser performs any Host instance-trust work server-side; browser code does
+  not receive Host control-plane credentials or raw Host write clients
+- visible mint conversation and signing UX restoration remain deferred to
+  Project 44 M4.2/M4.3
 - Simulacrum must not ask the browser to store or present `lesser-host`
   control-plane credentials
 
 Implementation rule for the rewrite:
 
 - use Lesser GraphQL workflow state as the canonical in-instance status model
-- restore mint/finalize execution only through the Lesser instance-trust
-  creation bridge plus Greater adapters, or an explicitly equivalent
+- restore mint/finalize execution only through the Lesser same-origin
+  soul-bootstrap bridge plus the Greater facade, or an explicitly equivalent
   first-party contract that keeps Host credentials server-side
 - do not regress to a portal-only UX
 
@@ -304,4 +308,5 @@ Canonical Stitch anchors:
 - Greater `faces/agent` and `shared/agent` are the canonical route-level and
   workflow UI surfaces.
 - Direct browser dependence on host-portal auth is out of scope; soul creation
-  must resume through same-origin instance trust and Greater adapters.
+  must resume through same-origin instance trust and the Greater bootstrap
+  facade.

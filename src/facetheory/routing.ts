@@ -42,7 +42,6 @@ const PAGE_DEFINITIONS: Record<AppPageKey, AppPageDescriptor> = {
 		summary:
 			'Conduct the streaming mint conversation, inspect produced declarations, and keep the issuance packet legible in-instance.',
 		requiresAuth: true,
-		requiresHostToken: true,
 	},
 	approvals: {
 		key: 'approvals',
@@ -52,7 +51,6 @@ const PAGE_DEFINITIONS: Record<AppPageKey, AppPageDescriptor> = {
 		summary:
 			'Gather boundary approvals, finalize the self-attestation, and make the graduation checkpoint readable as a first-class product flow.',
 		requiresAuth: true,
-		requiresHostToken: true,
 	},
 	identity: {
 		key: 'identity',

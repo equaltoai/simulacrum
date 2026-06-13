@@ -1,3 +1,11 @@
+/**
+ * @deprecated Project 44 M4.1 quarantine.
+ *
+ * Production soul creation uses `src/lib/api/soulBootstrap.ts`, which wraps the
+ * Greater soul-bootstrap facade over Lesser same-origin GraphQL. This raw
+ * lesser-host control-plane helper is retained only for non-production legacy
+ * panels that are no longer imported by the FaceTheory app shell.
+ */
 import {
 	LesserHostSoulClientError,
 	createLesserHostSoulClient,
