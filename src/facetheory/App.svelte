@@ -29,7 +29,6 @@
 	import IdentitySoulBindingPanel from './components/IdentitySoulBindingPanel.svelte';
 	import NotificationsPage from './components/NotificationsPage.svelte';
 	import SoulRequestActionPanel from './components/SoulRequestActionPanel.svelte';
-	import { HOST_WORKFLOW_BRIDGE_DISABLED_NOTE } from './flags';
 	import { createPreviewAppState, loadClientAppState } from './loaders';
 	import {
 		resolveConversationComposeActorId,
@@ -300,6 +299,24 @@
 
 			<section class="ft-shell__panels">
 				{#if isAuthenticated}
+					{#if currentPage.key === 'identity' || currentPage.key === 'genesis' || currentPage.key === 'approvals'}
+						<section class="ft-panel" data-testid="soul-bootstrap-lane">
+							<header class="ft-panel__header">
+								<div>
+									<p class="ft-panel__eyebrow">Same-origin bootstrap boundary</p>
+									<h2>{appState.hostWorkflow.bootstrap.title}</h2>
+								</div>
+							</header>
+							<p class="ft-panel__copy">{appState.hostWorkflow.bootstrap.summary}</p>
+							<p class="ft-panel__message">
+								{appState.hostWorkflow.bootstrap.stateLabel} · {appState.hostWorkflow.bootstrap.statusDetail}
+							</p>
+							<a class="ft-button ft-button--primary" href={appState.hostWorkflow.bootstrap.actionHref}>
+								{appState.hostWorkflow.bootstrap.actionLabel}
+							</a>
+						</section>
+					{/if}
+
 					{#if currentPage.key === 'identity'}
 						<IdentityQuarantinePanel agent={appState.activeAgent} onUpdated={refreshLiveState} />
 						<HostedBoundSoulActivationPanel
@@ -315,18 +332,6 @@
 							onUpdated={refreshLiveState}
 							username={appState.actionContext.activeUsername}
 						/>
-					{/if}
-
-					{#if currentPage.key === 'genesis' || currentPage.key === 'approvals'}
-						<section class="ft-panel">
-							<header class="ft-panel__header">
-								<div>
-									<p class="ft-panel__eyebrow">Same-origin bootstrap boundary</p>
-									<h2>Soul creation stays server-side</h2>
-								</div>
-							</header>
-							<p class="ft-panel__copy">{HOST_WORKFLOW_BRIDGE_DISABLED_NOTE}</p>
-						</section>
 					{/if}
 
 					{#if currentPage.key === 'souls'}

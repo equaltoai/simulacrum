@@ -62,6 +62,17 @@ import type {
 import type { SoulAnchorAssurance, SoulChannels, SoulContactPreferences } from '$lib/components/soul';
 
 import { buildConversationComposeHref, getPageHref } from './routing';
+import {
+	buildSoulBootstrapAction,
+	buildSoulBootstrapCallout,
+	buildSoulBootstrapCheckpoint,
+	buildSoulBootstrapConversationMessages,
+	buildSoulBootstrapGraduation,
+	buildSoulBootstrapLifecycle,
+	buildSoulBootstrapRequestCard,
+	classifySoulBootstrapFailure,
+	deriveSoulBootstrapUx,
+} from './bootstrapUx';
 import type {
 	AppActionContext,
 	AppPageDescriptor,
@@ -804,6 +815,12 @@ const PREVIEW_HOST_WORKFLOW: HostWorkflowState = {
 	hostBridgeAvailable: null,
 	creationReady: false,
 	authNote: HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+	bootstrap: deriveSoulBootstrapUx({
+		result: null,
+		activeUsername: PREVIEW_AGENT.username,
+		failureIssue: 'backend_error',
+		failureMessage: HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+	}),
 	baseUrl: null,
 	result: null,
 	surface: null,
@@ -1171,6 +1188,8 @@ async function loadHostWorkflow({
 		return emptyHostWorkflow({
 			baseUrl,
 			authNote: describeSoulBootstrapFailure(error),
+			activeUsername: username,
+			failureIssue: classifySoulBootstrapFailure(error),
 		});
 	}
 }
@@ -1184,7 +1203,11 @@ function createHostWorkflowFromSoulBootstrapResult(
 	const expectedWallet = state?.walletAddress ?? null;
 	const signingCheckpoints = state?.signingCheckpoints ?? [];
 	const producedDeclarations = parseBootstrapProducedDeclarations(state);
-	const transcript = parseBootstrapTranscript(state);
+	const bootstrap = deriveSoulBootstrapUx({
+		result,
+		activeUsername: state?.username ?? result.surface?.username ?? null,
+	});
+	const transcript = parseBootstrapTranscript(state, bootstrap, signingCheckpoints);
 	const creationReady = Boolean(result.executable && result.hostBridgeAvailable);
 	const authNote = buildSoulBootstrapAuthNote(result);
 
@@ -1192,6 +1215,7 @@ function createHostWorkflowFromSoulBootstrapResult(
 		hostBridgeAvailable: result.hostBridgeAvailable,
 		creationReady,
 		authNote,
+		bootstrap,
 		baseUrl,
 		result,
 		surface: result.surface,
@@ -1211,14 +1235,24 @@ function createHostWorkflowFromSoulBootstrapResult(
 function emptyHostWorkflow({
 	baseUrl,
 	authNote = HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+	activeUsername = null,
+	failureIssue = 'backend_error',
 }: {
 	baseUrl: string | null;
 	authNote?: string;
+	activeUsername?: string | null;
+	failureIssue?: ReturnType<typeof classifySoulBootstrapFailure>;
 }): HostWorkflowState {
 	return {
 		hostBridgeAvailable: null,
 		creationReady: false,
 		authNote,
+		bootstrap: deriveSoulBootstrapUx({
+			result: null,
+			activeUsername,
+			failureIssue,
+			failureMessage: authNote,
+		}),
 		baseUrl,
 		result: null,
 		surface: null,
@@ -1263,7 +1297,15 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		activeAgent?.username ?? input.agentHint?.trim() ?? input.myAgents[0]?.username ?? 'agent';
 	const rawIdentity = buildIdentityCard(activeAgent, workflow, activeUsername);
 	const identity = normalizeIdentityCard(rawIdentity);
-	const rawRequestQueue = dedupeById([workflow?.request ?? null, ...input.myRequests]);
+	const bootstrapRequest = buildSoulBootstrapRequestCard({
+		ux: input.hostWorkflow.bootstrap,
+		state: input.hostWorkflow.state,
+		username: activeUsername,
+		viewerName: input.viewer.name,
+		viewerId: input.viewer.id,
+		viewerHandle: input.viewer.handle,
+	});
+	const rawRequestQueue = dedupeById([workflow?.request ?? null, bootstrapRequest, ...input.myRequests]);
 	const requestQueue = rawRequestQueue.map((request) => normalizeSoulRequestCard(request));
 	const rawReviewDecision = workflow?.review ?? input.myReviews[0] ?? null;
 	const reviewDecision = rawReviewDecision ? normalizeReviewDecision(rawReviewDecision) : undefined;
@@ -1293,13 +1335,19 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 					publishedSoulError: input.publishedSoulError ?? null,
 					hostWorkflow: input.hostWorkflow,
 				});
-	const rawCheckpoint = workflow?.checkpoint ?? null;
+	const rawCheckpoint =
+		workflow?.checkpoint ??
+		buildSoulBootstrapCheckpoint(input.hostWorkflow.bootstrap, input.hostWorkflow.signingCheckpoints);
 	const checkpoint = rawCheckpoint ? normalizeCheckpointCard(rawCheckpoint) : undefined;
-	const rawGraduation = workflow?.graduation ?? null;
+	const rawGraduation =
+		workflow?.graduation ??
+		buildSoulBootstrapGraduation(input.hostWorkflow.bootstrap, input.hostWorkflow.signingCheckpoints);
 	const graduation = rawGraduation ? normalizeGraduationCard(rawGraduation) : undefined;
 	const rawContinuity = workflow?.continuity ?? null;
 	const continuity = rawContinuity ? normalizeContinuityPanel(rawContinuity) : undefined;
-	const rawLifecycle = workflow?.lifecycle?.length ? workflow.lifecycle : [];
+	const rawLifecycle = workflow?.lifecycle?.length
+		? workflow.lifecycle
+		: buildSoulBootstrapLifecycle(input.hostWorkflow.bootstrap);
 	const lifecycle = rawLifecycle.length ? normalizeLifecycle(rawLifecycle) : [];
 	const transcript = input.hostWorkflow.transcript.length
 		? input.hostWorkflow.transcript
@@ -1312,7 +1360,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		workflow,
 		input.hostWorkflow
 	);
-	const threadSummary = buildThreadSummary(rawReviewDecision, rawGraduation, rawCheckpoint, workflow);
+	const threadSummary = buildThreadSummary(rawReviewDecision, rawGraduation, rawCheckpoint, workflow, input.hostWorkflow);
 	const threadMessages = buildThreadMessages(
 		input.viewer,
 		rawIdentity,
@@ -1355,7 +1403,8 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		activeAgent?.id ?? null,
 		Boolean(activeAgent?.agentCapabilities.canDM),
 		input.myAgents.length,
-		input.mySouls.length
+		input.mySouls.length,
+		input.hostWorkflow
 	);
 	const shared = {
 		brand: {
@@ -1375,14 +1424,8 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		hero: {
 			eyebrow: input.page.eyebrow,
 			title: input.page.title,
-				summary: `${input.page.summary} ${
-					input.hostWorkflow.hostBridgeAvailable
-						? input.hostWorkflow.creationReady
-							? 'Same-origin bootstrap data is connected.'
-							: 'The Greater bootstrap adapter is wired; visible mint/signing controls stay parked for M4.2 and M4.3.'
-						: 'Hosted soul creation now stays on Lesser same-origin GraphQL and waits for the server-side bridge to report availability.'
-				}`,
-			},
+			summary: `${input.page.summary} ${input.hostWorkflow.bootstrap.summary}`,
+		},
 		filters: buildRequestFilters(rawRequestQueue),
 		notifications,
 		requestQueue,
@@ -1390,7 +1433,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		reviewDecision,
 		callouts: [
 			...(input.mySouls.length > 0 && input.myAgents.length === 0
-					? [{
+				? [{
 						id: 'request-note-drones',
 						title: 'Create a drone body before binding souls',
 						summary: `${input.mySouls.length} soul${
@@ -1400,19 +1443,11 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 					}]
 				: []),
 			{
-					id: 'request-note-host',
-					title: input.hostWorkflow.hostBridgeAvailable
-						? input.hostWorkflow.creationReady
-							? 'Same-origin bootstrap connected'
-							: 'Bootstrap action pending'
-						: 'Creation bridge parked',
-					summary: input.hostWorkflow.authNote,
+				id: 'request-note-bootstrap',
+				title: input.hostWorkflow.bootstrap.title,
+				summary: input.hostWorkflow.bootstrap.summary,
 				meta: input.hostWorkflow.activeConversationId ?? undefined,
-				tone: input.hostWorkflow.hostBridgeAvailable
-					? input.hostWorkflow.creationReady
-						? 'success'
-						: 'warning'
-					: 'accent',
+				tone: input.hostWorkflow.bootstrap.tone,
 			},
 			{
 				id: 'request-note-entry',
@@ -1430,7 +1465,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 			eyebrow: 'Mint conversation lane',
 			title: 'Agent Genesis Workspace',
 			summary:
-				'The conversation, declaration packet, and signer checkpoint stay on one route so the issuance flow reads as a first-class agent surface.',
+				`The conversation, declaration packet, and signer checkpoint stay on one route so the issuance flow reads as a first-class agent surface. ${input.hostWorkflow.bootstrap.summary}`,
 		},
 		identity,
 		requestQueue,
@@ -1447,20 +1482,12 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 			createdAt: message.createdAt,
 		})),
 		focusNotes: [
-				{
-					id: 'genesis-note-bootstrap',
-					title: input.hostWorkflow.hostBridgeAvailable
-						? input.hostWorkflow.creationReady
-							? 'Bootstrap state is live'
-							: 'Creation controls intentionally parked'
-						: 'Streaming lane waiting on the same-origin bridge',
-					summary: input.hostWorkflow.authNote,
+			{
+				id: 'genesis-note-bootstrap',
+				title: input.hostWorkflow.bootstrap.title,
+				summary: input.hostWorkflow.bootstrap.summary,
 				meta: input.hostWorkflow.activeConversationStatus ?? undefined,
-				tone: input.hostWorkflow.hostBridgeAvailable
-					? input.hostWorkflow.creationReady
-						? 'success'
-						: 'warning'
-					: 'accent',
+				tone: input.hostWorkflow.bootstrap.tone,
 			},
 			{
 				id: 'genesis-note-llm',
@@ -1489,7 +1516,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		workflowNotifications: notifications,
 		callouts: [
 			...(input.mySouls.length > 0 && input.myAgents.length === 0
-					? [{
+				? [{
 						id: 'dashboard-note-drones',
 						title: 'Souls are waiting for bodies',
 						summary: `This instance already exposes ${input.mySouls.length} soul${
@@ -1534,7 +1561,12 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		channels: input.channels,
 		preferences: input.preferences,
 		showReachability: input.showReachability,
-		boundSoulAgentId: input.boundSoul?.agent.agentId ?? undefined,
+		boundSoulAgentId:
+			input.boundSoul?.agent.agentId ??
+			input.hostWorkflow.surface?.existingSoulAgentId ??
+			input.hostWorkflow.state?.publication?.agentId ??
+			input.hostWorkflow.state?.hostSoulAgentId ??
+			undefined,
 		channelsUpdatedAt: input.channelsUpdatedAt ?? undefined,
 		reachabilityNotice: input.reachabilityNotice ?? undefined,
 		mcpAccess: activeAgent?.mcpAccess ?? undefined,
@@ -1547,6 +1579,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		evidence,
 		callouts: [
 			...buildQuarantineCallouts(activeAgent),
+			buildSoulBootstrapCallout(input.hostWorkflow.bootstrap, 'identity-note-bootstrap'),
 			{
 				id: 'identity-note-runtime',
 				title: activeAgent?.agentCapabilities.canDM ? 'Communications available' : 'Communications locked pre-graduation',
@@ -1575,7 +1608,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 			eyebrow: 'Approval and finalize',
 			title: 'Graduation Approval Thread',
 			summary:
-				'Keep signature readiness, declaration state, and launch context together so finalize reads as part of the product flow rather than an off-screen wallet popup.',
+				`Keep signature readiness, declaration state, and launch context together so finalize reads as part of the product flow rather than an off-screen wallet popup. ${input.hostWorkflow.bootstrap.summary}`,
 		},
 		threadSummary,
 		messages: threadMessages,
@@ -1584,6 +1617,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		graduation,
 		currentUserId: input.viewer.id,
 		callouts: [
+			buildSoulBootstrapCallout(input.hostWorkflow.bootstrap, 'approval-note-bootstrap'),
 			{
 				id: 'approval-note-wallet',
 				title: input.hostWorkflow.expectedWallet
@@ -1606,7 +1640,12 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 	const actionContext: AppActionContext = {
 		activeUsername,
 		activeAgentId: activeAgent?.id ?? null,
-		activeSoulAgentId: input.boundSoul?.agent.agentId ?? null,
+		activeSoulAgentId:
+			input.boundSoul?.agent.agentId ??
+			input.hostWorkflow.surface?.existingSoulAgentId ??
+			input.hostWorkflow.state?.publication?.agentId ??
+			input.hostWorkflow.state?.hostSoulAgentId ??
+			null,
 		activeConversationId:
 			input.hostWorkflow.activeConversationId ??
 			workflow?.conversation?.conversationId ??
@@ -1696,6 +1735,19 @@ function buildIdentityDeclarationNotice({
 	publishedSoulError: string | null;
 	hostWorkflow: HostWorkflowState;
 }): AuthorityNotice {
+	if (hostWorkflow.bootstrap.isProductionSoul) {
+		const soulAgentId =
+			boundSoul?.agent.agentId ??
+			hostWorkflow.surface?.existingSoulAgentId ??
+			hostWorkflow.state?.publication?.agentId ??
+			hostWorkflow.state?.hostSoulAgentId ??
+			'published soul';
+		return {
+			title: 'Production soul state confirmed',
+			message: `Lesser reports hosted/off-chain finalization is complete and bound to ${soulAgentId}. Simulacrum treats this as production identity state even while published declaration details refresh.`,
+		};
+	}
+
 	if (!boundSoul) {
 		return {
 			title: 'No bound soul returned by Lesser',
@@ -1917,9 +1969,11 @@ function buildActions(
 	activeActorId: string | null,
 	canDirectMessage: boolean,
 	agentCount: number,
-	soulCount: number
+	soulCount: number,
+	hostWorkflow: HostWorkflowState
 ): readonly AgentFaceAction[] {
 	const needsDroneBodies = soulCount > 0 && agentCount === 0;
+	const bootstrapAction = buildSoulBootstrapAction(hostWorkflow.bootstrap);
 
 	if (needsDroneBodies) {
 		switch (page.key) {
@@ -1943,6 +1997,26 @@ function buildActions(
 			case 'drones':
 				return [];
 		}
+	}
+
+	if (
+		activeUsername &&
+		(page.key === 'identity' || page.key === 'genesis' || page.key === 'approvals') &&
+		(!hostWorkflow.bootstrap.isProductionSoul || page.key === 'approvals')
+	) {
+		const nextHref = getPageHref(
+			page.key === 'identity' ? 'dashboard' : page.key === 'genesis' ? 'approvals' : 'identity',
+			activeUsername
+		);
+		const secondary = bootstrapAction.href === nextHref
+			? []
+			: [{
+					label: page.key === 'identity' ? 'Return to Dashboard' : page.key === 'genesis' ? 'Open Approvals' : 'Open Identity Nexus',
+					href: nextHref,
+					tone: 'secondary' as const,
+					detail: 'Continue the route sequence in Simulacrum.',
+				}];
+		return [bootstrapAction, ...secondary];
 	}
 
 	const nextPrimary = (() => {
@@ -2005,21 +2079,9 @@ function buildStatusChips(
 		] : []),
 		...(quarantineChip ? [quarantineChip] : []),
 		{
-			label: hostWorkflow.hostBridgeAvailable
-				? hostWorkflow.creationReady
-					? 'Bootstrap connected'
-					: 'Bootstrap parked'
-				: 'Creation bridge unavailable',
-			detail: hostWorkflow.hostBridgeAvailable
-				? hostWorkflow.creationReady
-					? 'same-origin GraphQL state loaded'
-					: (hostWorkflow.nextAction ?? 'visible controls deferred')
-				: 'server-side Host bridge not available',
-			tone: hostWorkflow.hostBridgeAvailable
-				? hostWorkflow.creationReady
-					? 'success'
-					: 'warning'
-				: 'accent',
+			label: hostWorkflow.bootstrap.title,
+			detail: hostWorkflow.bootstrap.statusDetail,
+			tone: hostWorkflow.bootstrap.tone,
 		},
 	];
 }
@@ -2184,6 +2246,22 @@ function buildWorkflowNotifications(
 	workflow: AgentWorkflowSurface | null,
 	hostWorkflow: HostWorkflowState
 ): readonly WorkflowEventNotification[] {
+	if (hostWorkflow.bootstrap.isProductionSoul) {
+		return [
+			createWorkflowNotification({
+				id: 'notification-bootstrap-production-soul',
+				createdAt: hostWorkflow.state?.publication?.publishedAt ?? new Date().toISOString(),
+				account: workflowNotificationAccount(viewer),
+				kind: 'graduated',
+				title: hostWorkflow.bootstrap.title,
+				summary: hostWorkflow.bootstrap.summary,
+				phase: 'continuity',
+				actionLabel: 'Open Identity Nexus',
+				index: 0,
+			}),
+		];
+	}
+
 	if (hostWorkflow.signingCheckpoints.length) {
 		return hostWorkflow.signingCheckpoints.map((checkpoint, index) =>
 			createWorkflowNotification({
@@ -2258,22 +2336,28 @@ function buildThreadSummary(
 	review: ReviewDecisionCard | null,
 	graduation: NonNullable<AgentWorkflowSurface['graduation']> | null | undefined,
 	checkpoint: NonNullable<AgentWorkflowSurface['checkpoint']> | null | undefined,
-	workflow: AgentWorkflowSurface | null
+	workflow: AgentWorkflowSurface | null,
+	hostWorkflow: HostWorkflowState
 ): MessagingWorkflowConversationSummary {
-	return {
-		kind: 'approval',
-		title: 'Graduation approval',
-		state:
-			review?.decision === 'blocked'
+	const threadState = hostWorkflow.bootstrap.issue === 'wallet_signature_rejected'
+		? 'rejected'
+		: hostWorkflow.bootstrap.isProductionSoul
+			? 'approved'
+			: review?.decision === 'blocked'
 				? 'rejected'
 				: review?.decision === 'changes_requested'
 					? 'changes_requested'
 					: graduation?.readiness === 'ready'
 						? 'approved'
-						: 'open',
-		phase: workflow?.currentPhase,
+						: 'open';
+
+	return {
+		kind: 'approval',
+		title: 'Graduation approval',
+		state: threadState,
+		phase: workflow?.currentPhase ?? hostWorkflow.bootstrap.stateLabel,
 		dueLabel: checkpoint?.dueAt ? `Due ${new Date(checkpoint.dueAt).toLocaleDateString('en-US')}` : undefined,
-		summary: checkpoint?.approvalMemo ?? graduation?.summary,
+		summary: checkpoint?.approvalMemo ?? graduation?.summary ?? hostWorkflow.bootstrap.summary,
 	};
 }
 
@@ -2598,25 +2682,15 @@ function buildProducedDeclarationArtifacts(
 }
 
 function parseBootstrapTranscript(
-	state: HostWorkflowState['state']
+	state: HostWorkflowState['state'],
+	bootstrap: HostWorkflowState['bootstrap'],
+	signingCheckpoints: HostWorkflowState['signingCheckpoints']
 ): readonly MintTranscriptMessage[] {
-	const conversationCheckpoint = state?.signingCheckpoints.find(
-		(checkpoint) => checkpoint.name.toLowerCase().includes('conversation') && checkpoint.message
-	);
-	if (!conversationCheckpoint?.message) return [];
-
-	return [{
-		id: `bootstrap-${conversationCheckpoint.name}`,
-		role: 'assistant',
-		label: 'Lesser',
-		content: conversationCheckpoint.message,
-		createdAt:
-			conversationCheckpoint.completedAt ??
-			conversationCheckpoint.declaredAt ??
-			conversationCheckpoint.issuedAt ??
-			state?.updatedAt ??
-			undefined,
-	}];
+	return buildSoulBootstrapConversationMessages({
+		ux: bootstrap,
+		state,
+		checkpoints: signingCheckpoints,
+	});
 }
 
 function parseBootstrapProducedDeclarations(
