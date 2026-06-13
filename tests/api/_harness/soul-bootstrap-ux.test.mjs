@@ -6,6 +6,15 @@ import {
 	deriveSoulBootstrapUx,
 	isProductionSoulBootstrapResult,
 } from '../../../src/facetheory/bootstrapUx.ts';
+import {
+	createActiveSoulBootstrapSigningPlan,
+	selectSoulBootstrapPersonalSignMaterial,
+} from '../../../src/facetheory/bootstrapSigning.ts';
+import {
+	project44SoulBootstrapFixtures,
+	project44SoulBootstrapIds,
+	project44SoulBootstrapSigning,
+} from '../../../src/lib/greater/adapters/fixtures/soul-bootstrap.ts';
 
 const ids = {
 	username: 'agent-zero',
@@ -200,4 +209,91 @@ test('M4.2 bootstrap UX makes backend/config states explicit and actionable', ()
 	});
 	assert.match(unsupportedUx.title, /Backend contract is unsupported/);
 	assert.match(unsupportedUx.summary, /will not add a REST or raw Host workaround/);
+});
+
+function resultFromProject44Surface(surface) {
+	return {
+		surface,
+		state: surface.state,
+		error: null,
+		executable: surface.executable,
+		hostBridgeAvailable: surface.hostBridgeAvailable,
+		nextAction: surface.nextAction,
+	};
+}
+
+test('M4.4 Project 44 fixtures cover the full visible bootstrap path without Host credentials', () => {
+	const sequence = [
+		{
+			name: 'ready-to-begin',
+			surface: project44SoulBootstrapFixtures.notStarted,
+			title: /Start Sim-led soul creation/,
+			routeKey: 'genesis',
+		},
+		{
+			name: 'wallet signing',
+			surface: project44SoulBootstrapFixtures.walletChallenge,
+			title: /Signature readiness is visible/,
+			routeKey: 'approvals',
+		},
+		{
+			name: 'principal signing',
+			surface: project44SoulBootstrapFixtures.principalDeclarationPreflight,
+			title: /Signature readiness is visible/,
+			routeKey: 'approvals',
+		},
+		{
+			name: 'genesis conversation',
+			surface: project44SoulBootstrapFixtures.conversationMessage,
+			title: /Genesis conversation is ready/,
+			routeKey: 'genesis',
+		},
+		{
+			name: 'finalize signing',
+			surface: project44SoulBootstrapFixtures.finalizePreflight,
+			title: /Finalize signing is ready/,
+			routeKey: 'approvals',
+		},
+		{
+			name: 'hosted off-chain bound',
+			surface: project44SoulBootstrapFixtures.finalizedHosted,
+			title: /Production soul is active/,
+			routeKey: 'identity',
+		},
+	];
+
+	for (const item of sequence) {
+		const ux = deriveSoulBootstrapUx({
+			result: resultFromProject44Surface(item.surface),
+			activeUsername: project44SoulBootstrapIds.username,
+		});
+		assert.match(ux.title, item.title, `${item.name} title`);
+		assert.equal(ux.routeKey, item.routeKey, `${item.name} route`);
+		assert.doesNotMatch(
+			`${ux.summary} ${ux.actionDetail} ${ux.statusDetail}`,
+			/hostToken|hostBaseUrl|soulWorkflowHost|browser instance key/i,
+			`${item.name} must not ask for browser Host credentials`
+		);
+	}
+
+	const walletPlan = createActiveSoulBootstrapSigningPlan(
+		resultFromProject44Surface(project44SoulBootstrapFixtures.walletChallenge)
+	);
+	const principalPlan = createActiveSoulBootstrapSigningPlan(
+		resultFromProject44Surface(project44SoulBootstrapFixtures.principalDeclarationPreflight)
+	);
+	const finalizePlan = createActiveSoulBootstrapSigningPlan(
+		resultFromProject44Surface(project44SoulBootstrapFixtures.finalizePreflight)
+	);
+
+	assert.equal(selectSoulBootstrapPersonalSignMaterial(walletPlan).message, project44SoulBootstrapSigning.walletChallenge.message);
+	assert.equal(selectSoulBootstrapPersonalSignMaterial(principalPlan).message, project44SoulBootstrapSigning.principalDeclaration.messageHex);
+	assert.equal(selectSoulBootstrapPersonalSignMaterial(finalizePlan).message, project44SoulBootstrapSigning.finalize.messageHex);
+
+	const complete = deriveSoulBootstrapUx({
+		result: resultFromProject44Surface(project44SoulBootstrapFixtures.finalizedHosted),
+		activeUsername: project44SoulBootstrapIds.username,
+	});
+	assert.equal(complete.isProductionSoul, true);
+	assert.match(complete.summary, /hosted\/off-chain finalization is complete and bound/);
 });

@@ -273,3 +273,36 @@ test('CSR-016: natural-language strings survive redactUnknown unchanged', () => 
 
 	assert.equal(output, content);
 });
+
+test('Project 44 production bootstrap path has no browser Host credential storage or raw Host write imports', async () => {
+	const productionPaths = [
+		'../../../src/facetheory/App.svelte',
+		'../../../src/facetheory/components/SoulBootstrapSigningPanel.svelte',
+		'../../../src/facetheory/bootstrapSigning.ts',
+		'../../../src/facetheory/loaders.ts',
+		'../../../src/lib/api/soulBootstrap.ts',
+		'../../../src/lib/auth/session.ts',
+	];
+	const sources = await Promise.all(
+		productionPaths.map(async (relativePath) => ({
+			relativePath,
+			source: await readFile(new URL(relativePath, import.meta.url), 'utf8'),
+		}))
+	);
+	const joined = sources.map(({ relativePath, source }) => `\n/* ${relativePath} */\n${source}`).join('\n');
+
+	assert.doesNotMatch(joined, /from ['\"][^'\"]*soulWorkflowHost['\"]/);
+	assert.doesNotMatch(joined, /createLesserHostSoulClient|createControlPlaneLesserHostSoulClient/);
+	assert.doesNotMatch(joined, /\bhostToken\b|\bhostBaseUrl\b|\bsoulWorkflowHost\b/);
+	assert.doesNotMatch(
+		joined,
+		/(localStorage|sessionStorage)\.(getItem|setItem)\([^)]*(hostToken|hostBaseUrl|soulWorkflowHost|instanceKey|lesserHost)/is
+	);
+
+	const signingSources = sources
+		.filter(({ relativePath }) => /SoulBootstrapSigningPanel|bootstrapSigning/.test(relativePath))
+		.map(({ source }) => source)
+		.join('\n');
+	assert.doesNotMatch(signingSources, /JSON\.stringify|crypto\.subtle|createHash|keccak|sha256|digestHex\s*=/i);
+	assert.match(signingSources, /createSubmitInput/);
+});
