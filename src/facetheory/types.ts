@@ -14,6 +14,7 @@ import type {
 	SoulBootstrapSurface,
 } from '$lib/api/soulBootstrap';
 import type { SoulAnchorAssurance } from '$lib/components/soul';
+import type { SoulBootstrapUxState } from './bootstrapUx';
 
 export type AppPageKey =
 	| 'dashboard'
@@ -52,6 +53,7 @@ export interface HostWorkflowState {
 	hostBridgeAvailable: boolean | null;
 	creationReady: boolean;
 	authNote: string;
+	bootstrap: SoulBootstrapUxState;
 	baseUrl: string | null;
 	result: SoulBootstrapResult | null;
 	surface: SoulBootstrapSurface | null;

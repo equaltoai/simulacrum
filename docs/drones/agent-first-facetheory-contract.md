@@ -246,8 +246,9 @@ Current integration boundary after Project 44 M4.1:
   facade over Lesser same-origin GraphQL
 - Lesser performs any Host instance-trust work server-side; browser code does
   not receive Host control-plane credentials or raw Host write clients
-- visible mint conversation and signing UX restoration remain deferred to
-  Project 44 M4.2/M4.3
+- M4.2 restores the visible `/l/identity`, `/l/souls/genesis`, and
+  `/l/approvals` route lanes from the adapter-backed state model; M4.3 owns
+  interactive signing controls
 - Simulacrum must not ask the browser to store or present `lesser-host`
   control-plane credentials
 

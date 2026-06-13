@@ -47,7 +47,8 @@ test('browser Host workflow bridge cannot be enabled with build-time env', async
 	assert.doesNotMatch(flagsSource, /VITE_SIMULACRUM_ENABLE_HOST_WORKFLOW_BRIDGE/);
 	assert.doesNotMatch(flagsSource, /normalizeBooleanEnv/);
 	assert.ok(flagsSource.includes('src/lib/api/soulBootstrap.ts'));
-	assert.match(flagsSource, /M4\.2\/M4\.3 UX work/);
+	assert.match(flagsSource, /M4\.2 restores visible route lanes/);
+	assert.match(flagsSource, /M4\.3 owns interactive signing controls/);
 	assert.match(flagsSource, /will not ask the browser for lesser-host control-plane credentials/);
 
 	assert.doesNotMatch(
@@ -61,7 +62,7 @@ test('browser Host workflow bridge cannot be enabled with build-time env', async
 	assert.doesNotMatch(loaderSource, /Streaming lane deliberately gated/);
 
 	assert.match(appSource, /Same-origin bootstrap boundary/);
-	assert.match(appSource, /Soul creation stays server-side/);
+	assert.match(appSource, /soul-bootstrap-lane/);
 	assert.doesNotMatch(appSource, /Deliberate enablement/);
 	assert.doesNotMatch(appSource, /Host workflow bridge is disabled/);
 
@@ -69,7 +70,8 @@ test('browser Host workflow bridge cannot be enabled with build-time env', async
 	assert.doesNotMatch(rolloutSource, /When the flag is enabled/);
 	assert.doesNotMatch(rolloutSource, /prefer enabling the host workflow bridge/);
 	assert.match(rolloutSource, /Greater `greater-v0\.10\.3` soul-bootstrap/);
-	assert.match(rolloutSource, /M4\.2\/M4\.3 UX deferral/);
+	assert.match(rolloutSource, /M4\.2 route-lane/);
+	assert.match(rolloutSource, /M4\.3 signing-control boundary/);
 	assert.match(rolloutSource, /no deploy\/install environment variable is a supported way/);
 });
 
