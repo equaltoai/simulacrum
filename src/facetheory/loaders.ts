@@ -5,11 +5,6 @@ import {
 	markRegistrationComplete,
 } from '$lib/greater/adapters/soul/avatarResolver.svelte';
 import {
-	createLesserHostSoulClient,
-	type SoulAgentChannelPreferencesResponse,
-	type SoulAgentChannelsResponse,
-} from '$lib/greater/adapters';
-import {
 	fetchDroneAgentState,
 	fetchDroneWorkflow,
 	fetchMyAgents,
@@ -17,21 +12,14 @@ import {
 	fetchMyDroneReviews,
 	fetchMySouls,
 	fetchViewer,
+	fetchSoulBootstrapSurface,
+	SOUL_BOOTSTRAP_AUTH_NOTE,
 	type AgentWorkflowSurface,
 	type DroneAgentState,
 	type ReviewDecisionCard,
 	type SoulRequestCard,
+	type SoulBootstrapResult,
 } from '$lib/api';
-import {
-	SOUL_WORKFLOW_HOST_AUTH_NOTE,
-	getAgentMintConversation,
-	getAgentPromotion,
-	listAgentMintConversations,
-	listAgentPromotionLifecycleEvents,
-	type SoulAgentPromotion,
-	type SoulAgentPromotionLifecycleEvent,
-	type SoulMintConversation,
-} from '$lib/api/soulWorkflowHost';
 import type {
 	AgentFaceAction,
 	AgentFaceAttributionRecord,
@@ -81,10 +69,7 @@ import type {
 	HostWorkflowState,
 	MintTranscriptMessage,
 } from './types';
-import {
-	HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
-	HOST_WORKFLOW_BRIDGE_ENABLED,
-} from './flags';
+import { HOST_WORKFLOW_BRIDGE_DISABLED_NOTE } from './flags';
 
 interface ViewerInfo {
 	id: string;
@@ -816,82 +801,19 @@ const PREVIEW_MY_SOULS: readonly SoulInventoryRecord[] = [
 ];
 
 const PREVIEW_HOST_WORKFLOW: HostWorkflowState = {
-	bridgeEnabled: HOST_WORKFLOW_BRIDGE_ENABLED,
-	tokenConfigured: false,
-	authNote: HOST_WORKFLOW_BRIDGE_ENABLED
-		? SOUL_WORKFLOW_HOST_AUTH_NOTE
-		: HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+	hostBridgeAvailable: null,
+	creationReady: false,
+	authNote: HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
 	baseUrl: null,
-	promotion: null,
-	lifecycleEvents: [
-		{
-			event_id: 'preview-event-request',
-			event_type: 'request_created',
-			summary: 'Soul promotion request recorded from Simulacrum.',
-			occurred_at: PREVIEW_TIMESTAMP,
-			request_id: PREVIEW_REQUEST.id,
-			operation_id: undefined,
-			conversation_id: PREVIEW_WORKFLOW.conversation?.conversationId,
-			promotion: {
-				agent_id: PREVIEW_AGENT.id,
-				domain: 'simulacrum.dev',
-				local_id: 'lyra',
-				wallet: '0x2222222222222222222222222222222222222222',
-				stage: 'requested',
-				request_status: 'requested',
-				review_status: 'draft_ready',
-				approval_status: 'pending',
-				readiness_status: 'ready_for_conversation',
-				created_at: PREVIEW_TIMESTAMP,
-				updated_at: PREVIEW_TIMESTAMP,
-				prerequisites: {
-					principal_declaration_recorded: true,
-					mint_operation_created: true,
-					mint_executed: false,
-					conversation_started: true,
-					conversation_completed: false,
-					review_draft_ready: true,
-					ready_for_finalize: false,
-					graduated: false,
-				},
-				next_actions: ['begin_finalize'],
-			},
-		},
-	],
-	conversations: [
-		{
-			agent_id: PREVIEW_AGENT.id,
-			conversation_id: PREVIEW_WORKFLOW.conversation?.conversationId ?? 'preview-conversation',
-			model: 'anthropic:claude-sonnet-4-6',
-			messages: JSON.stringify([
-				{
-					role: 'user',
-					content: 'We need a declaration that preserves the body through graduation.',
-				},
-				{
-					role: 'assistant',
-					content:
-						'Understood. I will frame the declaration around continuity, reachability, and explicit runtime boundaries.',
-				},
-			]),
-			produced_declarations: JSON.stringify({
-				selfDescription: { summary: 'Lyra remains the same body after graduation.' },
-				capabilities: [{ capability: 'editorial synthesis' }],
-				boundaries: [
-					{
-						id: 'boundary-preview',
-						category: 'runtime',
-						statement: 'No wallet or communications unlock before finalize.',
-					},
-				],
-				transparency: { note: 'Preview issuance packet' },
-			}),
-			status: 'in_progress',
-			created_at: PREVIEW_TIMESTAMP,
-			completed_at: undefined,
-		},
-	],
-	selectedConversation: null,
+	result: null,
+	surface: null,
+	state: null,
+	nextAction: null,
+	signingCheckpoints: [],
+	conversationCount: 1,
+	lifecycleEventCount: 1,
+	activeConversationId: PREVIEW_WORKFLOW.conversation?.conversationId ?? 'preview-conversation',
+	activeConversationStatus: 'in_progress',
 	transcript: [
 		{
 			id: 'preview-message-user',
@@ -949,7 +871,10 @@ export function createPreviewAppState({
 		reachabilityNotice: null,
 		publishedSoulProfile: null,
 		publishedSoulError: null,
-		hostWorkflow: emptyHostWorkflow(false, false, null),
+		hostWorkflow: emptyHostWorkflow({
+			baseUrl: null,
+			authNote: HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+		}),
 		isPreview: true,
 	});
 }
@@ -957,12 +882,10 @@ export function createPreviewAppState({
 export async function loadClientAppState({
 	page,
 	agentHint,
-	hostToken,
 	signal,
 }: {
 	page: AppPageDescriptor;
 	agentHint?: string | null;
-	hostToken?: string | null;
 	signal?: AbortSignal;
 }): Promise<ClientAppState> {
 	beginSoulRegistration();
@@ -1042,8 +965,8 @@ export async function loadClientAppState({
 			: [null, null];
 
 		const shouldShowReachability = shouldExposeSoulReachability(activeAgent, workflow);
-		let channelsResponse: SoulAgentChannelsResponse | null = null;
-		let preferencesResponse: SoulAgentChannelPreferencesResponse | null = null;
+		let channels: SoulChannels = EMPTY_CHANNELS;
+		let preferences: SoulContactPreferences | null = null;
 		let publishedSoulProfile: PublishedSoulProfile | null = null;
 		let channelsUpdatedAt: string | null = null;
 		let reachabilityNotice: AuthorityNotice | null = null;
@@ -1068,52 +991,11 @@ export async function loadClientAppState({
 			}
 
 			if (shouldShowReachability) {
-				const reachabilityToken = hostToken?.trim() ?? '';
-
-				if (!reachabilityToken) {
-					reachabilityNotice = {
-						title: HOST_WORKFLOW_BRIDGE_ENABLED
-							? 'Reachability control-plane token required'
-							: 'Reachability bridge pending',
-						message: HOST_WORKFLOW_BRIDGE_ENABLED
-							? SOUL_WORKFLOW_HOST_AUTH_NOTE
-							: HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
-					};
-				} else {
-					const [channelsResult, preferencesResult] = await Promise.allSettled([
-						loadChannels(lesserHostBaseUrl, boundSoulAgentId, reachabilityToken, signal),
-						loadPreferences(lesserHostBaseUrl, boundSoulAgentId, reachabilityToken, signal),
-					]);
-
-					if (channelsResult.status === 'fulfilled') {
-						channelsResponse = channelsResult.value;
-						channelsUpdatedAt = channelsResult.value.updatedAt ?? null;
-					}
-
-					if (preferencesResult.status === 'fulfilled') {
-						preferencesResponse = preferencesResult.value;
-					}
-
-					if (channelsResult.status !== 'fulfilled') {
-						reachabilityNotice = {
-							title: 'Reachability lookup failed',
-							message: describeAuthorityFailure(
-								'reachability lookup',
-								boundSoulAgentId,
-								channelsResult.reason
-							),
-						};
-					} else if (preferencesResult.status !== 'fulfilled') {
-						reachabilityNotice = {
-							title: 'Contact preferences unavailable',
-							message: describeAuthorityFailure(
-								'contact preferences lookup',
-								boundSoulAgentId,
-								preferencesResult.reason
-							),
-						};
-					}
-				}
+				reachabilityNotice = {
+					title: 'Reachability bridge pending',
+					message:
+						'Private reachability records stay behind Lesser same-origin GraphQL or public lesser-host reads; Simulacrum will not ask the browser for lesser-host control-plane credentials.',
+				};
 			}
 		} else if (boundSoulAgentId && !lesserHostBaseUrl) {
 			publishedSoulError =
@@ -1139,16 +1021,16 @@ export async function loadClientAppState({
 					};
 		}
 
-		const hostWorkflow = !HOST_WORKFLOW_BRIDGE_ENABLED
-			? emptyHostWorkflow(false, false, lesserHostBaseUrl)
-			: boundSoulAgentId
-				? await loadHostWorkflow({
-						token: hostToken ?? null,
-						baseUrl: lesserHostBaseUrl,
-						agentId: boundSoulAgentId,
-						signal,
-					})
-				: emptyHostWorkflow(Boolean(hostToken?.trim()), true, lesserHostBaseUrl);
+		const hostWorkflow = activeUsername
+			? await loadHostWorkflow({
+					username: activeUsername,
+					baseUrl: lesserHostBaseUrl,
+					signal,
+				})
+			: emptyHostWorkflow({
+					baseUrl: lesserHostBaseUrl,
+					authNote: HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+				});
 
 		return assembleAppState({
 			page,
@@ -1166,13 +1048,10 @@ export async function loadClientAppState({
 			workflow,
 			myRequests,
 			myReviews,
-			channels: channelsResponse?.channels ?? EMPTY_CHANNELS,
+			channels,
 			channelsUpdatedAt,
-			preferences:
-				preferencesResponse?.contactPreferences ??
-				channelsResponse?.contactPreferences ??
-				null,
-			showReachability: shouldShowReachability && channelsResponse !== null,
+			preferences,
+			showReachability: false,
 			reachabilityNotice,
 			publishedSoulProfile,
 			publishedSoulError,
@@ -1188,37 +1067,6 @@ export async function loadClientAppState({
 		}
 		throw error;
 	}
-}
-
-async function loadChannels(
-	baseUrl: string,
-	agentId: string,
-	hostToken?: string | null,
-	signal?: AbortSignal
-): Promise<SoulAgentChannelsResponse> {
-	const client = createControlPlaneLesserHostSoulClient(baseUrl, hostToken);
-	return await client.getAgentChannels(agentId);
-}
-
-async function loadPreferences(
-	baseUrl: string,
-	agentId: string,
-	hostToken?: string | null,
-	signal?: AbortSignal
-): Promise<SoulAgentChannelPreferencesResponse> {
-	const client = createControlPlaneLesserHostSoulClient(baseUrl, hostToken);
-	return await client.getAgentChannelPreferences(agentId);
-}
-
-function createControlPlaneLesserHostSoulClient(baseUrl: string, hostToken?: string | null) {
-	const token = hostToken?.trim();
-	if (!token) {
-		throw new Error('A lesser-host control-plane bearer token is required for reachability.');
-	}
-	return createLesserHostSoulClient({
-		baseUrl,
-		headers: { authorization: `Bearer ${token}` },
-	});
 }
 
 async function loadLesserHostBaseUrl(signal?: AbortSignal): Promise<string | null> {
@@ -1306,93 +1154,106 @@ function describeAuthorityFailure(scope: string, agentId: string, error: unknown
 }
 
 async function loadHostWorkflow({
-	token,
+	username,
 	baseUrl,
-	agentId,
 	signal,
 }: {
-	token: string | null;
+	username: string;
 	baseUrl: string | null;
-	agentId: string;
 	signal?: AbortSignal;
 }): Promise<HostWorkflowState> {
-	if (!token?.trim()) {
-		return emptyHostWorkflow(false, true, baseUrl);
-	}
-
-	if (!baseUrl?.trim()) {
-		return emptyHostWorkflow(true, true, null);
-	}
-
 	try {
-		const [promotion, lifecycleResponse, conversationsResponse] = await Promise.all([
-			getAgentPromotion({ token, agentId, baseUrl, signal })
-				.then((response) => response.promotion)
-				.catch(() => null),
-			listAgentPromotionLifecycleEvents({ token, agentId, baseUrl, signal })
-				.catch(() => ({ events: [] as SoulAgentPromotionLifecycleEvent[] })),
-			listAgentMintConversations({ token, agentId, baseUrl, signal }).catch(() => ({
-				conversations: [] as SoulMintConversation[],
-			})),
-		]);
-
-		const selectedConversation =
-			findSelectedConversation(
-				conversationsResponse.conversations,
-				promotion?.latest_conversation_id ?? null
-			) ??
-			null;
-
-		const fullConversation =
-			selectedConversation && selectedConversation.messages == null
-				? await getAgentMintConversation({
-						token,
-						agentId,
-						baseUrl,
-						conversationId: selectedConversation.conversation_id,
-						signal,
-					}).catch(() => selectedConversation)
-				: selectedConversation;
-
-		const transcript = parseTranscript(fullConversation);
-		const producedDeclarations = parseProducedDeclarations(fullConversation);
-
-		return {
-			bridgeEnabled: true,
-			tokenConfigured: true,
-			authNote: SOUL_WORKFLOW_HOST_AUTH_NOTE,
+		return createHostWorkflowFromSoulBootstrapResult(
+			await fetchSoulBootstrapSurface({ username, signal }),
+			baseUrl
+		);
+	} catch (error) {
+		return emptyHostWorkflow({
 			baseUrl,
-			promotion,
-			lifecycleEvents: lifecycleResponse.events ?? [],
-			conversations: conversationsResponse.conversations ?? [],
-			selectedConversation: fullConversation ?? null,
-			transcript,
-			producedDeclarations,
-			expectedWallet: promotion?.wallet ?? null,
-		};
-	} catch {
-		return emptyHostWorkflow(true, true, baseUrl);
+			authNote: describeSoulBootstrapFailure(error),
+		});
 	}
 }
 
-function emptyHostWorkflow(
-	tokenConfigured: boolean,
-	bridgeEnabled: boolean,
+function createHostWorkflowFromSoulBootstrapResult(
+	result: SoulBootstrapResult,
 	baseUrl: string | null
 ): HostWorkflowState {
+	const state = result.state;
+	const conversationId = state?.hostConversationId ?? null;
+	const expectedWallet = state?.walletAddress ?? null;
+	const signingCheckpoints = state?.signingCheckpoints ?? [];
+	const producedDeclarations = parseBootstrapProducedDeclarations(state);
+	const transcript = parseBootstrapTranscript(state);
+	const creationReady = Boolean(result.executable && result.hostBridgeAvailable);
+	const authNote = buildSoulBootstrapAuthNote(result);
+
 	return {
-		bridgeEnabled,
-		tokenConfigured,
-		authNote: bridgeEnabled ? SOUL_WORKFLOW_HOST_AUTH_NOTE : HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+		hostBridgeAvailable: result.hostBridgeAvailable,
+		creationReady,
+		authNote,
 		baseUrl,
-		promotion: null,
-		lifecycleEvents: [],
-		conversations: [],
-		selectedConversation: null,
+		result,
+		surface: result.surface,
+		state,
+		nextAction: result.nextAction,
+		signingCheckpoints,
+		conversationCount: conversationId ? 1 : 0,
+		lifecycleEventCount: signingCheckpoints.length,
+		activeConversationId: conversationId,
+		activeConversationStatus: state?.phase ?? null,
+		transcript,
+		producedDeclarations,
+		expectedWallet,
+	};
+}
+
+function emptyHostWorkflow({
+	baseUrl,
+	authNote = HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+}: {
+	baseUrl: string | null;
+	authNote?: string;
+}): HostWorkflowState {
+	return {
+		hostBridgeAvailable: null,
+		creationReady: false,
+		authNote,
+		baseUrl,
+		result: null,
+		surface: null,
+		state: null,
+		nextAction: null,
+		signingCheckpoints: [],
+		conversationCount: 0,
+		lifecycleEventCount: 0,
+		activeConversationId: null,
+		activeConversationStatus: null,
 		transcript: [],
 		producedDeclarations: null,
 		expectedWallet: null,
 	};
+}
+
+function buildSoulBootstrapAuthNote(result: SoulBootstrapResult): string {
+	if (result.error) {
+		return `${SOUL_BOOTSTRAP_AUTH_NOTE} Latest Lesser response: ${result.error.message}`;
+	}
+	if (result.hostBridgeAvailable === false) {
+		return `${SOUL_BOOTSTRAP_AUTH_NOTE} Lesser reports that the server-side Host bridge is not available yet.`;
+	}
+	if (result.nextAction) {
+		return `${SOUL_BOOTSTRAP_AUTH_NOTE} Next action: ${result.nextAction}.`;
+	}
+	return SOUL_BOOTSTRAP_AUTH_NOTE;
+}
+
+function describeSoulBootstrapFailure(error: unknown): string {
+	const detail =
+		error instanceof Error && error.message.trim()
+			? error.message.trim()
+			: 'Lesser did not return a usable soul-bootstrap surface.';
+	return `${SOUL_BOOTSTRAP_AUTH_NOTE} Soul-bootstrap facade load failed: ${detail}`;
 }
 
 function assembleAppState(input: AssembleAppStateInput): ClientAppState {
@@ -1476,7 +1337,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		activeUsername,
 		input.myAgents.length,
 		rawRequestQueue.length,
-		input.hostWorkflow.conversations.length,
+		input.hostWorkflow.conversationCount,
 		input.mySouls.length,
 		!input.isPreview
 	);
@@ -1486,7 +1347,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		input.mySouls.length,
 		rawRequestQueue.length,
 		input.myReviews.length,
-		input.hostWorkflow.conversations.length
+		input.hostWorkflow.conversationCount
 	);
 	const actions = buildActions(
 		input.page,
@@ -1514,14 +1375,14 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		hero: {
 			eyebrow: input.page.eyebrow,
 			title: input.page.title,
-			summary: `${input.page.summary} ${
-				input.hostWorkflow.bridgeEnabled
-					? input.hostWorkflow.tokenConfigured
-						? 'Host workflow data is connected.'
-						: 'Connect a lesser-host control-plane token to load the live mint lane.'
-					: 'Hosted soul creation is waiting on the Lesser instance-trust creation bridge and Greater adapters.'
-			}`,
-		},
+				summary: `${input.page.summary} ${
+					input.hostWorkflow.hostBridgeAvailable
+						? input.hostWorkflow.creationReady
+							? 'Same-origin bootstrap data is connected.'
+							: 'The Greater bootstrap adapter is wired; visible mint/signing controls stay parked for M4.2 and M4.3.'
+						: 'Hosted soul creation now stays on Lesser same-origin GraphQL and waits for the server-side bridge to report availability.'
+				}`,
+			},
 		filters: buildRequestFilters(rawRequestQueue),
 		notifications,
 		requestQueue,
@@ -1539,16 +1400,16 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 					}]
 				: []),
 			{
-				id: 'request-note-host',
-				title: input.hostWorkflow.bridgeEnabled
-					? input.hostWorkflow.tokenConfigured
-						? 'Host workflow linked'
-						: 'Host token required for mint lane'
-					: 'Creation bridge pending',
-				summary: input.hostWorkflow.authNote,
-				meta: input.hostWorkflow.selectedConversation?.conversation_id ?? undefined,
-				tone: input.hostWorkflow.bridgeEnabled
-					? input.hostWorkflow.tokenConfigured
+					id: 'request-note-host',
+					title: input.hostWorkflow.hostBridgeAvailable
+						? input.hostWorkflow.creationReady
+							? 'Same-origin bootstrap connected'
+							: 'Bootstrap action pending'
+						: 'Creation bridge parked',
+					summary: input.hostWorkflow.authNote,
+				meta: input.hostWorkflow.activeConversationId ?? undefined,
+				tone: input.hostWorkflow.hostBridgeAvailable
+					? input.hostWorkflow.creationReady
 						? 'success'
 						: 'warning'
 					: 'accent',
@@ -1586,17 +1447,17 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 			createdAt: message.createdAt,
 		})),
 		focusNotes: [
-			{
-				id: 'genesis-note-token',
-				title: input.hostWorkflow.bridgeEnabled
-					? input.hostWorkflow.tokenConfigured
-						? 'Streaming lane is unlocked'
-						: 'Connect lesser-host for live streaming'
-					: 'Streaming lane waiting on Lesser and Greater',
-				summary: input.hostWorkflow.authNote,
-				meta: input.hostWorkflow.selectedConversation?.status ?? undefined,
-				tone: input.hostWorkflow.bridgeEnabled
-					? input.hostWorkflow.tokenConfigured
+				{
+					id: 'genesis-note-bootstrap',
+					title: input.hostWorkflow.hostBridgeAvailable
+						? input.hostWorkflow.creationReady
+							? 'Bootstrap state is live'
+							: 'Creation controls intentionally parked'
+						: 'Streaming lane waiting on the same-origin bridge',
+					summary: input.hostWorkflow.authNote,
+				meta: input.hostWorkflow.activeConversationStatus ?? undefined,
+				tone: input.hostWorkflow.hostBridgeAvailable
+					? input.hostWorkflow.creationReady
 						? 'success'
 						: 'warning'
 					: 'accent',
@@ -1747,7 +1608,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		activeAgentId: activeAgent?.id ?? null,
 		activeSoulAgentId: input.boundSoul?.agent.agentId ?? null,
 		activeConversationId:
-			input.hostWorkflow.selectedConversation?.conversation_id ??
+			input.hostWorkflow.activeConversationId ??
 			workflow?.conversation?.conversationId ??
 			null,
 		expectedWallet:
@@ -1785,10 +1646,6 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 function resolveAnchorAssurance(input: AssembleAppStateInput): SoulAnchorAssurance | null {
 	const published = input.publishedSoulProfile?.agent.anchor_assurance;
 	if (published) return published;
-
-	for (const event of [...input.hostWorkflow.lifecycleEvents].reverse()) {
-		if (event.anchor_assurance) return event.anchor_assurance;
-	}
 
 	return null;
 }
@@ -1853,16 +1710,16 @@ function buildIdentityDeclarationNotice({
 		};
 	}
 
-	if (hostWorkflow.tokenConfigured) {
+	if (hostWorkflow.creationReady) {
 		return {
-			title: 'No declaration persisted on lesser-host',
-			message: `lesser-host returned no published declaration for soul ${boundSoul.agent.agentId}, and the connected mint conversation does not currently expose a persisted declaration payload.`,
+			title: 'No declaration persisted yet',
+			message: `Lesser returned a soul-bootstrap state for ${boundSoul.agent.agentId}, but no published declaration has been persisted yet.`,
 		};
 	}
 
 	return {
 		title: 'No published declaration returned by lesser-host',
-		message: `Soul ${boundSoul.agent.agentId} does not currently expose a published declaration record. Private mint conversation inspection is waiting on the Lesser same-origin instance-trust creation bridge and matching Greater adapters; Simulacrum will not ask the browser for lesser-host control-plane credentials.`,
+		message: `Soul ${boundSoul.agent.agentId} does not currently expose a published declaration record. Private creation state stays behind Lesser same-origin GraphQL; Simulacrum will not ask the browser for lesser-host control-plane credentials.`,
 	};
 }
 
@@ -2148,18 +2005,18 @@ function buildStatusChips(
 		] : []),
 		...(quarantineChip ? [quarantineChip] : []),
 		{
-			label: hostWorkflow.bridgeEnabled
-				? hostWorkflow.tokenConfigured
-					? 'Host workflow linked'
-					: 'Host workflow gated'
-				: 'Creation bridge pending',
-			detail: hostWorkflow.bridgeEnabled
-				? hostWorkflow.tokenConfigured
-					? 'conversation and finalize actions unlocked'
-					: 'requires control-plane token'
-				: 'waiting on Lesser bridge and Greater adapters',
-			tone: hostWorkflow.bridgeEnabled
-				? hostWorkflow.tokenConfigured
+			label: hostWorkflow.hostBridgeAvailable
+				? hostWorkflow.creationReady
+					? 'Bootstrap connected'
+					: 'Bootstrap parked'
+				: 'Creation bridge unavailable',
+			detail: hostWorkflow.hostBridgeAvailable
+				? hostWorkflow.creationReady
+					? 'same-origin GraphQL state loaded'
+					: (hostWorkflow.nextAction ?? 'visible controls deferred')
+				: 'server-side Host bridge not available',
+			tone: hostWorkflow.hostBridgeAvailable
+				? hostWorkflow.creationReady
 					? 'success'
 					: 'warning'
 				: 'accent',
@@ -2327,17 +2184,23 @@ function buildWorkflowNotifications(
 	workflow: AgentWorkflowSurface | null,
 	hostWorkflow: HostWorkflowState
 ): readonly WorkflowEventNotification[] {
-	if (hostWorkflow.lifecycleEvents.length) {
-		return hostWorkflow.lifecycleEvents.map((event, index) =>
+	if (hostWorkflow.signingCheckpoints.length) {
+		return hostWorkflow.signingCheckpoints.map((checkpoint, index) =>
 			createWorkflowNotification({
-				id: event.event_id,
-				createdAt: event.occurred_at,
+				id: `bootstrap-checkpoint-${checkpoint.name}-${index}`,
+				createdAt:
+					checkpoint.completedAt ??
+					checkpoint.declaredAt ??
+					checkpoint.issuedAt ??
+					new Date().toISOString(),
 				account: workflowNotificationAccount(viewer),
-				kind: mapLifecycleEventKind(event.event_type),
-				title: titleCase(event.event_type.replaceAll('_', ' ')),
-				summary: event.summary ?? 'Workflow lifecycle event',
+				kind: checkpoint.status === 'complete' ? 'graduated' : 'approval_requested',
+				title: titleCase(checkpoint.name.replaceAll('_', ' ')),
+				summary: checkpoint.message ?? `Bootstrap checkpoint ${checkpoint.status}`,
 				phase: workflow?.currentPhase,
-				actionLabel: event.conversation_id ? `Conversation ${event.conversation_id}` : undefined,
+				actionLabel: hostWorkflow.activeConversationId
+					? `Conversation ${hostWorkflow.activeConversationId}`
+					: undefined,
 				index,
 			})
 		);
@@ -2493,13 +2356,13 @@ function buildContinuityTimeline(
 						: 'neutral',
 	}));
 
-	const hostMoments = hostWorkflow.lifecycleEvents.slice(0, 3).map<AgentFaceTimelineMoment>((event) => ({
-		id: event.event_id,
-		title: titleCase(event.event_type.replaceAll('_', ' ')),
-		summary: event.summary ?? 'Lifecycle event',
-		meta: event.occurred_at,
+	const hostMoments = hostWorkflow.signingCheckpoints.slice(0, 3).map<AgentFaceTimelineMoment>((checkpoint, index) => ({
+		id: `bootstrap-checkpoint-${checkpoint.name}-${index}`,
+		title: titleCase(checkpoint.name.replaceAll('_', ' ')),
+		summary: checkpoint.message ?? `Bootstrap checkpoint ${checkpoint.status}`,
+		meta: checkpoint.completedAt ?? checkpoint.declaredAt ?? checkpoint.issuedAt ?? undefined,
 		phase: undefined,
-		tone: mapLifecycleEventKind(event.event_type) === 'graduated' ? 'success' : 'accent',
+		tone: checkpoint.status === 'complete' ? 'success' : 'accent',
 	}));
 
 	return hostMoments.length ? [...hostMoments, ...lifecycleMoments].slice(0, 6) : lifecycleMoments;
@@ -2734,44 +2597,50 @@ function buildProducedDeclarationArtifacts(
 	}));
 }
 
-function parseTranscript(conversation: SoulMintConversation | null): readonly MintTranscriptMessage[] {
-	if (!conversation?.messages) return [];
+function parseBootstrapTranscript(
+	state: HostWorkflowState['state']
+): readonly MintTranscriptMessage[] {
+	const conversationCheckpoint = state?.signingCheckpoints.find(
+		(checkpoint) => checkpoint.name.toLowerCase().includes('conversation') && checkpoint.message
+	);
+	if (!conversationCheckpoint?.message) return [];
 
-	try {
-		const parsed = JSON.parse(conversation.messages) as Array<Record<string, unknown>>;
-		return parsed
-			.filter((entry) => typeof entry?.role === 'string' && typeof entry?.content === 'string')
-			.map((entry, index) => ({
-				id: `${conversation.conversation_id}-${index}`,
-				role: normalizeRole(String(entry.role)),
-				label: normalizeRole(String(entry.role)) === 'assistant' ? 'Agent' : 'Operator',
-				content: String(entry.content),
-				createdAt: conversation.created_at,
-			}));
-	} catch {
-		return [];
-	}
+	return [{
+		id: `bootstrap-${conversationCheckpoint.name}`,
+		role: 'assistant',
+		label: 'Lesser',
+		content: conversationCheckpoint.message,
+		createdAt:
+			conversationCheckpoint.completedAt ??
+			conversationCheckpoint.declaredAt ??
+			conversationCheckpoint.issuedAt ??
+			state?.updatedAt ??
+			undefined,
+	}];
 }
 
-function parseProducedDeclarations(conversation: SoulMintConversation | null): Record<string, unknown> | null {
-	if (!conversation?.produced_declarations) return null;
+function parseBootstrapProducedDeclarations(
+	state: HostWorkflowState['state']
+): Record<string, unknown> | null {
+	for (const checkpoint of state?.signingCheckpoints ?? []) {
+		const parsed = parseJsonRecord(
+			checkpoint.registrationPreviewJson ?? checkpoint.finalizeRequestTemplateJson ?? null
+		);
+		if (parsed) return parsed;
+	}
+	return null;
+}
+
+function parseJsonRecord(value: string | null | undefined): Record<string, unknown> | null {
+	if (!value) return null;
 	try {
-		const parsed = JSON.parse(conversation.produced_declarations) as Record<string, unknown>;
-		return parsed && typeof parsed === 'object' ? parsed : null;
+		const parsed = JSON.parse(value) as unknown;
+		return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+			? (parsed as Record<string, unknown>)
+			: null;
 	} catch {
 		return null;
 	}
-}
-
-function findSelectedConversation(
-	conversations: readonly SoulMintConversation[],
-	conversationId: string | null
-): SoulMintConversation | null {
-	if (conversationId?.trim()) {
-		const found = conversations.find((conversation) => conversation.conversation_id === conversationId);
-		if (found) return found;
-	}
-	return conversations[0] ?? null;
 }
 
 function synthesizeTranscript(

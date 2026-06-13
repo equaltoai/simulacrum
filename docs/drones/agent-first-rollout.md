@@ -20,27 +20,29 @@ not the canonical user-facing workflow.
 ## Current Creation Boundary
 
 Project 44 remediation removes the browser Host-token bridge from production
-rollout guidance. Simulacrum currently has no production browser path for
-creating souls because the required server-side contracts are not available yet.
+rollout guidance. M4.1 vendors the Greater `greater-v0.10.3` soul-bootstrap
+facade and routes Simulacrum's Project 44 API layer through Lesser same-origin
+GraphQL. Visible soul-creation UX remains parked for M4.2/M4.3.
 
 Do not ship or canary a browser prompt for `lesser-host` control-plane
 credentials. Provisioned Lesser instances already hold their Host trust
 server-side; the installed client must wait for same-origin instance trust
 instead of asking the browser to carry a Host bearer token.
 
-Hosted/off-chain creation can return to Simulacrum only after both gates land:
+Hosted/off-chain creation can return visibly to Simulacrum only after both gates
+are true:
 
 - Lesser exposes a same-origin instance-trust creation bridge for installed
   clients.
-- Greater exposes adapters for that Lesser bridge so Simulacrum can consume it
+- Simulacrum consumes that bridge through the Greater soul-bootstrap facade
   without direct Host write wrappers.
 
 Until then:
 
 - request, review, identity, and continuity remain live in Simulacrum
 - the client renders the canonical FaceTheory route map
-- `/l/souls/genesis` and `/l/approvals` show the missing Lesser bridge and
-  Greater adapter gate rather than an operator-enableable flag
+- `/l/souls/genesis` and `/l/approvals` show the parked same-origin bootstrap
+  lane rather than an operator-enableable flag
 - no deploy/install environment variable is a supported way to enable direct
   Host control-plane writes from the browser
 
@@ -54,8 +56,8 @@ Before promoting a build as the active dev-stage release, verify:
   `lesser-host` portal
 - mint conversation and finalize surfaces do not ask for a `lesser-host`
   control-plane token
-- disabled-state copy names the missing Lesser instance-trust creation bridge
-  and Greater adapter gate
+- disabled-state copy names the same-origin bootstrap boundary and the
+  M4.2/M4.3 UX deferral
 - review, approval, and continuity states remain legible inside the FaceTheory
   surfaces
 - drone runtime boundaries remain explicit:

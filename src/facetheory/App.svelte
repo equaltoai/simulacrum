@@ -23,19 +23,13 @@
 		type AuthSession,
 	} from '$lib/auth/session';
 
-	import FinalizeSigningPanel from './components/FinalizeSigningPanel.svelte';
 	import DronesPage from './components/DronesPage.svelte';
 	import HostedBoundSoulActivationPanel from './components/HostedBoundSoulActivationPanel.svelte';
-	import HostTokenPanel from './components/HostTokenPanel.svelte';
 	import IdentityQuarantinePanel from './components/IdentityQuarantinePanel.svelte';
 	import IdentitySoulBindingPanel from './components/IdentitySoulBindingPanel.svelte';
-	import MintConversationPanel from './components/MintConversationPanel.svelte';
 	import NotificationsPage from './components/NotificationsPage.svelte';
 	import SoulRequestActionPanel from './components/SoulRequestActionPanel.svelte';
-	import {
-		HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
-		HOST_WORKFLOW_BRIDGE_ENABLED,
-	} from './flags';
+	import { HOST_WORKFLOW_BRIDGE_DISABLED_NOTE } from './flags';
 	import { createPreviewAppState, loadClientAppState } from './loaders';
 	import {
 		resolveConversationComposeActorId,
@@ -46,8 +40,6 @@
 		resolveStatusId,
 	} from './routing';
 	import type { AppPageDescriptor, ClientAppState } from './types';
-
-	const HOST_TOKEN_STORAGE_KEY = 'simulacrum:lesser_host_workflow_token';
 
 	interface Props {
 		initialPage: AppPageDescriptor;
@@ -83,9 +75,6 @@
 	let currentComposeActorId = $state<string | null>(initialComposeActorIdValue);
 	let session = $state<AuthSession | null>(null);
 	let appState = $state<ClientAppState>(initialState);
-	let hostToken = $state('');
-	let lastSessionAccessToken = $state<string | null>(null);
-	let busy = $state(false);
 	let authError = $state<string | null>(null);
 	let loadError = $state<string | null>(null);
 	let currentStatusId = $state<string | null>(initialStatusIdValue);
@@ -131,23 +120,6 @@
 		}
 	});
 
-	function readStoredHostToken(): string {
-		if (!HOST_WORKFLOW_BRIDGE_ENABLED) return '';
-		if (typeof window === 'undefined') return '';
-		return sessionStorage.getItem(HOST_TOKEN_STORAGE_KEY) ?? '';
-	}
-
-	function writeStoredHostToken(next: string): void {
-		if (!HOST_WORKFLOW_BRIDGE_ENABLED) return;
-		if (typeof window === 'undefined') return;
-		const trimmed = next.trim();
-		if (trimmed) {
-			sessionStorage.setItem(HOST_TOKEN_STORAGE_KEY, trimmed);
-			return;
-		}
-		sessionStorage.removeItem(HOST_TOKEN_STORAGE_KEY);
-	}
-
 	function currentLocation(): string {
 		if (typeof window === 'undefined') {
 			return '/l/';
@@ -168,19 +140,15 @@
 	async function refreshLiveState() {
 		if (!session?.accessToken) return;
 
-		busy = true;
 		loadError = null;
 
 		try {
 			appState = await loadClientAppState({
 				page: currentPage,
 				agentHint: currentAgentHint,
-				hostToken,
 			});
 		} catch (error) {
 			loadError = error instanceof Error ? error.message : 'Failed to load the live Simulacrum state.';
-		} finally {
-			busy = false;
 		}
 	}
 
@@ -191,22 +159,8 @@
 
 	function handleLogout() {
 		clearAuthSession();
-		writeStoredHostToken('');
-		hostToken = '';
 		session = null;
 		loadError = null;
-	}
-
-	async function handleHostTokenSave(nextToken: string) {
-		writeStoredHostToken(nextToken);
-		hostToken = nextToken.trim();
-		await refreshLiveState();
-	}
-
-	async function handleHostTokenClear() {
-		writeStoredHostToken('');
-		hostToken = '';
-		await refreshLiveState();
 	}
 
 	async function handleAuthCallback() {
@@ -229,16 +183,9 @@
 		currentStatusId = resolveStatusId(window.location.pathname);
 		currentProfileIdentifier = resolveProfileIdentifier(window.location.pathname);
 		currentProfileActorId = resolveProfileActorId(new URLSearchParams(window.location.search));
-		hostToken = readStoredHostToken();
 		initAuthFromStorage();
 
 		const unsubscribe = authSession.subscribe((value) => {
-			const nextAccessToken = value?.accessToken ?? null;
-			if (!nextAccessToken || (lastSessionAccessToken && lastSessionAccessToken !== nextAccessToken)) {
-				writeStoredHostToken('');
-				hostToken = '';
-			}
-			lastSessionAccessToken = nextAccessToken;
 			session = value;
 			if (value && currentPage.key !== 'auth-callback') {
 				void refreshLiveState();
@@ -370,24 +317,12 @@
 						/>
 					{/if}
 
-					{#if HOST_WORKFLOW_BRIDGE_ENABLED}
-						<HostTokenPanel
-							busy={busy}
-							configured={appState.hostWorkflow.tokenConfigured}
-							conversationCount={appState.hostWorkflow.conversations.length}
-							lifecycleEventCount={appState.hostWorkflow.lifecycleEvents.length}
-							note={appState.hostWorkflow.authNote}
-							onClear={handleHostTokenClear}
-							onSave={handleHostTokenSave}
-							selectedConversationId={appState.actionContext.activeConversationId}
-							token={hostToken}
-						/>
-					{:else if currentPage.key === 'genesis' || currentPage.key === 'approvals'}
+					{#if currentPage.key === 'genesis' || currentPage.key === 'approvals'}
 						<section class="ft-panel">
 							<header class="ft-panel__header">
 								<div>
-									<p class="ft-panel__eyebrow">Instance-trust bridge pending</p>
-									<h2>Soul creation is waiting on Lesser and Greater</h2>
+									<p class="ft-panel__eyebrow">Same-origin bootstrap boundary</p>
+									<h2>Soul creation stays server-side</h2>
 								</div>
 							</header>
 							<p class="ft-panel__copy">{HOST_WORKFLOW_BRIDGE_DISABLED_NOTE}</p>
@@ -403,31 +338,6 @@
 						/>
 					{/if}
 
-					{#if HOST_WORKFLOW_BRIDGE_ENABLED && currentPage.key === 'genesis'}
-						<MintConversationPanel
-							agentId={appState.actionContext.activeAgentId}
-							conversationStatus={appState.hostWorkflow.selectedConversation?.status ?? null}
-							hostBaseUrl={appState.hostWorkflow.baseUrl}
-							hostToken={hostToken}
-							initialConversationId={appState.actionContext.activeConversationId}
-							initialTranscript={appState.hostWorkflow.transcript}
-							onUpdated={refreshLiveState}
-						/>
-					{/if}
-
-					{#if HOST_WORKFLOW_BRIDGE_ENABLED && currentPage.key === 'approvals'}
-						<FinalizeSigningPanel
-							activeSoulAgentId={appState.actionContext.activeSoulAgentId}
-							agentId={appState.actionContext.activeAgentId}
-							conversationId={appState.actionContext.activeConversationId}
-							expectedWallet={appState.actionContext.expectedWallet}
-							hostBaseUrl={appState.hostWorkflow.baseUrl}
-							hostToken={hostToken}
-							onUpdated={refreshLiveState}
-							username={appState.actionContext.activeUsername}
-							workflow={appState.workflow}
-						/>
-					{/if}
 				{/if}
 			</section>
 		{/if}
