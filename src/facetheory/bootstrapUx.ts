@@ -18,7 +18,7 @@ import type {
 } from '../lib/api/soulBootstrap.ts';
 import type { AgentFaceAction, AgentFaceCallout } from '../lib/greater/faces/agent/types.ts';
 
-export type SoulBootstrapUxRouteKey = 'identity' | 'genesis' | 'approvals';
+export type SoulBootstrapUxRouteKey = 'identity' | 'genesis' | 'approvals' | 'drones';
 
 export type SoulBootstrapUxIssue =
 	| 'none'
@@ -31,6 +31,7 @@ export type SoulBootstrapUxIssue =
 	| 'finalize_expired'
 	| 'binding_conflict'
 	| 'authorization_required'
+	| 'body_required'
 	| 'not_found'
 	| 'validation'
 	| 'backend_error';
@@ -161,6 +162,14 @@ const ISSUE_COPY: Record<SoulBootstrapUxIssue, {
 		routeKey: 'identity',
 		tone: 'warning',
 	},
+	body_required: {
+		title: 'Create a drone body first',
+		summary:
+			'This account does not have a local drone body yet. Create the body inside Simulacrum first; Lesser soul-bootstrap starts only after there is a body to attach a hosted/off-chain soul to.',
+		actionLabel: 'Create Drone Body',
+		routeKey: 'drones',
+		tone: 'accent',
+	},
 	not_found: {
 		title: 'Bootstrap target was not found',
 		summary:
@@ -229,12 +238,14 @@ export function deriveSoulBootstrapUx({
 
 	if (issue !== 'none') {
 		const copy = ISSUE_COPY[issue];
+		const detail = result?.error?.message ??
+			(issue === 'body_required' || issue === 'authorization_required' ? null : failureMessage);
 		return {
 			issue,
 			phase,
 			stateLabel: PHASE_LABELS[phase],
 			title: copy.title,
-			summary: withBackendDetail(copy.summary, result?.error?.message ?? failureMessage),
+			summary: withBackendDetail(copy.summary, detail),
 			actionLabel: copy.actionLabel,
 			actionHref: pageHref(copy.routeKey, username),
 			actionDetail: 'Action stays in Simulacrum; no lesser-host portal token is required.',
@@ -345,6 +356,7 @@ export function buildSoulBootstrapRequestCard({
 	viewerHandle?: string | null;
 }): SoulRequestCard | null {
 	if (ux.isProductionSoul) return null;
+	if (!state && (ux.issue === 'body_required' || ux.issue === 'authorization_required')) return null;
 	return {
 		id: `bootstrap-request-${username}`,
 		title: `Sim-led soul creation for @${username}`,
@@ -679,7 +691,13 @@ function firstCheckpointDate(checkpoints: readonly SoulBootstrapSigningCheckpoin
 }
 
 function pageHref(key: SoulBootstrapUxRouteKey, agentHint?: string | null): string {
-	const path = key === 'identity' ? '/identity' : key === 'genesis' ? '/souls/genesis' : '/approvals';
+	const path = key === 'identity'
+		? '/identity'
+		: key === 'genesis'
+			? '/souls/genesis'
+			: key === 'drones'
+				? '/drones'
+				: '/approvals';
 	const trimmedAgent = agentHint?.trim();
 	if (key === 'identity' && trimmedAgent) {
 		return `${PUBLIC_APP_BASE_PATH}/identity/${encodeURIComponent(trimmedAgent)}`;

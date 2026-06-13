@@ -240,7 +240,7 @@ export async function installProject44Wallet(page: Page, options: { rejectPerson
 
 export async function installProject44Routes(
 	page: Page,
-	options: { initialSurface?: SoulBootstrapFixtureKey | SoulBootstrapSurface } = {}
+	options: { initialSurface?: SoulBootstrapFixtureKey | SoulBootstrapSurface; myAgents?: 'fixture' | 'none' } = {}
 ) {
 	let currentSurface: SoulBootstrapSurface = typeof options.initialSurface === 'string'
 		? project44SoulBootstrapFixtures[options.initialSurface]
@@ -271,7 +271,9 @@ export async function installProject44Routes(
 				await route.fulfill(jsonResponse({ data: { viewer: buildViewerActor() } }));
 				return;
 			case 'MyAgents':
-				await route.fulfill(jsonResponse({ data: { myAgents: [buildProject44Agent()] } }));
+				await route.fulfill(jsonResponse({
+					data: { myAgents: options.myAgents === 'none' ? [] : [buildProject44Agent()] },
+				}));
 				return;
 			case 'MySouls':
 				await route.fulfill(jsonResponse({ data: { mySouls: [] } }));

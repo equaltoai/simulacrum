@@ -28,6 +28,26 @@ async function expectNoHostCredentialStorage(page: Page) {
 }
 
 test.describe('Project 44 soul-bootstrap browser guards', () => {
+
+	test('no local drone body routes users to body creation instead of reporting a Lesser backend error', async ({ page }) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, { myAgents: 'none' });
+
+		await page.goto('/l/identity');
+
+		const lane = page.getByTestId('soul-bootstrap-lane');
+		await expect(lane).toBeVisible();
+		await expect(lane).toContainText('Create a drone body first');
+		await expect(lane).toContainText('Create Drone Body');
+		await expect(lane).not.toContainText('Bootstrap backend needs attention');
+		await expect(lane).not.toContainText('Latest Lesser response');
+		await expect(lane.getByRole('link', { name: 'Create Drone Body' })).toHaveAttribute('href', '/l/drones');
+
+		const graphQLOperations = harness.graphQLRequests().map((request) => request.operationName);
+		expect(graphQLOperations).toContain('MyAgents');
+		expect(graphQLOperations).not.toContain('SoulBootstrap');
+	});
+
 	test('mocked route lanes cover begin, signing, conversation, finalize, and hosted/off-chain result without Host credentials', async ({ page }, testInfo) => {
 		await installProject44Auth(page);
 		await installProject44Wallet(page);
