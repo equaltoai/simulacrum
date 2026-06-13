@@ -69,7 +69,7 @@ test('browser Host workflow bridge cannot be enabled with build-time env', async
 	assert.doesNotMatch(rolloutSource, /VITE_SIMULACRUM_ENABLE_HOST_WORKFLOW_BRIDGE/);
 	assert.doesNotMatch(rolloutSource, /When the flag is enabled/);
 	assert.doesNotMatch(rolloutSource, /prefer enabling the host workflow bridge/);
-	assert.match(rolloutSource, /Greater `greater-v0\.10\.3` soul-bootstrap/);
+	assert.match(rolloutSource, /Greater `greater-v0\.10\.4` soul-bootstrap/);
 	assert.match(rolloutSource, /M4\.2 route-lane/);
 	assert.match(rolloutSource, /M4\.3 signing-control boundary/);
 	assert.match(rolloutSource, /no deploy\/install environment variable is a supported way/);

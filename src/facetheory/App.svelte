@@ -28,6 +28,7 @@
 	import IdentityQuarantinePanel from './components/IdentityQuarantinePanel.svelte';
 	import IdentitySoulBindingPanel from './components/IdentitySoulBindingPanel.svelte';
 	import NotificationsPage from './components/NotificationsPage.svelte';
+	import SoulBootstrapSigningPanel from './components/SoulBootstrapSigningPanel.svelte';
 	import SoulRequestActionPanel from './components/SoulRequestActionPanel.svelte';
 	import { createPreviewAppState, loadClientAppState } from './loaders';
 	import {
@@ -315,6 +316,10 @@
 								{appState.hostWorkflow.bootstrap.actionLabel}
 							</a>
 						</section>
+						<SoulBootstrapSigningPanel
+							result={appState.hostWorkflow.result}
+							onUpdated={refreshLiveState}
+						/>
 					{/if}
 
 					{#if currentPage.key === 'identity'}

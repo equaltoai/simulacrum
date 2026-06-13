@@ -11,7 +11,7 @@ legacy clone-shaped client with the agent-first Simulacrum.
 - Scope owner: `equaltoai/simulacrum`
 - Project 9 milestones: M0 complete; M1 complete with the historical
   `greater-v0.8.0` lesser-host workflow contract. Project 44 M4.1 vendors
-  `greater-v0.10.3` and consumes the browser-safe Lesser soul-bootstrap facade
+  `greater-v0.10.4` and consumes the browser-safe Lesser soul-bootstrap facade
   through `src/lib/api/soulBootstrap.ts`; the direct Host write wrapper
   `src/lib/api/soulWorkflowHost.ts` is retained only as non-production legacy
   quarantine for retired panels.
