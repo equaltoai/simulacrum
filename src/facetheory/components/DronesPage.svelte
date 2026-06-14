@@ -277,8 +277,8 @@
 							<h2>Create a drone body in the new shell</h2>
 						</header>
 						<p class="drones-page__copy">
-							Create the local body here first. Once it exists, open its Identity page to inspect available souls
-							and bind one in context.
+							Create the local body here first. Once it exists, open its Identity page to start the
+							hosted/off-chain soul definition path under instance trust.
 						</p>
 
 						<label class="drones-page__field">
@@ -350,8 +350,8 @@
 							<h2>Drone bodies on this instance</h2>
 						</header>
 						<p class="drones-page__copy">
-							Manage the bodies you have already created here, then start or inspect each body's soul
-							process from that body's Identity page.
+							Manage the bodies you have already created here, then start or inspect each body's
+							hosted/off-chain soul definition from that body's Identity page.
 						</p>
 
 						{#if loadError}
@@ -382,7 +382,7 @@
 										</div>
 										<div class="drones-page__card-actions">
 											<a class="drones-page__button drones-page__button--primary" href={agentIdentityHref(agent.username)}>
-												Start Soul Process
+												Define Hosted Soul
 											</a>
 											<a class="drones-page__button drones-page__button--secondary" href={agentIdentityHref(agent.username)}>
 												Inspect Identity

@@ -26,7 +26,8 @@ const ids = {
 function resultFor({
 	phase = 'NOT_STARTED',
 	state = 'ready_to_begin',
-	nextAction = 'begin',
+	nextAction = 'start_hosted_bootstrap',
+	typedNextAction = 'START_HOSTED_BOOTSTRAP',
 	executable = true,
 	hostBridgeAvailable = true,
 	soulBindingState = 'UNBOUND',
@@ -36,6 +37,12 @@ function resultFor({
 	publication = null,
 	hostConversationId = null,
 	hostSoulAgentId = null,
+	bootstrapMode = signingCheckpoints.length ? 'WALLET_PRINCIPAL' : 'HOSTED',
+	recoveryCategory = null,
+	recoveryAction = null,
+	retryable = false,
+	restartRequired = false,
+	restartAvailable = false,
 } = {}) {
 	const bootstrapState = {
 		__typename: 'SoulBootstrapState',
@@ -48,7 +55,21 @@ function resultFor({
 		hostRegistrationId: 'registration-project-44',
 		hostConversationId,
 		hostSoulAgentId,
+		bootstrapMode,
+		authorityModel: bootstrapMode === 'HOSTED' ? 'INSTANCE_TRUST' : 'WALLET_PRINCIPAL',
+		anchorState: 'HOSTED_OFFCHAIN',
+		assuranceState: 'HOSTED_OFFCHAIN',
 		updatedAt: '2026-06-12T12:00:00Z',
+		typedNextAction,
+		recoveryCategory,
+		recoveryAction,
+		retryable,
+		restartRequired,
+		restartAvailable,
+		recoveryAttemptId: null,
+		restartIdempotencyKey: null,
+		lastHostRequestId: project44SoulBootstrapIds.hostRequestId,
+		restartedAt: null,
 		signingCheckpoints,
 		publication,
 		error: null,
@@ -61,6 +82,11 @@ function resultFor({
 		existingSoulAgentId,
 		hostBridgeAvailable,
 		nextAction,
+		typedNextAction,
+		recoveryCategory,
+		recoveryAction,
+		retryable,
+		restartAvailable,
 		soulBindingState,
 		body: {
 			__typename: 'SoulBootstrapIdentityTarget',
@@ -80,6 +106,12 @@ function resultFor({
 		executable,
 		hostBridgeAvailable,
 		nextAction,
+		typedNextAction,
+		recoveryCategory,
+		recoveryAction,
+		retryable,
+		restartRequired,
+		restartAvailable,
 	};
 }
 
@@ -91,26 +123,29 @@ test('M4.2 bootstrap UX routes unsouled, conversation, finalize, and hosted comp
 	const notStarted = deriveSoulBootstrapUx({ result: resultFor(), activeUsername: ids.username });
 	assert.equal(notStarted.routeKey, 'genesis');
 	assert.equal(notStarted.actionHref, '/l/souls/genesis');
-	assert.match(notStarted.title, /Start Sim-led soul creation/);
+	assert.match(notStarted.title, /Start hosted soul definition/);
+	assert.match(notStarted.summary, /no selected wallet/);
 
 	const backendNotStarted = deriveSoulBootstrapUx({
 		result: resultFor({
 			phase: 'NOT_STARTED',
-			state: 'not_started',
-			nextAction: 'begin',
+			state: 'hosted_ready_to_start',
+			nextAction: 'start_hosted_bootstrap',
+			typedNextAction: 'START_HOSTED_BOOTSTRAP',
 			executable: false,
 			hostBridgeAvailable: false,
 		}),
 		activeUsername: ids.username,
 	});
 	assert.equal(backendNotStarted.issue, 'none');
-	assert.match(backendNotStarted.title, /Start Sim-led soul creation/);
+	assert.match(backendNotStarted.title, /Start hosted soul definition/);
 
 	const beginReady = deriveSoulBootstrapUx({
 		result: resultFor({
 			phase: 'BEGIN',
 			state: 'begin.ready',
 			nextAction: 'verify_wallet',
+			typedNextAction: 'VERIFY_WALLET',
 			signingCheckpoints: [{
 				__typename: 'SoulBootstrapSigningCheckpoint',
 				name: 'wallet',
@@ -131,40 +166,38 @@ test('M4.2 bootstrap UX routes unsouled, conversation, finalize, and hosted comp
 		result: resultFor({
 			phase: 'CONVERSATION',
 			state: 'conversation_in_progress',
-			nextAction: 'complete_conversation',
+			nextAction: 'send_hosted_soul_genesis_message',
+			typedNextAction: 'SEND_HOSTED_SOUL_GENESIS_MESSAGE',
 			hostConversationId: ids.conversationId,
 		}),
 		activeUsername: ids.username,
 	});
 	assert.equal(conversation.routeKey, 'genesis');
 	assert.equal(conversation.conversationVisible, true);
-	assert.match(conversation.summary, /\/l\/souls\/genesis/);
+	assert.match(conversation.summary, /hosted\/off-chain genesis conversation/);
 
 	const finalize = deriveSoulBootstrapUx({
 		result: resultFor({
 			phase: 'FINALIZE',
-			state: 'awaiting_finalize_signature',
-			nextAction: 'finalize',
+			state: 'hosted_genesis_complete',
+			nextAction: 'publish_hosted_soul',
+			typedNextAction: 'PUBLISH_HOSTED_SOUL',
 			hostConversationId: ids.conversationId,
-			signingCheckpoints: [{
-				__typename: 'SoulBootstrapSigningCheckpoint',
-				name: 'finalize',
-				status: 'pending_signature',
-				message: 'Sign the Lesser-provided finalize payload.',
-			}],
 		}),
 		activeUsername: ids.username,
 	});
-	assert.equal(finalize.routeKey, 'approvals');
-	assert.equal(finalize.actionHref, '/l/approvals');
-	assert.equal(finalize.finalizeReady, true);
-	assert.match(finalize.title, /Finalize signing is ready/);
+	assert.equal(finalize.routeKey, 'genesis');
+	assert.equal(finalize.actionHref, '/l/souls/genesis');
+	assert.equal(finalize.finalizeReady, false);
+	assert.equal(finalize.hostedPublishReady, true);
+	assert.match(finalize.title, /Publish hosted\/off-chain soul/);
 
 	const hostedComplete = resultFor({
 		phase: 'COMPLETE',
 		state: 'hosted_off_chain_binding_ready',
 		executable: false,
 		nextAction: 'binding_ready',
+		typedNextAction: 'COMPLETE',
 		soulBindingState: 'BOUND',
 		existingSoulAgentId: ids.soulAgentId,
 		hostSoulAgentId: ids.soulAgentId,
@@ -181,7 +214,7 @@ test('M4.2 bootstrap UX routes unsouled, conversation, finalize, and hosted comp
 	assert.equal(complete.isProductionSoul, true);
 	assert.equal(complete.routeKey, 'identity');
 	assert.equal(complete.actionHref, `/l/identity/${ids.username}`);
-	assert.match(complete.summary, /hosted\/off-chain finalization is complete and bound/);
+	assert.match(complete.summary, /hosted\/off-chain publication is complete and bound/);
 });
 
 test('M4.2 bootstrap UX makes backend/config states explicit and actionable', () => {
@@ -245,6 +278,29 @@ test('M4.2 bootstrap UX makes backend/config states explicit and actionable', ()
 	assert.match(unsupportedUx.summary, /will not add a REST or raw Host workaround/);
 });
 
+test('M7.4 hosted recovery copy is driven by typed recovery fields', () => {
+	const restart = deriveSoulBootstrapUx({
+		result: resultFromProject44Surface(project44SoulBootstrapFixtures.hostedRestartRequired),
+		activeUsername: project44SoulBootstrapIds.username,
+	});
+	assert.equal(restart.issue, 'restart_required');
+	assert.equal(restart.recoveryCategory, 'RESTART_REQUIRED');
+	assert.equal(restart.recoveryAction, 'RESTART_BOOTSTRAP');
+	assert.equal(restart.typedNextAction, 'RESTART_SOUL_BOOTSTRAP');
+	assert.match(restart.title, /must restart/);
+	assert.match(restart.summary, /typed restart recovery/);
+
+	const operator = deriveSoulBootstrapUx({
+		result: resultFromProject44Surface(project44SoulBootstrapFixtures.hostedOperatorActionRequired),
+		activeUsername: project44SoulBootstrapIds.username,
+	});
+	assert.equal(operator.issue, 'operator_action_required');
+	assert.equal(operator.recoveryCategory, 'OPERATOR_ACTION_REQUIRED');
+	assert.equal(operator.recoveryAction, 'CONTACT_OPERATOR');
+	assert.equal(operator.typedNextAction, 'OPERATOR_ACTION_REQUIRED');
+	assert.match(operator.summary, /operator must repair/);
+});
+
 function resultFromProject44Surface(surface) {
 	return {
 		surface,
@@ -253,6 +309,12 @@ function resultFromProject44Surface(surface) {
 		executable: surface.executable,
 		hostBridgeAvailable: surface.hostBridgeAvailable,
 		nextAction: surface.nextAction,
+		typedNextAction: surface.typedNextAction ?? surface.state.typedNextAction,
+		recoveryCategory: surface.recoveryCategory ?? surface.state.recoveryCategory,
+		recoveryAction: surface.recoveryAction ?? surface.state.recoveryAction,
+		retryable: surface.retryable ?? surface.state.retryable,
+		restartRequired: surface.state.restartRequired,
+		restartAvailable: surface.restartAvailable ?? surface.state.restartAvailable,
 	};
 }
 
@@ -260,8 +322,8 @@ test('M4.4 Project 44 fixtures cover the full visible bootstrap path without Hos
 	const sequence = [
 		{
 			name: 'ready-to-begin',
-			surface: project44SoulBootstrapFixtures.notStarted,
-			title: /Start Sim-led soul creation/,
+			surface: project44SoulBootstrapFixtures.hostedNotStarted,
+			title: /Start hosted soul definition/,
 			routeKey: 'genesis',
 		},
 		{
@@ -290,8 +352,8 @@ test('M4.4 Project 44 fixtures cover the full visible bootstrap path without Hos
 		},
 		{
 			name: 'hosted off-chain bound',
-			surface: project44SoulBootstrapFixtures.finalizedHosted,
-			title: /Production soul is active/,
+			surface: project44SoulBootstrapFixtures.hostedPublished,
+			title: /Hosted\/off-chain soul is active/,
 			routeKey: 'identity',
 		},
 	];
@@ -325,9 +387,9 @@ test('M4.4 Project 44 fixtures cover the full visible bootstrap path without Hos
 	assert.equal(selectSoulBootstrapPersonalSignMaterial(finalizePlan).message, project44SoulBootstrapSigning.finalize.messageHex);
 
 	const complete = deriveSoulBootstrapUx({
-		result: resultFromProject44Surface(project44SoulBootstrapFixtures.finalizedHosted),
+		result: resultFromProject44Surface(project44SoulBootstrapFixtures.hostedPublished),
 		activeUsername: project44SoulBootstrapIds.username,
 	});
 	assert.equal(complete.isProductionSoul, true);
-	assert.match(complete.summary, /hosted\/off-chain finalization is complete and bound/);
+	assert.match(complete.summary, /hosted\/off-chain publication is complete and bound/);
 });

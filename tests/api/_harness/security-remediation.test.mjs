@@ -277,6 +277,7 @@ test('CSR-016: natural-language strings survive redactUnknown unchanged', () => 
 test('Project 44 production bootstrap path has no browser Host credential storage or raw Host write imports', async () => {
 	const productionPaths = [
 		'../../../src/facetheory/App.svelte',
+		'../../../src/facetheory/components/HostedSoulBootstrapPanel.svelte',
 		'../../../src/facetheory/components/SoulBootstrapSigningPanel.svelte',
 		'../../../src/facetheory/bootstrapSigning.ts',
 		'../../../src/facetheory/loaders.ts',

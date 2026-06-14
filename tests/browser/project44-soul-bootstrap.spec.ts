@@ -3,7 +3,6 @@ import { expect, type Page } from '@playwright/test';
 import { test } from './_harness/fixtures';
 import {
 	createProject44BeginReadySurface,
-	createProject44BackendNotStartedSurface,
 	createProject44ConversationConflictSurface,
 	createProject44GenericBootstrapErrorSurface,
 	createProject44HostUnavailableSurface,
@@ -55,86 +54,67 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 		expect(graphQLOperations).not.toContain('SoulBootstrap');
 	});
 
-	test('mocked route lanes cover begin, signing, conversation, finalize, and hosted/off-chain result without Host credentials', async ({ page }, testInfo) => {
+	test('mocked hosted happy path completes without wallet selection or browser signing prompts', async ({ page }, testInfo) => {
 		await installProject44Auth(page);
-		await installProject44Wallet(page);
 		const harness = await installProject44Routes(page, {
-			initialSurface: createProject44BackendNotStartedSurface(),
+			initialSurface: project44SoulBootstrapFixtures.hostedNotStarted,
 		});
 
 		await page.goto(`/l/identity/${project44SoulBootstrapIds.username}`);
 		const lane = page.getByTestId('soul-bootstrap-lane');
 		await expect(lane).toBeVisible();
-		await expect(lane.getByRole('heading', { name: 'Start Sim-led soul creation' })).toBeVisible();
-		await expect(lane).toContainText('Ready to begin');
+		await expect(lane.getByRole('heading', { name: 'Start hosted soul definition' })).toBeVisible();
+		await expect(lane).toContainText('Ready to start hosted definition');
+		await expect(lane).toContainText('authority: instance trust');
 		await expect(lane).not.toContainText('Host is unavailable through Lesser');
-		await expect(page.getByRole('button', { name: 'Begin with selected wallet' })).toBeDisabled();
-		await page.getByRole('button', { name: 'Use connected wallet' }).click();
-		await expect(page.getByTestId('soul-bootstrap-wallet-input')).toHaveValue(project44SoulBootstrapIds.walletAddress);
-		await page.getByRole('button', { name: 'Begin with selected wallet' }).click();
-		await expect(page.getByTestId('soul-bootstrap-signing-success')).toContainText('Soul bootstrap began through Lesser');
-		await expect(lane).toContainText('Wallet challenge is ready');
+		await expect(page.getByTestId('soul-bootstrap-signing-panel')).toHaveCount(0);
+		await expect(page.getByTestId('hosted-soul-bootstrap-panel')).toBeVisible();
+		await expect(page.getByTestId('hosted-soul-default-action')).toHaveCount(1);
+		await expect(page.getByRole('button', { name: 'Start Hosted Definition' })).toBeEnabled();
+		await page.getByRole('button', { name: 'Start Hosted Definition' }).click();
+		await expect(page.getByTestId('hosted-soul-success')).toContainText('Hosted definition started through Lesser');
+		await expect(lane).toContainText('Genesis conversation is ready');
 		await expectNoHostCredentialPrompt(page);
 		await expectNoHostCredentialStorage(page);
 
-		await expect(page.getByTestId('soul-bootstrap-signing-panel')).toBeVisible();
-		await expect(page.getByRole('heading', { name: 'Wallet challenge signing' })).toBeVisible();
-		await page.getByRole('button', { name: 'Sign wallet challenge' }).click();
-		await expect(page.getByTestId('soul-bootstrap-signing-success')).toContainText('Wallet challenge signature accepted by Lesser');
-
-		await expect(page.getByRole('heading', { name: 'Prepare principal declaration' })).toBeVisible();
-		await page.getByRole('button', { name: 'Prepare principal declaration' }).click();
-		await expect(page.getByTestId('soul-bootstrap-signing-success')).toContainText('Principal declaration signing material is ready');
-		await expect(page.getByRole('heading', { name: 'Principal declaration signing' })).toBeVisible();
-		await page.getByRole('button', { name: 'Sign principal declaration' }).click();
-		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Genesis conversation is ready');
-
-		await expect(page.getByRole('heading', { name: 'Start genesis conversation' })).toBeVisible();
-		await page.getByRole('button', { name: 'Start genesis conversation' }).click();
-		await expect(page.getByTestId('soul-bootstrap-signing-success')).toContainText('Genesis conversation turn completed');
-		await expect(page.getByRole('heading', { name: 'Complete genesis conversation' })).toBeVisible();
-		await page.getByRole('button', { name: 'Complete genesis conversation' }).click();
-		await expect(page.getByTestId('soul-bootstrap-signing-success')).toContainText('Genesis conversation completed');
-		await expect(page.getByRole('heading', { name: 'Prepare finalize signing' })).toBeVisible();
-		await page.getByRole('button', { name: 'Prepare finalize signing' }).click();
-		await expect(page.getByTestId('soul-bootstrap-signing-success')).toContainText('Finalize signing material is ready');
-		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Finalize signing is ready');
-		await expect(page.getByRole('heading', { name: 'Finalize self-attestation signing' })).toBeVisible();
-		await page.getByRole('button', { name: 'Sign finalize attestation' }).click();
-		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Production soul is active');
-		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('hosted/off-chain soul bound');
+		await expect(page.getByTestId('hosted-soul-default-action')).toHaveCount(1);
+		await expect(page.getByRole('button', { name: 'Send Genesis Message' })).toBeEnabled();
+		await page.getByRole('button', { name: 'Send Genesis Message' }).click();
+		await expect(page.getByTestId('hosted-soul-success')).toContainText('Genesis conversation message recorded');
+		await expect(page.getByTestId('hosted-soul-default-action')).toHaveCount(1);
+		await expect(page.getByRole('button', { name: 'Review Generated Declarations' })).toBeEnabled();
+		await page.getByRole('button', { name: 'Review Generated Declarations' }).click();
+		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Publish hosted/off-chain soul');
+		await expect(page.getByTestId('hosted-soul-default-action')).toHaveCount(1);
+		await expect(page.getByRole('button', { name: 'Publish Hosted Soul' })).toBeEnabled();
+		await page.getByRole('button', { name: 'Publish Hosted Soul' }).click();
+		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Hosted/off-chain soul is active');
+		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('authority: instance trust');
 
 		const walletRequests = await readProject44WalletRequests(page);
-		const personalSignMessages = walletRequests
-			.filter((request) => request.method === 'personal_sign')
-			.map((request) => Array.isArray(request.params) ? request.params[0] : null);
-		expect(personalSignMessages).toEqual([
-			project44SoulBootstrapSigning.walletChallenge.message,
-			project44SoulBootstrapSigning.principalDeclaration.messageHex,
-			project44SoulBootstrapSigning.finalize.messageHex,
-		]);
+		expect(walletRequests).toEqual([]);
 
 		await page.goto(`/l/identity/${project44SoulBootstrapIds.username}`);
-		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Production soul is active');
+		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Hosted/off-chain soul is active');
 		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText(project44SoulBootstrapIds.soulAgentId);
 
 		const graphQLOperations = harness.graphQLRequests().map((request) => request.operationName);
 		expect(graphQLOperations).toContain('SoulBootstrap');
-		expect(graphQLOperations).toContain('BeginSoulBootstrap');
-		expect(graphQLOperations).toContain('VerifySoulBootstrapWallet');
-		expect(graphQLOperations).toContain('PrepareSoulBootstrapPrincipalDeclaration');
-		expect(graphQLOperations).toContain('VerifySoulBootstrapPrincipalDeclaration');
-		expect(graphQLOperations).toContain('SendSoulBootstrapConversationMessage');
-		expect(graphQLOperations).toContain('CompleteSoulBootstrapConversation');
-		expect(graphQLOperations).toContain('PrepareSoulBootstrapFinalize');
-		expect(graphQLOperations).toContain('FinalizeSoulBootstrap');
-		const beginRequest = harness.graphQLRequests().find((request) => request.operationName === 'BeginSoulBootstrap');
-		expect(beginRequest?.variables).toMatchObject({
+		expect(graphQLOperations).toContain('StartHostedSoulBootstrap');
+		expect(graphQLOperations).toContain('SendHostedSoulGenesisMessage');
+		expect(graphQLOperations).toContain('CompleteHostedSoulGenesis');
+		expect(graphQLOperations).toContain('PublishHostedSoul');
+		expect(graphQLOperations).not.toContain('BeginSoulBootstrap');
+		expect(graphQLOperations).not.toContain('VerifySoulBootstrapWallet');
+		expect(graphQLOperations).not.toContain('VerifySoulBootstrapPrincipalDeclaration');
+		expect(graphQLOperations).not.toContain('FinalizeSoulBootstrap');
+		const startRequest = harness.graphQLRequests().find((request) => request.operationName === 'StartHostedSoulBootstrap');
+		expect(startRequest?.variables).toMatchObject({
 			input: {
 				username: project44SoulBootstrapIds.username,
-				walletAddress: project44SoulBootstrapIds.walletAddress,
 			},
 		});
+		expect(JSON.stringify(startRequest?.variables ?? {})).not.toMatch(/walletAddress|principalAddress|signature|selfAttestation/i);
 		for (const request of harness.graphQLRequests()) {
 			const url = new URL(request.url);
 			expect(url.origin, `GraphQL operation ${request.operationName} must remain same-origin`).toBe(new URL(page.url()).origin);
@@ -156,10 +136,37 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 		await page.goto('/l/drones');
 
 		await expect(page.getByRole('heading', { name: 'Drone bodies on this instance' })).toBeVisible();
-		const startLinks = page.getByRole('link', { name: 'Start Soul Process' });
+		const startLinks = page.getByRole('link', { name: 'Define Hosted Soul' });
 		await expect(startLinks).toHaveCount(2);
 		await expect(startLinks.nth(0)).toHaveAttribute('href', `/l/identity/${project44SoulBootstrapIds.username}`);
 		await expect(startLinks.nth(1)).toHaveAttribute('href', '/l/identity/second-drone');
+	});
+
+	test('hosted restart-required recovery uses adapter fields without wallet fallback', async ({ page }) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: project44SoulBootstrapFixtures.hostedRestartRequired,
+		});
+
+		await page.goto(`/l/identity/${project44SoulBootstrapIds.username}`);
+
+		await expect(page.getByTestId('soul-bootstrap-signing-panel')).toHaveCount(0);
+		const panel = page.getByTestId('hosted-soul-bootstrap-panel');
+		await expect(panel).toBeVisible();
+		await expect(panel).toContainText('Restart Hosted Definition');
+		await expect(panel.getByTestId('hosted-soul-recovery')).toContainText('RESTART_REQUIRED');
+		await expect(panel.getByTestId('hosted-soul-recovery')).toContainText('RESTART_BOOTSTRAP');
+		await expect(page.getByTestId('hosted-soul-default-action')).toHaveCount(1);
+		await expect(page.getByRole('button', { name: 'Restart Hosted Definition' })).toBeEnabled();
+		await page.getByRole('button', { name: 'Restart Hosted Definition' }).click();
+		await expect(page.getByTestId('hosted-soul-success')).toContainText('Hosted definition restarted through Lesser');
+		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Genesis conversation is ready');
+
+		const operations = harness.graphQLRequests().map((request) => request.operationName);
+		expect(operations).toContain('RestartSoulBootstrap');
+		expect(operations).not.toContain('BeginSoulBootstrap');
+		expect(JSON.stringify(harness.graphQLRequests())).not.toMatch(/walletAddress|personal_sign|hostToken|hostBaseUrl|instanceKey/i);
+		await expectNoHostCredentialStorage(page);
 	});
 
 	test('pre-verification wallet can be corrected before signing the wallet challenge', async ({ page }) => {
@@ -315,8 +322,7 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 
 			const cases = [
 				{ surface: 'walletVerified', heading: 'Prepare principal declaration' },
-				{ surface: 'conversationMessage', heading: 'Complete genesis conversation' },
-				{ surface: 'conversationComplete', heading: 'Prepare finalize signing' },
+				{ surface: 'principalDeclarationPreflight', heading: 'Principal declaration signing' },
 				{ surface: 'finalizePreflight', heading: 'Finalize self-attestation signing' },
 			] as const;
 
@@ -467,8 +473,10 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 		const harness = await installProject44Routes(page, { initialSurface: 'missingTrust' });
 
 		await page.goto(`/l/identity/${project44SoulBootstrapIds.username}`);
-		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Host trust is not configured');
-		await expect(page.getByTestId('soul-bootstrap-signing-panel')).toContainText('No active next step');
+		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Operator action required');
+		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Trusted Lesser identity is required');
+		await expect(page.getByTestId('hosted-soul-bootstrap-panel')).toContainText('Refresh After Operator Action');
+		await expect(page.getByTestId('hosted-soul-recovery')).toContainText('CONTACT_OPERATOR');
 		await expectNoHostCredentialPrompt(page);
 		await expectNoHostCredentialStorage(page);
 

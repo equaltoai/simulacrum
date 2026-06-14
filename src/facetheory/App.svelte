@@ -24,6 +24,7 @@
 	} from '$lib/auth/session';
 
 	import DronesPage from './components/DronesPage.svelte';
+	import HostedSoulBootstrapPanel from './components/HostedSoulBootstrapPanel.svelte';
 	import HostedBoundSoulActivationPanel from './components/HostedBoundSoulActivationPanel.svelte';
 	import IdentityQuarantinePanel from './components/IdentityQuarantinePanel.svelte';
 	import IdentitySoulBindingPanel from './components/IdentitySoulBindingPanel.svelte';
@@ -84,6 +85,10 @@
 	const isAuthenticated = $derived(Boolean(session?.accessToken));
 	const showAuthPreviewNotice = $derived(!isAuthenticated && currentPage.requiresAuth !== false);
 	const showBlockingLoadError = $derived(Boolean(isAuthenticated && loadError));
+	const showLegacySigningPanel = $derived(Boolean(
+		appState.hostWorkflow.state?.bootstrapMode === 'WALLET_PRINCIPAL' ||
+		appState.hostWorkflow.signingCheckpoints.length > 0
+	));
 
 	const socialBaseData = $derived({
 		hero: {
@@ -312,14 +317,23 @@
 							<p class="ft-panel__message">
 								{appState.hostWorkflow.bootstrap.stateLabel} · {appState.hostWorkflow.bootstrap.statusDetail}
 							</p>
-							<a class="ft-button ft-button--primary" href={appState.hostWorkflow.bootstrap.actionHref}>
-								{appState.hostWorkflow.bootstrap.actionLabel}
-							</a>
+							{#if appState.hostWorkflow.bootstrap.issue === 'body_required'}
+								<a class="ft-button ft-button--primary" href={appState.hostWorkflow.bootstrap.actionHref}>
+									{appState.hostWorkflow.bootstrap.actionLabel}
+								</a>
+							{/if}
 						</section>
-						<SoulBootstrapSigningPanel
-							result={appState.hostWorkflow.result}
-							onUpdated={refreshLiveState}
-						/>
+						{#if showLegacySigningPanel}
+							<SoulBootstrapSigningPanel
+								result={appState.hostWorkflow.result}
+								onUpdated={refreshLiveState}
+							/>
+						{:else}
+							<HostedSoulBootstrapPanel
+								result={appState.hostWorkflow.result}
+								onUpdated={refreshLiveState}
+							/>
+						{/if}
 					{/if}
 
 					{#if currentPage.key === 'identity'}
