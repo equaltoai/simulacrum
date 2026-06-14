@@ -1,7 +1,7 @@
 {
   "$schema": "https://greater.components.dev/schema.json",
   "version": "1.0.0",
-  "ref": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
+  "ref": "af3ecde492a464d9f6eebfd6329718adc5f24712",
   "installMode": "vendored",
   "style": "default",
   "rsc": false,
@@ -24,260 +24,260 @@
   "installed": [
     {
       "name": "icons",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:58:58.871Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:46:14.700Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "utils",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:02.373Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:46:18.179Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "tokens",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:03.628Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:46:19.377Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "primitives",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:17.509Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:46:33.886Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "content",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:17.833Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:46:34.221Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "adapters",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:26.659Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:46:44.866Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "headless",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:30.180Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:46:47.838Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "social-generics",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:30.471Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:46:48.068Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "timeline",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:31.270Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:46:48.823Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "status",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:32.190Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:46:49.906Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "profile",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:34.619Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:46:52.198Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "auth",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:36.291Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:46:53.935Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "compose",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:38.509Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:46:56.041Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "notifications",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:40.097Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:46:57.709Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "search",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:41.102Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:46:59.065Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "admin",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:44.873Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:03.180Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "messaging",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:46.427Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:04.693Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "thread-view",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:46.721Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:04.985Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "moderation-tools",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:46.840Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:05.132Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "visibility-selector",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:46.945Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:05.254Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "content-warning-handler",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:47.047Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:05.450Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "custom-emoji-picker",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:47.157Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:05.576Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "federation-indicator",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:47.267Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:05.682Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "instance-picker",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:47.370Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:05.825Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "poll-composer",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:47.478Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:05.971Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "media-composer",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:47.586Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:06.081Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "bookmark-manager",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:47.696Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:06.229Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "lists",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:48.582Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:07.247Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "filters",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:49.287Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:07.960Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "hashtags",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:50.017Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:08.669Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "soul",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:50.714Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:09.369Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "agent",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:52.137Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:10.794Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "chat",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:53.765Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:12.538Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "social-types",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:53.871Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:12.632Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "social-status-card",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:53.985Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:12.731Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "social-renderers",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:54.191Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:12.952Z",
       "modified": false,
       "checksums": []
     },
     {
       "name": "social-timeline",
-      "version": "aa02dcfa99469675c11cdf90886ac2374900c8d2",
-      "installedAt": "2026-06-13T03:59:55.609Z",
+      "version": "af3ecde492a464d9f6eebfd6329718adc5f24712",
+      "installedAt": "2026-06-14T03:47:14.453Z",
       "modified": false,
       "checksums": []
     }
