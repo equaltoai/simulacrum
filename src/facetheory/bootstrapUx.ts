@@ -18,7 +18,7 @@ import type {
 } from '../lib/api/soulBootstrap.ts';
 import type { AgentFaceAction, AgentFaceCallout } from '../lib/greater/faces/agent/types.ts';
 
-export type SoulBootstrapUxRouteKey = 'identity' | 'genesis' | 'approvals';
+export type SoulBootstrapUxRouteKey = 'identity' | 'genesis' | 'approvals' | 'drones';
 
 export type SoulBootstrapUxIssue =
 	| 'none'
@@ -31,6 +31,7 @@ export type SoulBootstrapUxIssue =
 	| 'finalize_expired'
 	| 'binding_conflict'
 	| 'authorization_required'
+	| 'body_required'
 	| 'not_found'
 	| 'validation'
 	| 'backend_error';
@@ -65,7 +66,7 @@ export interface DeriveSoulBootstrapUxInput {
 const PHASE_LABELS: Record<SoulBootstrapPhase | 'UNAVAILABLE', string> = {
 	UNAVAILABLE: 'Backend unavailable',
 	NOT_STARTED: 'Ready to begin',
-	BEGIN: 'Bootstrap starting',
+	BEGIN: 'Wallet challenge ready',
 	WALLET_VERIFICATION: 'Wallet verification',
 	PRINCIPAL_DECLARATION: 'Principal declaration',
 	CONVERSATION: 'Genesis conversation',
@@ -161,6 +162,14 @@ const ISSUE_COPY: Record<SoulBootstrapUxIssue, {
 		routeKey: 'identity',
 		tone: 'warning',
 	},
+	body_required: {
+		title: 'Create a drone body first',
+		summary:
+			'This account does not have a local drone body yet. Create the body inside Simulacrum first; Lesser soul-bootstrap starts only after there is a body to attach a hosted/off-chain soul to.',
+		actionLabel: 'Create Drone Body',
+		routeKey: 'drones',
+		tone: 'accent',
+	},
 	not_found: {
 		title: 'Bootstrap target was not found',
 		summary:
@@ -195,7 +204,7 @@ export function deriveSoulBootstrapUx({
 }: DeriveSoulBootstrapUxInput): SoulBootstrapUxState {
 	const issue = result?.error
 		? issueFromActionableError(result.error)
-		: result && result.hostBridgeAvailable === false
+		: result && isHostBridgeUnavailableIssue(result)
 			? 'host_unavailable'
 			: failureIssue ?? 'none';
 	const phase = result?.state?.phase ?? (issue === 'none' && result ? 'NOT_STARTED' : 'UNAVAILABLE');
@@ -229,12 +238,14 @@ export function deriveSoulBootstrapUx({
 
 	if (issue !== 'none') {
 		const copy = ISSUE_COPY[issue];
+		const detail = result?.error?.message ??
+			(issue === 'body_required' || issue === 'authorization_required' ? null : failureMessage);
 		return {
 			issue,
 			phase,
 			stateLabel: PHASE_LABELS[phase],
 			title: copy.title,
-			summary: withBackendDetail(copy.summary, result?.error?.message ?? failureMessage),
+			summary: withBackendDetail(copy.summary, detail),
 			actionLabel: copy.actionLabel,
 			actionHref: pageHref(copy.routeKey, username),
 			actionDetail: 'Action stays in Simulacrum; no lesser-host portal token is required.',
@@ -243,7 +254,7 @@ export function deriveSoulBootstrapUx({
 			isProductionSoul: false,
 			conversationVisible: phase === 'CONVERSATION',
 			finalizeReady: phase === 'FINALIZE',
-			signingReady: phase === 'WALLET_VERIFICATION' || phase === 'PRINCIPAL_DECLARATION' || phase === 'FINALIZE',
+			signingReady: isSoulBootstrapSigningPhase(phase),
 			statusDetail: result?.state?.state ?? result?.error?.code ?? issue.replaceAll('_', ' '),
 		};
 	}
@@ -263,7 +274,7 @@ export function deriveSoulBootstrapUx({
 		isProductionSoul: false,
 		conversationVisible: phase === 'CONVERSATION',
 		finalizeReady: phase === 'FINALIZE',
-		signingReady: phase === 'WALLET_VERIFICATION' || phase === 'PRINCIPAL_DECLARATION' || phase === 'FINALIZE',
+		signingReady: isSoulBootstrapSigningPhase(phase),
 		statusDetail: result?.nextAction ?? result?.state?.state ?? 'same-origin GraphQL state loaded',
 	};
 }
@@ -345,6 +356,7 @@ export function buildSoulBootstrapRequestCard({
 	viewerHandle?: string | null;
 }): SoulRequestCard | null {
 	if (ux.isProductionSoul) return null;
+	if (!state && (ux.issue === 'body_required' || ux.issue === 'authorization_required')) return null;
 	return {
 		id: `bootstrap-request-${username}`,
 		title: `Sim-led soul creation for @${username}`,
@@ -541,7 +553,6 @@ function issueFromActionableError(error: SoulBootstrapActionableError): SoulBoot
 function normalPhaseCopy(phase: SoulBootstrapPhase | 'UNAVAILABLE', result: SoulBootstrapResult | null) {
 	switch (phase) {
 		case 'NOT_STARTED':
-		case 'BEGIN':
 			return {
 				title: 'Start Sim-led soul creation',
 				summary:
@@ -550,6 +561,16 @@ function normalPhaseCopy(phase: SoulBootstrapPhase | 'UNAVAILABLE', result: Soul
 				actionDetail: 'Begin the visible creation path at /l/souls/genesis.',
 				routeKey: 'genesis' as const,
 				tone: 'accent' as const,
+			};
+		case 'BEGIN':
+			return {
+				title: 'Wallet challenge is ready',
+				summary:
+					'Lesser began the same-origin soul-bootstrap registration and returned wallet challenge material. Continue signing inside Simulacrum; the browser still never receives Host control-plane credentials.',
+				actionLabel: 'Open Approvals',
+				actionDetail: 'Review the Lesser-provided wallet challenge signing material.',
+				routeKey: 'approvals' as const,
+				tone: 'warning' as const,
 			};
 		case 'CONVERSATION':
 			return {
@@ -616,6 +637,23 @@ function normalPhaseCopy(phase: SoulBootstrapPhase | 'UNAVAILABLE', result: Soul
 	}
 }
 
+function isHostBridgeUnavailableIssue(result: SoulBootstrapResult): boolean {
+	if (result.hostBridgeAvailable !== false) return false;
+	const phase = result.state?.phase;
+	const nextAction = result.nextAction?.trim() ?? '';
+	if (phase === 'NOT_STARTED' && (nextAction === '' || nextAction === 'begin')) {
+		return false;
+	}
+	return true;
+}
+
+function isSoulBootstrapSigningPhase(phase: SoulBootstrapPhase | 'UNAVAILABLE'): boolean {
+	return phase === 'BEGIN' ||
+		phase === 'WALLET_VERIFICATION' ||
+		phase === 'PRINCIPAL_DECLARATION' ||
+		phase === 'FINALIZE';
+}
+
 function workflowPhaseFromBootstrap(ux: SoulBootstrapUxState): DroneWorkflowPhase {
 	if (ux.isProductionSoul) return 'continuity';
 	if (ux.conversationVisible) return 'declaration';
@@ -679,7 +717,13 @@ function firstCheckpointDate(checkpoints: readonly SoulBootstrapSigningCheckpoin
 }
 
 function pageHref(key: SoulBootstrapUxRouteKey, agentHint?: string | null): string {
-	const path = key === 'identity' ? '/identity' : key === 'genesis' ? '/souls/genesis' : '/approvals';
+	const path = key === 'identity'
+		? '/identity'
+		: key === 'genesis'
+			? '/souls/genesis'
+			: key === 'drones'
+				? '/drones'
+				: '/approvals';
 	const trimmedAgent = agentHint?.trim();
 	if (key === 'identity' && trimmedAgent) {
 		return `${PUBLIC_APP_BASE_PATH}/identity/${encodeURIComponent(trimmedAgent)}`;
