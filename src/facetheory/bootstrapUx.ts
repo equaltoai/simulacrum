@@ -66,7 +66,7 @@ export interface DeriveSoulBootstrapUxInput {
 const PHASE_LABELS: Record<SoulBootstrapPhase | 'UNAVAILABLE', string> = {
 	UNAVAILABLE: 'Backend unavailable',
 	NOT_STARTED: 'Ready to begin',
-	BEGIN: 'Bootstrap starting',
+	BEGIN: 'Wallet challenge ready',
 	WALLET_VERIFICATION: 'Wallet verification',
 	PRINCIPAL_DECLARATION: 'Principal declaration',
 	CONVERSATION: 'Genesis conversation',
@@ -204,7 +204,7 @@ export function deriveSoulBootstrapUx({
 }: DeriveSoulBootstrapUxInput): SoulBootstrapUxState {
 	const issue = result?.error
 		? issueFromActionableError(result.error)
-		: result && result.hostBridgeAvailable === false
+		: result && isHostBridgeUnavailableIssue(result)
 			? 'host_unavailable'
 			: failureIssue ?? 'none';
 	const phase = result?.state?.phase ?? (issue === 'none' && result ? 'NOT_STARTED' : 'UNAVAILABLE');
@@ -254,7 +254,7 @@ export function deriveSoulBootstrapUx({
 			isProductionSoul: false,
 			conversationVisible: phase === 'CONVERSATION',
 			finalizeReady: phase === 'FINALIZE',
-			signingReady: phase === 'WALLET_VERIFICATION' || phase === 'PRINCIPAL_DECLARATION' || phase === 'FINALIZE',
+			signingReady: isSoulBootstrapSigningPhase(phase),
 			statusDetail: result?.state?.state ?? result?.error?.code ?? issue.replaceAll('_', ' '),
 		};
 	}
@@ -274,7 +274,7 @@ export function deriveSoulBootstrapUx({
 		isProductionSoul: false,
 		conversationVisible: phase === 'CONVERSATION',
 		finalizeReady: phase === 'FINALIZE',
-		signingReady: phase === 'WALLET_VERIFICATION' || phase === 'PRINCIPAL_DECLARATION' || phase === 'FINALIZE',
+		signingReady: isSoulBootstrapSigningPhase(phase),
 		statusDetail: result?.nextAction ?? result?.state?.state ?? 'same-origin GraphQL state loaded',
 	};
 }
@@ -553,7 +553,6 @@ function issueFromActionableError(error: SoulBootstrapActionableError): SoulBoot
 function normalPhaseCopy(phase: SoulBootstrapPhase | 'UNAVAILABLE', result: SoulBootstrapResult | null) {
 	switch (phase) {
 		case 'NOT_STARTED':
-		case 'BEGIN':
 			return {
 				title: 'Start Sim-led soul creation',
 				summary:
@@ -562,6 +561,16 @@ function normalPhaseCopy(phase: SoulBootstrapPhase | 'UNAVAILABLE', result: Soul
 				actionDetail: 'Begin the visible creation path at /l/souls/genesis.',
 				routeKey: 'genesis' as const,
 				tone: 'accent' as const,
+			};
+		case 'BEGIN':
+			return {
+				title: 'Wallet challenge is ready',
+				summary:
+					'Lesser began the same-origin soul-bootstrap registration and returned wallet challenge material. Continue signing inside Simulacrum; the browser still never receives Host control-plane credentials.',
+				actionLabel: 'Open Approvals',
+				actionDetail: 'Review the Lesser-provided wallet challenge signing material.',
+				routeKey: 'approvals' as const,
+				tone: 'warning' as const,
 			};
 		case 'CONVERSATION':
 			return {
@@ -626,6 +635,23 @@ function normalPhaseCopy(phase: SoulBootstrapPhase | 'UNAVAILABLE', result: Soul
 				tone: ISSUE_COPY.backend_error.tone,
 			};
 	}
+}
+
+function isHostBridgeUnavailableIssue(result: SoulBootstrapResult): boolean {
+	if (result.hostBridgeAvailable !== false) return false;
+	const phase = result.state?.phase;
+	const nextAction = result.nextAction?.trim() ?? '';
+	if (phase === 'NOT_STARTED' && (nextAction === '' || nextAction === 'begin')) {
+		return false;
+	}
+	return true;
+}
+
+function isSoulBootstrapSigningPhase(phase: SoulBootstrapPhase | 'UNAVAILABLE'): boolean {
+	return phase === 'BEGIN' ||
+		phase === 'WALLET_VERIFICATION' ||
+		phase === 'PRINCIPAL_DECLARATION' ||
+		phase === 'FINALIZE';
 }
 
 function workflowPhaseFromBootstrap(ux: SoulBootstrapUxState): DroneWorkflowPhase {

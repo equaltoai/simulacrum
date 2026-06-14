@@ -3,9 +3,11 @@ import type { Page, Route } from '@playwright/test';
 import {
 	project44SoulBootstrapFixtures,
 	project44SoulBootstrapIds,
+	project44SoulBootstrapSigning,
 	type Project44SoulBootstrapSurfaceOptions,
 	createProject44SoulBootstrapSurface,
 } from '../../../src/lib/greater/adapters/fixtures/soul-bootstrap.ts';
+import type { SoulBootstrapSigningCheckpoint } from '../../../src/lib/greater/adapters/graphql/generated/types.ts';
 import type { SoulBootstrapSurface } from '../../../src/lib/greater/adapters/soul/bootstrap.ts';
 
 type SoulBootstrapFixtureKey = keyof typeof project44SoulBootstrapFixtures;
@@ -27,6 +29,21 @@ const DEFAULT_SIGNATURES = [
 	`0x${'b'.repeat(130)}`,
 	`0x${'c'.repeat(130)}`,
 ] as const;
+const PROJECT44_PRINCIPAL_DECLARATION =
+	'I declare Project 44 principal authority for this Lesser-hosted soul.';
+const PROJECT44_PRINCIPAL_DECLARATION_CANONICAL_JSON = JSON.stringify({
+	agentId: project44SoulBootstrapIds.soulAgentId,
+	chainId: '1',
+	contract: '0x60fba71f84bd613118d38f7d0375c36693daecba',
+	declaration: PROJECT44_PRINCIPAL_DECLARATION,
+	declaredAt: project44SoulBootstrapIds.declaredAt,
+	domain: 'project44.example',
+	kind: 'soul_principal_declaration',
+	localId: project44SoulBootstrapIds.username,
+	principalAddress: project44SoulBootstrapIds.principalAddress,
+	version: '1',
+	wallet: project44SoulBootstrapIds.walletAddress,
+});
 
 const OPERATION_RESPONSE_FIELD = {
 	BeginSoulBootstrap: 'beginSoulBootstrap',
@@ -41,11 +58,11 @@ const OPERATION_RESPONSE_FIELD = {
 
 const MUTATION_NEXT_SURFACE = {
 	BeginSoulBootstrap: 'walletChallenge',
-	VerifySoulBootstrapWallet: 'principalDeclarationPreflight',
+	VerifySoulBootstrapWallet: 'walletVerified',
 	PrepareSoulBootstrapPrincipalDeclaration: 'principalDeclarationPreflight',
-	VerifySoulBootstrapPrincipalDeclaration: 'conversationMessage',
+	VerifySoulBootstrapPrincipalDeclaration: 'principalDeclarationVerified',
 	SendSoulBootstrapConversationMessage: 'conversationMessage',
-	CompleteSoulBootstrapConversation: 'finalizePreflight',
+	CompleteSoulBootstrapConversation: 'conversationComplete',
 	PrepareSoulBootstrapFinalize: 'finalizePreflight',
 	FinalizeSoulBootstrap: 'finalizedHosted',
 } as const satisfies Record<keyof typeof OPERATION_RESPONSE_FIELD, SoulBootstrapFixtureKey>;
@@ -96,6 +113,35 @@ function buildAgentCapabilities() {
 	};
 }
 
+function project44PrincipalDeclarationCheckpoint(
+	overrides: Partial<SoulBootstrapSigningCheckpoint> = {}
+): SoulBootstrapSigningCheckpoint {
+	return {
+		__typename: 'SoulBootstrapSigningCheckpoint',
+		...project44SoulBootstrapSigning.principalDeclaration,
+		canonicalJson: PROJECT44_PRINCIPAL_DECLARATION_CANONICAL_JSON,
+		...overrides,
+	} satisfies SoulBootstrapSigningCheckpoint;
+}
+
+function createProject44PrincipalDeclarationPreflightSurface() {
+	return createProject44SoulBootstrapSurface({
+		phase: 'PRINCIPAL_DECLARATION',
+		state: 'awaiting_principal_signature',
+		nextAction: 'verify_principal_declaration',
+		principalAddress: project44SoulBootstrapIds.principalAddress,
+		signingCheckpoints: [project44PrincipalDeclarationCheckpoint()],
+	} satisfies Project44SoulBootstrapSurfaceOptions);
+}
+
+function resolveProject44Surface(surface: SoulBootstrapFixtureKey | SoulBootstrapSurface): SoulBootstrapSurface {
+	if (typeof surface !== 'string') return surface;
+	if (surface === 'principalDeclarationPreflight') {
+		return createProject44PrincipalDeclarationPreflightSurface();
+	}
+	return project44SoulBootstrapFixtures[surface];
+}
+
 function buildIdentitySemantics(soulBindingState: 'UNBOUND' | 'BOUND' = 'UNBOUND') {
 	return {
 		identityState: soulBindingState === 'BOUND' ? 'souled' : 'drone',
@@ -113,11 +159,15 @@ function buildIdentitySemantics(soulBindingState: 'UNBOUND' | 'BOUND' = 'UNBOUND
 	};
 }
 
-function buildProject44Agent() {
+function buildProject44Agent(overrides: {
+	id?: string;
+	username?: string;
+	displayName?: string;
+} = {}) {
 	return {
-		id: project44SoulBootstrapIds.bodyId,
-		username: project44SoulBootstrapIds.username,
-		displayName: 'Agent Zero',
+		id: overrides.id ?? project44SoulBootstrapIds.bodyId,
+		username: overrides.username ?? project44SoulBootstrapIds.username,
+		displayName: overrides.displayName ?? 'Agent Zero',
 		bio: 'Deterministic Project 44 bootstrap body.',
 		agentType: 'drone',
 		agentVersion: 'project-44-fixture',
@@ -196,13 +246,228 @@ export function createProject44HostUnavailableSurface() {
 	} satisfies Project44SoulBootstrapSurfaceOptions);
 }
 
+export function createProject44BackendNotStartedSurface() {
+	const surface = createProject44SoulBootstrapSurface({
+		phase: 'NOT_STARTED',
+		state: 'not_started',
+		executable: false,
+		hostBridgeAvailable: false,
+		nextAction: 'begin',
+		hostRegistrationId: null,
+		walletAddress: null,
+	} satisfies Project44SoulBootstrapSurfaceOptions);
+	return {
+		...surface,
+		state: {
+			...surface.state,
+			correlation: null,
+		},
+	} satisfies SoulBootstrapSurface;
+}
+
+export function createProject44BeginReadySurface(variables: Record<string, unknown>) {
+	const input = variables.input && typeof variables.input === 'object'
+		? variables.input as {
+				walletAddress?: string;
+				idempotencyKey?: string;
+				correlationKey?: string;
+		  }
+		: {};
+	const walletAddress = input.walletAddress?.trim() || project44SoulBootstrapIds.walletAddress;
+	const surface = createProject44SoulBootstrapSurface({
+		phase: 'BEGIN',
+		state: 'begin.ready',
+		nextAction: 'verify_wallet',
+		hostBridgeAvailable: true,
+		executable: true,
+		hostRegistrationId: project44SoulBootstrapIds.registrationId,
+		walletAddress,
+		signingCheckpoints: [
+			{
+				__typename: 'SoulBootstrapSigningCheckpoint',
+				...project44SoulBootstrapSigning.walletChallenge,
+				signerAddress: walletAddress,
+			},
+		],
+	} satisfies Project44SoulBootstrapSurfaceOptions);
+	return {
+		...surface,
+		state: {
+			...surface.state,
+			correlation: {
+				__typename: 'SoulBootstrapCorrelationState',
+				correlationKey: input.correlationKey?.trim() || null,
+				beginIdempotencyKey: input.idempotencyKey?.trim() || null,
+				walletVerificationIdempotencyKey: null,
+				principalDeclarationIdempotencyKey: null,
+				conversationIdempotencyKey: null,
+				finalizeIdempotencyKey: null,
+				lastHostRequestId: project44SoulBootstrapIds.hostRequestId,
+			},
+		},
+	} satisfies SoulBootstrapSurface;
+}
+
+function createProject44PrincipalVerifiedSurface() {
+	return createProject44SoulBootstrapSurface({
+		phase: 'CONVERSATION',
+		state: 'principal_verified',
+		nextAction: 'send_conversation_message',
+		principalAddress: project44SoulBootstrapIds.principalAddress,
+		hostConversationId: null,
+		signingCheckpoints: [
+			project44PrincipalDeclarationCheckpoint({
+				status: 'complete',
+				completedAt: project44SoulBootstrapIds.completedAt,
+			}),
+		],
+	} satisfies Project44SoulBootstrapSurfaceOptions);
+}
+
+export function createProject44RecoverablePrincipalPreflightSurface() {
+	return createProject44SoulBootstrapSurface({
+		phase: 'PRINCIPAL_DECLARATION',
+		state: 'awaiting_principal_signature',
+		nextAction: 'verify_principal_declaration',
+		principalAddress: project44SoulBootstrapIds.principalAddress,
+		signingCheckpoints: [
+			{
+				__typename: 'SoulBootstrapSigningCheckpoint',
+				...project44SoulBootstrapSigning.walletChallenge,
+				status: 'complete',
+				completedAt: project44SoulBootstrapIds.completedAt,
+			},
+			project44PrincipalDeclarationCheckpoint(),
+		],
+	} satisfies Project44SoulBootstrapSurfaceOptions);
+}
+
+export function createProject44RecoverablePrincipalErrorSurface() {
+	return createProject44SoulBootstrapSurface({
+		phase: 'ERROR',
+		state: 'wallet_signature_rejected',
+		nextAction: 'retry_signature',
+		executable: false,
+		principalAddress: project44SoulBootstrapIds.principalAddress,
+		error: {
+			__typename: 'SoulBootstrapErrorState',
+			code: 'SIGNATURE_REJECTED',
+			message: 'Signature rejected by Host verifier.',
+			source: 'lesser-host',
+			statusCode: 422,
+			hostRequestId: project44SoulBootstrapIds.hostRequestId,
+			at: DEFAULT_TIMESTAMP,
+		},
+		signingCheckpoints: [
+			{
+				__typename: 'SoulBootstrapSigningCheckpoint',
+				...project44SoulBootstrapSigning.walletChallenge,
+				status: 'complete',
+				completedAt: project44SoulBootstrapIds.completedAt,
+			},
+			project44PrincipalDeclarationCheckpoint(),
+		],
+	} satisfies Project44SoulBootstrapSurfaceOptions);
+}
+
+export function createProject44GenericBootstrapErrorSurface() {
+	return createProject44SoulBootstrapSurface({
+		phase: 'ERROR',
+		state: 'error.host_unavailable',
+		nextAction: 'retry_signature',
+		executable: false,
+		principalAddress: project44SoulBootstrapIds.principalAddress,
+		error: {
+			__typename: 'SoulBootstrapErrorState',
+			code: 'HOST_INVALID_REQUEST',
+			message: 'Host rejected the bootstrap request.',
+			source: 'host',
+			statusCode: 400,
+			hostRequestId: project44SoulBootstrapIds.hostRequestId,
+			at: DEFAULT_TIMESTAMP,
+		},
+		signingCheckpoints: [
+			{
+				__typename: 'SoulBootstrapSigningCheckpoint',
+				...project44SoulBootstrapSigning.walletChallenge,
+				status: 'complete',
+				completedAt: project44SoulBootstrapIds.completedAt,
+			},
+			project44PrincipalDeclarationCheckpoint(),
+		],
+	} satisfies Project44SoulBootstrapSurfaceOptions);
+}
+
+export function createProject44MissingRegistrationErrorSurface() {
+	return createProject44SoulBootstrapSurface({
+		phase: 'ERROR',
+		state: 'error.host_unavailable',
+		nextAction: 'retry_signature',
+		executable: false,
+		principalAddress: project44SoulBootstrapIds.principalAddress,
+		error: {
+			__typename: 'SoulBootstrapErrorState',
+			code: 'HOST_REGISTRATION_NOT_FOUND',
+			message: 'Host registration was not found.',
+			source: 'host',
+			statusCode: 404,
+			hostRequestId: project44SoulBootstrapIds.hostRequestId,
+			at: DEFAULT_TIMESTAMP,
+		},
+		signingCheckpoints: [
+			{
+				__typename: 'SoulBootstrapSigningCheckpoint',
+				...project44SoulBootstrapSigning.walletChallenge,
+				status: 'complete',
+				completedAt: project44SoulBootstrapIds.completedAt,
+			},
+			project44PrincipalDeclarationCheckpoint(),
+		],
+	} satisfies Project44SoulBootstrapSurfaceOptions);
+}
+
+export function createProject44ConversationConflictSurface() {
+	return createProject44SoulBootstrapSurface({
+		phase: 'ERROR',
+		state: 'error.host_unavailable',
+		nextAction: 'retry_conversation',
+		executable: false,
+		principalAddress: project44SoulBootstrapIds.principalAddress,
+		hostConversationId: null,
+		error: {
+			__typename: 'SoulBootstrapErrorState',
+			code: 'HOST_BOOTSTRAP_CONFLICT',
+			message: 'Host reported a bootstrap conflict.',
+			source: 'host',
+			statusCode: 409,
+			hostRequestId: project44SoulBootstrapIds.hostRequestId,
+			at: DEFAULT_TIMESTAMP,
+		},
+		signingCheckpoints: [
+			{
+				__typename: 'SoulBootstrapSigningCheckpoint',
+				...project44SoulBootstrapSigning.walletChallenge,
+				status: 'complete',
+				completedAt: project44SoulBootstrapIds.completedAt,
+			},
+			project44PrincipalDeclarationCheckpoint({
+				status: 'verified',
+				completedAt: project44SoulBootstrapIds.completedAt,
+			}),
+		],
+	} satisfies Project44SoulBootstrapSurfaceOptions);
+}
+
 export async function installProject44Auth(page: Page) {
 	await page.addInitScript((session) => {
 		window.sessionStorage.setItem('simulacrum:auth_session', JSON.stringify(session));
 	}, createAuthSession());
 }
 
-export async function installProject44Wallet(page: Page, options: { rejectPersonalSign?: boolean } = {}) {
+export async function installProject44Wallet(
+	page: Page,
+	options: { rejectPersonalSign?: boolean; accounts?: readonly string[] } = {}
+) {
 	await page.addInitScript(
 		({ accounts, signatures, rejectPersonalSign }) => {
 			const walletRequests: Array<{ method: string; params?: unknown }> = [];
@@ -231,7 +496,7 @@ export async function installProject44Wallet(page: Page, options: { rejectPerson
 			});
 		},
 		{
-			accounts: [project44SoulBootstrapIds.walletAddress, project44SoulBootstrapIds.principalAddress],
+			accounts: options.accounts ?? [project44SoulBootstrapIds.walletAddress, project44SoulBootstrapIds.principalAddress],
 			signatures: DEFAULT_SIGNATURES,
 			rejectPersonalSign: Boolean(options.rejectPersonalSign),
 		}
@@ -240,11 +505,16 @@ export async function installProject44Wallet(page: Page, options: { rejectPerson
 
 export async function installProject44Routes(
 	page: Page,
-	options: { initialSurface?: SoulBootstrapFixtureKey | SoulBootstrapSurface; myAgents?: 'fixture' | 'none' } = {}
+	options: {
+		initialSurface?: SoulBootstrapFixtureKey | SoulBootstrapSurface;
+		myAgents?: 'fixture' | 'multiple' | 'none';
+		rejectConversationMessageWithMissingRegistration?: boolean;
+		rejectPrincipalVerification?: boolean;
+	} = {}
 ) {
-	let currentSurface: SoulBootstrapSurface = typeof options.initialSurface === 'string'
-		? project44SoulBootstrapFixtures[options.initialSurface]
-		: options.initialSurface ?? project44SoulBootstrapFixtures.notStarted;
+	let currentSurface: SoulBootstrapSurface = options.initialSurface
+		? resolveProject44Surface(options.initialSurface)
+		: project44SoulBootstrapFixtures.notStarted;
 	const graphQLRequests: GraphQLRecord[] = [];
 
 	await page.route('**/api/v2/instance', async (route) => {
@@ -271,6 +541,21 @@ export async function installProject44Routes(
 				await route.fulfill(jsonResponse({ data: { viewer: buildViewerActor() } }));
 				return;
 			case 'MyAgents':
+				if (options.myAgents === 'multiple') {
+					await route.fulfill(jsonResponse({
+						data: {
+							myAgents: [
+								buildProject44Agent(),
+								buildProject44Agent({
+									id: 'body-second-drone',
+									username: 'second-drone',
+									displayName: 'Second Drone',
+								}),
+							],
+						},
+					}));
+					return;
+				}
 				await route.fulfill(jsonResponse({
 					data: { myAgents: options.myAgents === 'none' ? [] : [buildProject44Agent()] },
 				}));
@@ -285,7 +570,15 @@ export async function installProject44Routes(
 				await route.fulfill(jsonResponse({ data: { myDroneReviews: [] } }));
 				return;
 			case 'DroneAgentState':
-				await route.fulfill(jsonResponse({ data: { agent: buildProject44Agent() } }));
+				await route.fulfill(jsonResponse({
+					data: {
+						agent: buildProject44Agent(
+							variables.username === 'second-drone'
+								? { id: 'body-second-drone', username: 'second-drone', displayName: 'Second Drone' }
+								: {}
+						),
+					},
+				}));
 				return;
 			case 'DroneWorkflow':
 				await route.fulfill(jsonResponse({ data: { droneWorkflow: null } }));
@@ -293,18 +586,76 @@ export async function installProject44Routes(
 			case 'SoulBootstrap':
 				await route.fulfill(jsonResponse({ data: { soulBootstrap: currentSurface } }));
 				return;
-			case 'BeginSoulBootstrap':
+			case 'BeginSoulBootstrap': {
+				currentSurface = createProject44BeginReadySurface(variables);
+				await route.fulfill(jsonResponse({
+					data: {
+						beginSoulBootstrap: payloadForSurface(currentSurface),
+					},
+				}));
+				return;
+			}
 			case 'VerifySoulBootstrapWallet':
 			case 'PrepareSoulBootstrapPrincipalDeclaration':
-			case 'VerifySoulBootstrapPrincipalDeclaration':
-			case 'SendSoulBootstrapConversationMessage':
 			case 'CompleteSoulBootstrapConversation':
 			case 'PrepareSoulBootstrapFinalize':
 			case 'FinalizeSoulBootstrap': {
-				currentSurface = project44SoulBootstrapFixtures[MUTATION_NEXT_SURFACE[operationName]];
+				currentSurface = resolveProject44Surface(MUTATION_NEXT_SURFACE[operationName]);
 				await route.fulfill(jsonResponse({
 					data: {
 						[OPERATION_RESPONSE_FIELD[operationName]]: payloadForSurface(currentSurface),
+					},
+				}));
+				return;
+			}
+			case 'SendSoulBootstrapConversationMessage': {
+				if (options.rejectConversationMessageWithMissingRegistration) {
+					currentSurface = createProject44MissingRegistrationErrorSurface();
+					await route.fulfill(jsonResponse({
+						data: {
+							sendSoulBootstrapConversationMessage: {
+								...payloadForSurface(currentSurface),
+								executable: false,
+								error: currentSurface.state.error,
+							},
+						},
+					}));
+					return;
+				}
+				currentSurface = resolveProject44Surface(MUTATION_NEXT_SURFACE[operationName]);
+				await route.fulfill(jsonResponse({
+					data: {
+						[OPERATION_RESPONSE_FIELD[operationName]]: payloadForSurface(currentSurface),
+					},
+				}));
+				return;
+			}
+			case 'VerifySoulBootstrapPrincipalDeclaration': {
+				if (options.rejectPrincipalVerification) {
+					await route.fulfill(jsonResponse({
+						data: {
+							verifySoulBootstrapPrincipalDeclaration: {
+								__typename: 'SoulBootstrapMutationPayload',
+								executable: false,
+								error: {
+									__typename: 'SoulBootstrapErrorState',
+									code: 'SIGNATURE_REJECTED',
+									message: 'Signature rejected by Host verifier.',
+									source: 'lesser-host',
+									statusCode: 422,
+									hostRequestId: project44SoulBootstrapIds.hostRequestId,
+									at: DEFAULT_TIMESTAMP,
+								},
+								bootstrap: currentSurface,
+							},
+						},
+					}));
+					return;
+				}
+				currentSurface = createProject44PrincipalVerifiedSurface();
+				await route.fulfill(jsonResponse({
+					data: {
+						verifySoulBootstrapPrincipalDeclaration: payloadForSurface(currentSurface),
 					},
 				}));
 				return;
@@ -316,7 +667,7 @@ export async function installProject44Routes(
 
 	return {
 		setSurface(surface: SoulBootstrapFixtureKey | SoulBootstrapSurface) {
-			currentSurface = typeof surface === 'string' ? project44SoulBootstrapFixtures[surface] : surface;
+			currentSurface = resolveProject44Surface(surface);
 		},
 		graphQLRequests: () => [...graphQLRequests],
 	};
