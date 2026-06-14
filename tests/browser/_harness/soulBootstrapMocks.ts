@@ -54,6 +54,11 @@ const OPERATION_RESPONSE_FIELD = {
 	CompleteSoulBootstrapConversation: 'completeSoulBootstrapConversation',
 	PrepareSoulBootstrapFinalize: 'prepareSoulBootstrapFinalize',
 	FinalizeSoulBootstrap: 'finalizeSoulBootstrap',
+	StartHostedSoulBootstrap: 'startHostedSoulBootstrap',
+	SendHostedSoulGenesisMessage: 'sendHostedSoulGenesisMessage',
+	CompleteHostedSoulGenesis: 'completeHostedSoulGenesis',
+	PublishHostedSoul: 'publishHostedSoul',
+	RestartSoulBootstrap: 'restartSoulBootstrap',
 } as const;
 
 const MUTATION_NEXT_SURFACE = {
@@ -65,6 +70,11 @@ const MUTATION_NEXT_SURFACE = {
 	CompleteSoulBootstrapConversation: 'conversationComplete',
 	PrepareSoulBootstrapFinalize: 'finalizePreflight',
 	FinalizeSoulBootstrap: 'finalizedHosted',
+	StartHostedSoulBootstrap: 'hostedStarted',
+	SendHostedSoulGenesisMessage: 'hostedGenesisMessage',
+	CompleteHostedSoulGenesis: 'hostedGenesisComplete',
+	PublishHostedSoul: 'hostedPublished',
+	RestartSoulBootstrap: 'hostedRestarted',
 } as const satisfies Record<keyof typeof OPERATION_RESPONSE_FIELD, SoulBootstrapFixtureKey>;
 
 function jsonResponse(body: Record<string, unknown>) {
@@ -247,15 +257,7 @@ export function createProject44HostUnavailableSurface() {
 }
 
 export function createProject44BackendNotStartedSurface() {
-	const surface = createProject44SoulBootstrapSurface({
-		phase: 'NOT_STARTED',
-		state: 'not_started',
-		executable: false,
-		hostBridgeAvailable: false,
-		nextAction: 'begin',
-		hostRegistrationId: null,
-		walletAddress: null,
-	} satisfies Project44SoulBootstrapSurfaceOptions);
+	const surface = project44SoulBootstrapFixtures.hostedNotStarted;
 	return {
 		...surface,
 		state: {
@@ -355,7 +357,12 @@ export function createProject44RecoverablePrincipalErrorSurface() {
 			message: 'Signature rejected by Host verifier.',
 			source: 'lesser-host',
 			statusCode: 422,
+			detailsJson: null,
 			hostRequestId: project44SoulBootstrapIds.hostRequestId,
+			recoveryCategory: 'RETRY_SAME_STEP',
+			recoveryAction: 'RETRY_SAME_STEP',
+			retryable: true,
+			restartRequired: false,
 			at: DEFAULT_TIMESTAMP,
 		},
 		signingCheckpoints: [
@@ -383,7 +390,12 @@ export function createProject44GenericBootstrapErrorSurface() {
 			message: 'Host rejected the bootstrap request.',
 			source: 'host',
 			statusCode: 400,
+			detailsJson: null,
 			hostRequestId: project44SoulBootstrapIds.hostRequestId,
+			recoveryCategory: 'RESTART_REQUIRED',
+			recoveryAction: 'RESTART_BOOTSTRAP',
+			retryable: false,
+			restartRequired: true,
 			at: DEFAULT_TIMESTAMP,
 		},
 		signingCheckpoints: [
@@ -411,7 +423,12 @@ export function createProject44MissingRegistrationErrorSurface() {
 			message: 'Host registration was not found.',
 			source: 'host',
 			statusCode: 404,
+			detailsJson: null,
 			hostRequestId: project44SoulBootstrapIds.hostRequestId,
+			recoveryCategory: 'RESTART_REQUIRED',
+			recoveryAction: 'RESTART_BOOTSTRAP',
+			retryable: false,
+			restartRequired: true,
 			at: DEFAULT_TIMESTAMP,
 		},
 		signingCheckpoints: [
@@ -440,7 +457,12 @@ export function createProject44ConversationConflictSurface() {
 			message: 'Host reported a bootstrap conflict.',
 			source: 'host',
 			statusCode: 409,
+			detailsJson: null,
 			hostRequestId: project44SoulBootstrapIds.hostRequestId,
+			recoveryCategory: 'RETRY_SAME_STEP',
+			recoveryAction: 'RETRY_SAME_STEP',
+			retryable: true,
+			restartRequired: false,
 			at: DEFAULT_TIMESTAMP,
 		},
 		signingCheckpoints: [
@@ -514,7 +536,7 @@ export async function installProject44Routes(
 ) {
 	let currentSurface: SoulBootstrapSurface = options.initialSurface
 		? resolveProject44Surface(options.initialSurface)
-		: project44SoulBootstrapFixtures.notStarted;
+		: project44SoulBootstrapFixtures.hostedNotStarted;
 	const graphQLRequests: GraphQLRecord[] = [];
 
 	await page.route('**/api/v2/instance', async (route) => {
@@ -599,7 +621,20 @@ export async function installProject44Routes(
 			case 'PrepareSoulBootstrapPrincipalDeclaration':
 			case 'CompleteSoulBootstrapConversation':
 			case 'PrepareSoulBootstrapFinalize':
-			case 'FinalizeSoulBootstrap': {
+			case 'FinalizeSoulBootstrap':
+			case 'StartHostedSoulBootstrap':
+			case 'CompleteHostedSoulGenesis':
+			case 'PublishHostedSoul':
+			case 'RestartSoulBootstrap': {
+				currentSurface = resolveProject44Surface(MUTATION_NEXT_SURFACE[operationName]);
+				await route.fulfill(jsonResponse({
+					data: {
+						[OPERATION_RESPONSE_FIELD[operationName]]: payloadForSurface(currentSurface),
+					},
+				}));
+				return;
+			}
+			case 'SendHostedSoulGenesisMessage': {
 				currentSurface = resolveProject44Surface(MUTATION_NEXT_SURFACE[operationName]);
 				await route.fulfill(jsonResponse({
 					data: {
@@ -643,7 +678,12 @@ export async function installProject44Routes(
 									message: 'Signature rejected by Host verifier.',
 									source: 'lesser-host',
 									statusCode: 422,
+									detailsJson: null,
 									hostRequestId: project44SoulBootstrapIds.hostRequestId,
+									recoveryCategory: 'RETRY_SAME_STEP',
+									recoveryAction: 'RETRY_SAME_STEP',
+									retryable: true,
+									restartRequired: false,
 									at: DEFAULT_TIMESTAMP,
 								},
 								bootstrap: currentSurface,
