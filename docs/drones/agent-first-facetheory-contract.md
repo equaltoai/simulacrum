@@ -32,8 +32,9 @@ The canonical user path for soul graduation is:
 1. Request from within Simulacrum.
 2. Review and approval from within Simulacrum.
 3. Conduct the mint conversation from within Simulacrum.
-4. Gather signatures and finalize from within Simulacrum.
-5. Observe continuity and attribution updates from within Simulacrum.
+4. Publish the hosted/off-chain bound soul from within Simulacrum.
+5. Optionally upgrade assurance with wallet/on-chain material later.
+6. Observe continuity and attribution updates from within Simulacrum.
 
 `lesser-host` remains the control-plane and publication backend. It is not the
 canonical human-facing UI for the graduation flow.
@@ -211,12 +212,35 @@ Canonical continuity semantics:
 - moderation semantics distinguish lightweight drone constraints from souled
   operation
 
+## Hosted/off-chain bootstrap contract
+
+The default Simulacrum soul-definition path is hosted/off-chain. It is not an
+on-chain mint and must not inherit on-chain-era wallet ceremony as required
+browser friction.
+
+For hosted/off-chain bootstrap:
+
+- Lesser same-origin auth plus Lesser's server-side Host instance trust is the
+  authority boundary.
+- The browser should not be required to provide a wallet address, wallet
+  challenge signature, principal declaration digest signature, boundary
+  signature, or final self-attestation before the hosted soul can be bound.
+- Genesis conversation, declaration review, and hosted publication are the
+  product-critical steps.
+- Wallet proof, principal declaration, boundary signatures, Safe/on-chain
+  payloads, and immutable/on-chain assurance are a separate explicit upgrade
+  path after hosted binding, not the default path.
+- If Lesser/`lesser-host` currently require wallet/principal material for
+  hosted/off-chain publication, that is an upstream contract gap; Simulacrum
+  must not hide it with raw Host calls or browser-held Host credentials.
+
 ## Signing And Approval Contract
 
-Simulacrum must expose the approval and finalization flow as part of the
-product, not as an external wallet popup without context.
+Simulacrum must expose any required approval and finalization flow as part of
+the product, not as an external wallet popup without context.
 
-The UX must make room for:
+The UX must make room for wallet/on-chain upgrade material when the operator
+explicitly requests immutable/on-chain assurance:
 
 - principal approval
 - boundary signatures
@@ -226,6 +250,26 @@ The UX must make room for:
 The client may render signing readiness from Lesser workflow state and
 `lesser-host` finalize preflight payloads, but it must not invent signing
 inputs when canonical backend data already exists.
+
+### Reversibility and resumability
+
+Any web process that defines, binds, or finalizes a soul must remain reversible
+and resumable until Lesser reports the hosted/off-chain soul as bound.
+
+Non-negotiable implications:
+
+- a wrong wallet selection must have an explicit replacement/restart path before
+  final binding
+- a stale browser session, expired Host registration, rejected Host submission,
+  interrupted wallet prompt, or failed Lesser mutation must not strand the user
+  in a dead-end state
+- every pre-binding state must show one canonical next step and, when a process
+  has already started, an explicit "restart with selected wallet" recovery path
+- browser session storage can assist recovery, but required recovery must not
+  depend on unrefreshable browser-only state
+- if Lesser or `lesser-host` lacks a reset/resume primitive for a pre-binding
+  state, that is an upstream contract gap to route upstream; Simulacrum must not
+  mask it with raw Host calls or portal-token workarounds
 
 ## Conversation Contract
 

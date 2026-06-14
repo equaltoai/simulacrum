@@ -93,6 +93,40 @@ test('M4.2 bootstrap UX routes unsouled, conversation, finalize, and hosted comp
 	assert.equal(notStarted.actionHref, '/l/souls/genesis');
 	assert.match(notStarted.title, /Start Sim-led soul creation/);
 
+	const backendNotStarted = deriveSoulBootstrapUx({
+		result: resultFor({
+			phase: 'NOT_STARTED',
+			state: 'not_started',
+			nextAction: 'begin',
+			executable: false,
+			hostBridgeAvailable: false,
+		}),
+		activeUsername: ids.username,
+	});
+	assert.equal(backendNotStarted.issue, 'none');
+	assert.match(backendNotStarted.title, /Start Sim-led soul creation/);
+
+	const beginReady = deriveSoulBootstrapUx({
+		result: resultFor({
+			phase: 'BEGIN',
+			state: 'begin.ready',
+			nextAction: 'verify_wallet',
+			signingCheckpoints: [{
+				__typename: 'SoulBootstrapSigningCheckpoint',
+				name: 'wallet',
+				status: 'ready',
+				message: 'Sign this Host wallet challenge exactly.',
+				messageEncoding: 'utf8',
+				signingMethod: 'eip191_personal_sign',
+				signerAddress: '0x1111111111111111111111111111111111111111',
+			}],
+		}),
+		activeUsername: ids.username,
+	});
+	assert.equal(beginReady.routeKey, 'approvals');
+	assert.equal(beginReady.signingReady, true);
+	assert.match(beginReady.title, /Wallet challenge is ready/);
+
 	const conversation = deriveSoulBootstrapUx({
 		result: resultFor({
 			phase: 'CONVERSATION',

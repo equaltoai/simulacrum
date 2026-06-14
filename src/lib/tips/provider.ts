@@ -93,16 +93,37 @@ export async function personalSign(
 	provider: EthereumProvider,
 	{ address, message }: { address: `0x${string}`; message: string }
 ): Promise<`0x${string}`> {
-	const result = await provider.request({
-		method: 'personal_sign',
-		params: [message, address],
-	});
+	let result: unknown;
+	try {
+		result = await provider.request({
+			method: 'personal_sign',
+			params: [message, address],
+		});
+	} catch (error) {
+		if (isWalletUserRejection(error)) {
+			throw error;
+		}
+		result = await provider.request({
+			method: 'personal_sign',
+			params: [address, message],
+		});
+	}
 
 	if (typeof result !== 'string' || !result.startsWith('0x')) {
 		throw new Error('Wallet provider returned invalid signature');
 	}
 
 	return result as `0x${string}`;
+}
+
+function isWalletUserRejection(error: unknown): boolean {
+	const record = error && typeof error === 'object'
+		? (error as { code?: unknown; message?: unknown })
+		: null;
+	if (record?.code === 4001) return true;
+	const message = typeof record?.message === 'string' ? record.message : '';
+	return /\b(user|wallet)\b.*\b(reject(?:ed)?|denied|cancel(?:ed|led)?)\b/i.test(message) ||
+		/\b(reject(?:ed)?|denied|cancel(?:ed|led)?)\b.*\b(user|wallet)\b/i.test(message);
 }
 
 export async function signTypedDataJson(

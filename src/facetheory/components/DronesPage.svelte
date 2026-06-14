@@ -350,8 +350,8 @@
 							<h2>Drone bodies on this instance</h2>
 						</header>
 						<p class="drones-page__copy">
-							Manage the bodies you have already created here, then step into an Identity page whenever you want
-							to attach a soul.
+							Manage the bodies you have already created here, then start or inspect each body's soul
+							process from that body's Identity page.
 						</p>
 
 						{#if loadError}
@@ -381,12 +381,15 @@
 											</span>
 										</div>
 										<div class="drones-page__card-actions">
+											<a class="drones-page__button drones-page__button--primary" href={agentIdentityHref(agent.username)}>
+												Start Soul Process
+											</a>
 											<a class="drones-page__button drones-page__button--secondary" href={agentIdentityHref(agent.username)}>
-												Open Identity
+												Inspect Identity
 											</a>
 											{#if effectiveSoulCount > 0}
 												<a class="drones-page__button drones-page__button--ghost" href={agentIdentityHref(agent.username)}>
-													Bind Soul on Identity
+													Bind Existing Soul
 												</a>
 											{/if}
 										</div>

@@ -82,6 +82,11 @@ import type {
 } from './types';
 import { HOST_WORKFLOW_BRIDGE_DISABLED_NOTE } from './flags';
 
+const NO_DRONE_BODY_REQUIRED_NOTE =
+	'Create a local drone body in Simulacrum first. Soul-bootstrap remains on the Lesser same-origin facade, but it is not contacted until a body exists.';
+const PREVIEW_AUTH_REQUIRED_NOTE =
+	'Sign in with Lesser to load live agent roster state. Soul creation remains in Simulacrum after authentication.';
+
 interface ViewerInfo {
 	id: string;
 	name: string;
@@ -890,7 +895,8 @@ export function createPreviewAppState({
 		publishedSoulError: null,
 		hostWorkflow: emptyHostWorkflow({
 			baseUrl: null,
-			authNote: HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+			authNote: PREVIEW_AUTH_REQUIRED_NOTE,
+			failureIssue: 'authorization_required',
 		}),
 		isPreview: true,
 	});
@@ -1046,7 +1052,8 @@ export async function loadClientAppState({
 				})
 			: emptyHostWorkflow({
 					baseUrl: lesserHostBaseUrl,
-					authNote: HOST_WORKFLOW_BRIDGE_DISABLED_NOTE,
+					authNote: NO_DRONE_BODY_REQUIRED_NOTE,
+					failureIssue: 'body_required',
 				});
 
 		return assembleAppState({
@@ -1972,7 +1979,7 @@ function buildActions(
 	soulCount: number,
 	hostWorkflow: HostWorkflowState
 ): readonly AgentFaceAction[] {
-	const needsDroneBodies = soulCount > 0 && agentCount === 0;
+	const needsDroneBodies = agentCount === 0;
 	const bootstrapAction = buildSoulBootstrapAction(hostWorkflow.bootstrap);
 
 	if (needsDroneBodies) {
@@ -1987,12 +1994,14 @@ function buildActions(
 						tone: 'primary',
 						detail: 'Bodies must exist before souls can be attached from Identity.',
 					},
-					{
-						label: 'Open Soul Requests',
-						href: getPageHref('souls', activeUsername),
-						tone: 'secondary',
-						detail: `${soulCount} soul${soulCount === 1 ? '' : 's'} waiting for local bodies.`,
-					},
+					...(soulCount > 0
+						? [{
+							label: 'Open Soul Requests',
+							href: getPageHref('souls', activeUsername),
+							tone: 'secondary' as const,
+							detail: `${soulCount} soul${soulCount === 1 ? '' : 's'} waiting for local bodies.`,
+						}]
+						: []),
 				];
 			case 'drones':
 				return [];
