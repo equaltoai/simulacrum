@@ -32,6 +32,7 @@ export type SoulBootstrapUxIssue =
 	| 'backend_contract_unsupported'
 	| 'wallet_signature_rejected'
 	| 'conversation_incomplete'
+	| 'declaration_evidence_missing'
 	| 'finalize_expired'
 	| 'binding_conflict'
 	| 'authorization_required'
@@ -73,6 +74,7 @@ export interface DeriveSoulBootstrapUxInput {
 	activeUsername?: string | null;
 	failureIssue?: SoulBootstrapUxIssue;
 	failureMessage?: string | null;
+	hostedPublishReady?: boolean;
 }
 
 const PHASE_LABELS: Record<SoulBootstrapPhase | 'UNAVAILABLE', string> = {
@@ -149,6 +151,14 @@ const ISSUE_COPY: Record<SoulBootstrapUxIssue, {
 		actionLabel: 'Open Genesis Lane',
 		routeKey: 'genesis',
 		tone: 'warning',
+	},
+	declaration_evidence_missing: {
+		title: 'Hosted declaration evidence is missing',
+		summary:
+			'Lesser reports that hosted publication is next, but the GraphQL surface does not include persisted conversation/declaration evidence. Simulacrum will not publish a hosted soul from a bare conversation id; retry or refresh after Lesser/Host returns declaration evidence.',
+		actionLabel: 'Refresh Hosted State',
+		routeKey: 'genesis',
+		tone: 'critical',
 	},
 	finalize_expired: {
 		title: 'Finalize payload expired',
@@ -245,6 +255,7 @@ export function deriveSoulBootstrapUx({
 	activeUsername,
 	failureIssue,
 	failureMessage,
+	hostedPublishReady: hostedPublishReadyInput = false,
 }: DeriveSoulBootstrapUxInput): SoulBootstrapUxState {
 	const username = activeUsername?.trim() || result?.surface?.username || result?.state?.username || null;
 	const isProductionSoul = isProductionSoulBootstrapResult(result);
@@ -253,13 +264,22 @@ export function deriveSoulBootstrapUx({
 	const recoveryAction = recoveryActionFromResult(result);
 	const hostedMode = isHostedBootstrapResult(result);
 	const actionableError = result?.error ?? result?.state?.error ?? result?.surface?.error ?? null;
-	const issue = actionableError
+	const hostedPublishCandidateReady = hostedMode && hostedPublishReadyInput;
+	let issue = actionableError
 		? issueFromActionableError(actionableError, hostedMode)
 		: result && isHostBridgeUnavailableIssue(result)
 			? 'host_unavailable'
 			: failureIssue ?? 'none';
+	if (
+		issue === 'none' &&
+		hostedMode &&
+		typedNextAction === 'PUBLISH_HOSTED_SOUL' &&
+		!hostedPublishCandidateReady
+	) {
+		issue = 'declaration_evidence_missing';
+	}
 	const phase = result?.state?.phase ?? (issue === 'none' && result ? 'NOT_STARTED' : 'UNAVAILABLE');
-	const hostedPublishReady = hostedMode && typedNextAction === 'PUBLISH_HOSTED_SOUL';
+	const hostedPublishReady = hostedPublishCandidateReady && issue === 'none';
 	const conversationVisible = phase === 'CONVERSATION' || hostedPublishReady;
 	const finalizeReady = !hostedMode && phase === 'FINALIZE';
 	const signingReady = !hostedMode && isSoulBootstrapSigningPhase(phase);
@@ -773,6 +793,17 @@ function normalPhaseCopy(phase: SoulBootstrapPhase | 'UNAVAILABLE', result: Soul
 				tone: 'warning' as const,
 			};
 		case 'CONVERSATION':
+			if (typedNextAction === 'PUBLISH_HOSTED_SOUL') {
+				return {
+					title: 'Publish hosted/off-chain soul',
+					summary:
+						'Lesser reports that hosted genesis is complete. Review the generated evidence and publish the hosted/off-chain soul through Lesser same-origin GraphQL; immutable/on-chain assurance remains an optional later upgrade.',
+					actionLabel: 'Publish Hosted Soul',
+					actionDetail: 'Authority: instance trust · anchor: hosted/off-chain · mutable/revocable: yes.',
+					routeKey: 'genesis' as const,
+					tone: 'accent' as const,
+				};
+			}
 			return {
 				title: typedNextAction === 'COMPLETE_HOSTED_SOUL_GENESIS'
 					? 'Review hosted genesis declarations'

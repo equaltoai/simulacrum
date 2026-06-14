@@ -20,10 +20,11 @@ not the canonical user-facing workflow.
 ## Current Creation Boundary
 
 Project 44 remediation removes the browser Host-token bridge from production
-rollout guidance. M4.1 vendors the Greater `greater-v0.10.4` soul-bootstrap
-facade and routes Simulacrum's Project 44 API layer through Lesser same-origin
-GraphQL. M4.2 restores visible identity, genesis, and approvals lanes from the
-adapter-backed state model; M4.3 owns interactive signing controls.
+rollout guidance. M7.4 consumes the hosted-first Greater soul-bootstrap facade
+through Lesser same-origin GraphQL, with Greater `greater-v0.10.6` providing the
+released terminal hosted-declaration evidence helpers. Simulacrum must treat
+`PUBLISH_HOSTED_SOUL` as only a typed next-action hint until Lesser also returns
+terminal declaration evidence for the active hosted conversation id.
 
 Do not ship or canary a browser prompt for `lesser-host` control-plane
 credentials. Provisioned Lesser instances already hold their Host trust
@@ -57,6 +58,10 @@ Before promoting a build as the active dev-stage release, verify:
   `lesser-host` portal
 - mint conversation and finalize surfaces do not ask for a `lesser-host`
   control-plane token
+- hosted/off-chain publish is enabled only when the GraphQL surface includes a
+  completed `hosted_conversation` / `conversation` declaration checkpoint with
+  canonical `selfDescription`, `capabilities`, `boundaries`, `transparency`, and
+  a Host request id matching the active conversation context
 - state copy names the same-origin bootstrap boundary, M4.2 route-lane
   restoration, and M4.3 signing-control boundary
 - review, approval, and continuity states remain legible inside the FaceTheory

@@ -6,6 +6,7 @@ import {
 	createProject44ConversationConflictSurface,
 	createProject44GenericBootstrapErrorSurface,
 	createProject44HostUnavailableSurface,
+	createProject44HostedGenesisCompleteWithoutEvidenceSurface,
 	createProject44MissingRegistrationErrorSurface,
 	createProject44RecoverablePrincipalErrorSurface,
 	createProject44RecoverablePrincipalPreflightSurface,
@@ -80,11 +81,12 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 		await expect(page.getByTestId('hosted-soul-default-action')).toHaveCount(1);
 		await expect(page.getByRole('button', { name: 'Send Genesis Message' })).toBeEnabled();
 		await page.getByRole('button', { name: 'Send Genesis Message' }).click();
-		await expect(page.getByTestId('hosted-soul-success')).toContainText('Genesis conversation message recorded');
+		await expect(lane).toContainText('Review hosted genesis declarations');
 		await expect(page.getByTestId('hosted-soul-default-action')).toHaveCount(1);
 		await expect(page.getByRole('button', { name: 'Review Generated Declarations' })).toBeEnabled();
 		await page.getByRole('button', { name: 'Review Generated Declarations' }).click();
 		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Publish hosted/off-chain soul');
+		await expect(page.getByTestId('hosted-soul-evidence')).toContainText('ready for hosted publish');
 		await expect(page.getByTestId('hosted-soul-default-action')).toHaveCount(1);
 		await expect(page.getByRole('button', { name: 'Publish Hosted Soul' })).toBeEnabled();
 		await page.getByRole('button', { name: 'Publish Hosted Soul' }).click();
@@ -127,6 +129,28 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 			body: Buffer.from(JSON.stringify(graphQLOperations, null, 2), 'utf8'),
 			contentType: 'application/json',
 		});
+	});
+
+	test('hosted publish stays blocked when Lesser omits declaration evidence', async ({ page }) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: createProject44HostedGenesisCompleteWithoutEvidenceSurface(),
+		});
+
+		await page.goto(`/l/identity/${project44SoulBootstrapIds.username}`);
+
+		const lane = page.getByTestId('soul-bootstrap-lane');
+		await expect(lane).toContainText('Hosted declaration evidence is missing');
+		await expect(lane).toContainText('will not publish a hosted soul from a bare conversation id');
+		await expect(page.getByTestId('hosted-soul-evidence-missing')).toContainText(
+			'Publication is blocked'
+		);
+		await expect(page.getByRole('button', { name: 'Publish Hosted Soul' })).toBeDisabled();
+		expect(harness.graphQLRequests().map((request) => request.operationName)).not.toContain(
+			'PublishHostedSoul'
+		);
+		await expectNoHostCredentialPrompt(page);
+		await expectNoHostCredentialStorage(page);
 	});
 
 	test('drones roster exposes a soul-process entry point for every local body', async ({ page }) => {

@@ -152,6 +152,27 @@ function resolveProject44Surface(surface: SoulBootstrapFixtureKey | SoulBootstra
 	return project44SoulBootstrapFixtures[surface];
 }
 
+export function createProject44HostedGenesisCompleteWithoutEvidenceSurface(): SoulBootstrapSurface {
+	const surface = project44SoulBootstrapFixtures.hostedGenesisComplete;
+	return {
+		...surface,
+		state: {
+			...surface.state,
+			signingCheckpoints: [],
+		},
+		workflow: surface.workflow
+			? {
+					...surface.workflow,
+					declaration: null,
+					soulBootstrap: {
+						...surface.workflow.soulBootstrap,
+						signingCheckpoints: [],
+					},
+				}
+			: surface.workflow,
+	} satisfies SoulBootstrapSurface;
+}
+
 function buildIdentitySemantics(soulBindingState: 'UNBOUND' | 'BOUND' = 'UNBOUND') {
 	return {
 		identityState: soulBindingState === 'BOUND' ? 'souled' : 'drone',

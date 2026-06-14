@@ -82,12 +82,24 @@
 	let currentProfileIdentifier = $state<string | null>(initialProfileIdentifierValue);
 	let currentProfileActorId = $state<string | null>(initialProfileActorIdValue);
 
+	const LEGACY_SIGNING_NEXT_ACTIONS = new Set([
+		'VERIFY_WALLET',
+		'PREPARE_PRINCIPAL_DECLARATION',
+		'VERIFY_PRINCIPAL_DECLARATION',
+		'CONTINUE_CONVERSATION',
+		'FINALIZE',
+	]);
+
 	const isAuthenticated = $derived(Boolean(session?.accessToken));
 	const showAuthPreviewNotice = $derived(!isAuthenticated && currentPage.requiresAuth !== false);
 	const showBlockingLoadError = $derived(Boolean(isAuthenticated && loadError));
 	const showLegacySigningPanel = $derived(Boolean(
 		appState.hostWorkflow.state?.bootstrapMode === 'WALLET_PRINCIPAL' ||
-		appState.hostWorkflow.signingCheckpoints.length > 0
+		LEGACY_SIGNING_NEXT_ACTIONS.has(appState.hostWorkflow.state?.typedNextAction ?? '') ||
+		(
+			appState.hostWorkflow.signingCheckpoints.length > 0 &&
+			appState.hostWorkflow.state?.bootstrapMode !== 'HOSTED'
+		)
 	));
 
 	const socialBaseData = $derived({

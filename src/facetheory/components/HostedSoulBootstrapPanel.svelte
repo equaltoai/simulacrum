@@ -12,6 +12,11 @@
 		type HostedSoulBootstrapStateModel,
 		type SoulBootstrapResult,
 	} from '$lib/api/soulBootstrap';
+	import {
+		getHostedSoulBootstrapTerminalDeclarationEvidence,
+		isHostedSoulBootstrapPublishReady,
+		type HostedSoulBootstrapTerminalDeclarationEvidence,
+	} from '$lib/greater/adapters';
 
 	import { getPageHref } from '../routing';
 
@@ -43,10 +48,27 @@
 
 	const hosted = $derived(resolveHostedState(result));
 	const defaultAction = $derived(resolveHostedDefaultAction(result));
-	const steps = $derived(buildHostedSteps(defaultAction, result));
+	const activeConversationId = $derived(result?.state?.hostConversationId ?? null);
+	const declarationEvidence = $derived(
+		getHostedSoulBootstrapTerminalDeclarationEvidence(result?.state ?? null, {
+			conversationId: activeConversationId,
+		})
+	);
+	const declarationEvidenceReady = $derived(
+		isHostedSoulBootstrapPublishReady(result?.state ?? null, {
+			conversationId: activeConversationId,
+		})
+	);
+	const publishEvidenceMissing = $derived(
+		defaultAction === 'PUBLISH_HOSTED_SOUL' && !declarationEvidenceReady
+	);
+	const steps = $derived(buildHostedSteps(defaultAction, result, declarationEvidenceReady));
 	const actionLabel = $derived(actionLabelFor(defaultAction));
 	const actionSummary = $derived(actionSummaryFor(defaultAction, result));
-	const canRunDefaultAction = $derived(canRunAction(defaultAction, result, messageDraft, busy));
+	const declarationEvidenceSummary = $derived(readDeclarationEvidenceSummary(result, declarationEvidence));
+	const canRunDefaultAction = $derived(
+		canRunAction(defaultAction, result, messageDraft, busy, declarationEvidenceReady)
+	);
 	const recoveryCategory = $derived(readRecoveryCategory(result));
 	const recoveryAction = $derived(readRecoveryAction(result));
 	const identityHref = $derived(getPageHref('identity', resolveUsername(result)));
@@ -122,11 +144,14 @@
 
 	function buildHostedSteps(
 		action: HostedDefaultAction,
-		source: HostedSoulBootstrapResult | SoulBootstrapResult | null
+		source: HostedSoulBootstrapResult | SoulBootstrapResult | null,
+		hasDeclarationEvidence: boolean
 	): Array<{ key: HostedStepKey; label: string; detail: string; status: StepStatus }> {
 		const activeKey = stepKeyForAction(action, source);
 		const activeIndex = HOSTED_STEPS.findIndex((step) => step.key === activeKey);
-		const blocked = source?.state?.phase === 'ERROR' && action === 'OPERATOR_ACTION_REQUIRED';
+		const blocked =
+			(source?.state?.phase === 'ERROR' && action === 'OPERATOR_ACTION_REQUIRED') ||
+			(action === 'PUBLISH_HOSTED_SOUL' && !hasDeclarationEvidence);
 		return HOSTED_STEPS.map((step, index) => ({
 			...step,
 			status: blocked
@@ -226,11 +251,13 @@
 		action: HostedDefaultAction,
 		source: HostedSoulBootstrapResult | SoulBootstrapResult | null,
 		message: string,
-		isBusy: boolean
+		isBusy: boolean,
+		hasDeclarationEvidence: boolean
 	): boolean {
 		if (isBusy) return false;
 		if (action === 'COMPLETE') return true;
 		if (action === 'SEND_HOSTED_SOUL_GENESIS_MESSAGE') return Boolean(message.trim());
+		if (action === 'PUBLISH_HOSTED_SOUL' && !hasDeclarationEvidence) return false;
 		if (action === 'COMPLETE_HOSTED_SOUL_GENESIS' || action === 'PUBLISH_HOSTED_SOUL') {
 			return Boolean(source?.state?.hostConversationId?.trim());
 		}
@@ -323,11 +350,17 @@
 	}
 
 	async function submitPublish() {
+		const conversationId = requireConversationId(result);
+		if (!isHostedSoulBootstrapPublishReady(result?.state ?? null, { conversationId })) {
+			throw new Error(
+				'Lesser reports hosted publication is next, but did not return persisted declaration evidence. Simulacrum will not publish from a bare hosted conversation id.'
+			);
+		}
 		const correlation = clientCorrelation(result, 'publish');
 		const mutation = await publishHostedSoul({
 			input: {
 				username: requireUsername(result),
-				conversationId: requireConversationId(result),
+				conversationId,
 				...(result?.state?.hostRegistrationId ? { registrationId: result.state.hostRegistrationId } : {}),
 				...(result?.state?.recoveryAttemptId ? { recoveryAttemptId: result.state.recoveryAttemptId } : {}),
 				...(correlation.correlationKey ? { correlationKey: correlation.correlationKey } : {}),
@@ -364,7 +397,14 @@
 		if (result.state.phase === 'CONVERSATION') {
 			return result.state.hostConversationId ? submitCompleteGenesis() : submitGenesisMessage();
 		}
-		if (result.state.phase === 'FINALIZE') return submitPublish();
+		if (result.state.phase === 'FINALIZE') {
+			const conversationId = result.state.hostConversationId?.trim() ?? null;
+			if (isHostedSoulBootstrapPublishReady(result.state, { conversationId })) return submitPublish();
+			await onUpdated?.();
+			throw new Error(
+				'Lesser reports hosted publication is next, but declaration evidence is missing. Refresh or retry after Lesser/Host returns the generated declaration packet.'
+			);
+		}
 		await onUpdated?.();
 		success = 'Hosted state refreshed before retry.';
 	}
@@ -478,6 +518,28 @@
 		return `Prepare the hosted/off-chain genesis declaration for @${username}. Preserve body continuity, runtime boundaries, and operator accountability.`;
 	}
 
+	function readDeclarationEvidenceSummary(
+		source: HostedSoulBootstrapResult | SoulBootstrapResult | null,
+		evidence: HostedSoulBootstrapTerminalDeclarationEvidence | null
+	): string | null {
+		const selfDescription = evidence?.declaration.selfDescription;
+		const summary = typeof selfDescription?.['summary'] === 'string'
+			? selfDescription['summary'].trim()
+			: '';
+		if (summary) return summary;
+		if (evidence?.canonicalDeclarationJson) return evidence.canonicalDeclarationJson;
+
+		const statement = source?.surface?.workflow?.declaration?.statement?.trim();
+		if (statement && statement !== 'Host mint conversation completed and produced declaration material.') {
+			return statement;
+		}
+		const checkpoint = source?.state?.signingCheckpoints.find((candidate) =>
+			candidate.name.toLowerCase().includes('conversation') &&
+			(candidate.canonicalJson?.trim() || candidate.message?.trim())
+		);
+		return checkpoint?.message?.trim() || checkpoint?.canonicalJson?.trim() || null;
+	}
+
 	function nonEmpty(value?: string | null): string | null {
 		const normalized = value?.trim() ?? '';
 		return normalized || null;
@@ -546,10 +608,32 @@
 		</label>
 	{:else if defaultAction === 'COMPLETE_HOSTED_SOUL_GENESIS'}
 		<p class="ft-panel__copy">
-			Conversation {result?.state?.hostConversationId} has generated hosted declaration evidence.
-			Review it in Simulacrum, then advance to publication.
+			Conversation {result?.state?.hostConversationId} is ready to complete. Lesser must
+			return generated declaration evidence before Simulacrum will allow publication.
 		</p>
+		{#if declarationEvidenceSummary}
+			<p class="ft-panel__message ft-panel__message--info" data-testid="hosted-soul-evidence">
+				Declaration evidence: {declarationEvidenceSummary}
+			</p>
+		{/if}
 	{:else if defaultAction === 'PUBLISH_HOSTED_SOUL'}
+		{#if publishEvidenceMissing}
+			<section class="ft-panel__recovery" data-testid="hosted-soul-evidence-missing">
+				<p class="ft-panel__message ft-panel__message--error">
+					Lesser reports hosted publication is next, but Simulacrum has no persisted
+					conversation/declaration evidence to review.
+				</p>
+				<p class="ft-panel__copy">
+					Publication is blocked until Lesser/Host returns generated declaration evidence.
+					Simulacrum will not publish a hosted soul from only a registration id and
+					conversation id.
+				</p>
+			</section>
+		{:else if declarationEvidenceSummary}
+			<p class="ft-panel__message ft-panel__message--info" data-testid="hosted-soul-evidence">
+				Declaration evidence: {declarationEvidenceSummary}
+			</p>
+		{/if}
 		<ul class="ft-list">
 			<li>Registration: {result?.state?.hostRegistrationId ?? 'pending'}</li>
 			<li>Conversation: {result?.state?.hostConversationId ?? 'pending'}</li>

@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
 import test from 'node:test';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
 	classifySoulBootstrapFailure,
@@ -15,6 +18,32 @@ import {
 	project44SoulBootstrapIds,
 	project44SoulBootstrapSigning,
 } from '../../../src/lib/greater/adapters/fixtures/soul-bootstrap.ts';
+
+let hostedBootstrapHelpersPromise;
+
+function loadHostedBootstrapHelpers() {
+	if (!hostedBootstrapHelpersPromise) {
+		registerHooks({
+			resolve(specifier, context, nextResolve) {
+				if (
+					(specifier.startsWith('./') || specifier.startsWith('../')) &&
+					specifier.endsWith('.js')
+				) {
+					const resolved = new URL(specifier, context.parentURL);
+					const tsPath = fileURLToPath(resolved).replace(/\.js$/, '.ts');
+					if (existsSync(tsPath)) {
+						return { url: pathToFileURL(tsPath).href, shortCircuit: true };
+					}
+				}
+				return nextResolve(specifier, context);
+			},
+		});
+		hostedBootstrapHelpersPromise = import(
+			'../../../src/lib/greater/adapters/soul/hostedBootstrap.ts'
+		);
+	}
+	return hostedBootstrapHelpersPromise;
+}
 
 const ids = {
 	username: 'agent-zero',
@@ -119,7 +148,18 @@ function actionableError(category, message, code = category.toUpperCase()) {
 	return { category, message, code };
 }
 
-test('M4.2 bootstrap UX routes unsouled, conversation, finalize, and hosted completion states', () => {
+function hostedDeclarationEvidenceCheckpoint() {
+	return {
+		__typename: 'SoulBootstrapSigningCheckpoint',
+		...project44SoulBootstrapSigning.hostedConversation,
+	};
+}
+
+test('M4.2 bootstrap UX routes unsouled, conversation, finalize, and hosted completion states', async () => {
+	const {
+		getHostedSoulBootstrapTerminalDeclarationEvidence,
+		isHostedSoulBootstrapPublishReady,
+	} = await loadHostedBootstrapHelpers();
 	const notStarted = deriveSoulBootstrapUx({ result: resultFor(), activeUsername: ids.username });
 	assert.equal(notStarted.routeKey, 'genesis');
 	assert.equal(notStarted.actionHref, '/l/souls/genesis');
@@ -176,21 +216,73 @@ test('M4.2 bootstrap UX routes unsouled, conversation, finalize, and hosted comp
 	assert.equal(conversation.conversationVisible, true);
 	assert.match(conversation.summary, /hosted\/off-chain genesis conversation/);
 
-	const finalize = deriveSoulBootstrapUx({
-		result: resultFor({
-			phase: 'FINALIZE',
-			state: 'hosted_genesis_complete',
-			nextAction: 'publish_hosted_soul',
-			typedNextAction: 'PUBLISH_HOSTED_SOUL',
-			hostConversationId: ids.conversationId,
-		}),
-		activeUsername: ids.username,
+	const validHostedPublishResult = resultFor({
+		phase: 'CONVERSATION',
+		state: 'hosted_genesis_complete',
+		nextAction: 'publish_hosted_soul',
+		typedNextAction: 'PUBLISH_HOSTED_SOUL',
+		hostConversationId: ids.conversationId,
+		signingCheckpoints: [hostedDeclarationEvidenceCheckpoint()],
+		bootstrapMode: 'HOSTED',
 	});
+	const finalize = deriveSoulBootstrapUx({
+		result: validHostedPublishResult,
+		activeUsername: ids.username,
+		hostedPublishReady: isHostedSoulBootstrapPublishReady(validHostedPublishResult.state, {
+			conversationId: ids.conversationId,
+		}),
+	});
+	assert.equal(
+		isHostedSoulBootstrapPublishReady(validHostedPublishResult.state, {
+			conversationId: ids.conversationId,
+		}),
+		true
+	);
+	const terminalEvidence = getHostedSoulBootstrapTerminalDeclarationEvidence(
+		validHostedPublishResult.state,
+		{ conversationId: ids.conversationId }
+	);
+	assert.ok(terminalEvidence);
+	assert.equal(terminalEvidence.hostRequestId, project44SoulBootstrapIds.hostRequestId);
+	assert.deepEqual(Object.keys(terminalEvidence.declaration).sort(), [
+		'boundaries',
+		'capabilities',
+		'selfDescription',
+		'transparency',
+	]);
+	assert.equal(
+		isHostedSoulBootstrapPublishReady(validHostedPublishResult.state, {
+			conversationId: `${ids.conversationId}-stale`,
+		}),
+		false
+	);
+	assert.equal(
+		getHostedSoulBootstrapTerminalDeclarationEvidence(validHostedPublishResult.state, {
+			conversationId: `${ids.conversationId}-stale`,
+		}),
+		null
+	);
+	assert.equal(finalize.issue, 'none');
 	assert.equal(finalize.routeKey, 'genesis');
 	assert.equal(finalize.actionHref, '/l/souls/genesis');
 	assert.equal(finalize.finalizeReady, false);
 	assert.equal(finalize.hostedPublishReady, true);
 	assert.match(finalize.title, /Publish hosted\/off-chain soul/);
+
+	const missingEvidence = deriveSoulBootstrapUx({
+		result: resultFor({
+			phase: 'CONVERSATION',
+			state: 'hosted_genesis_complete',
+			nextAction: 'publish_hosted_soul',
+			typedNextAction: 'PUBLISH_HOSTED_SOUL',
+			hostConversationId: ids.conversationId,
+			bootstrapMode: 'HOSTED',
+		}),
+		activeUsername: ids.username,
+	});
+	assert.equal(missingEvidence.issue, 'declaration_evidence_missing');
+	assert.equal(missingEvidence.hostedPublishReady, false);
+	assert.match(missingEvidence.summary, /will not publish a hosted soul from a bare conversation id/);
 
 	const hostedComplete = resultFor({
 		phase: 'COMPLETE',
