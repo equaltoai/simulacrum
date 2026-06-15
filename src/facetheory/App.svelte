@@ -24,6 +24,7 @@
 	} from '$lib/auth/session';
 
 	import DronesPage from './components/DronesPage.svelte';
+	import HostedSoulBootstrapPanel from './components/HostedSoulBootstrapPanel.svelte';
 	import HostedBoundSoulActivationPanel from './components/HostedBoundSoulActivationPanel.svelte';
 	import IdentityQuarantinePanel from './components/IdentityQuarantinePanel.svelte';
 	import IdentitySoulBindingPanel from './components/IdentitySoulBindingPanel.svelte';
@@ -81,9 +82,25 @@
 	let currentProfileIdentifier = $state<string | null>(initialProfileIdentifierValue);
 	let currentProfileActorId = $state<string | null>(initialProfileActorIdValue);
 
+	const LEGACY_SIGNING_NEXT_ACTIONS = new Set([
+		'VERIFY_WALLET',
+		'PREPARE_PRINCIPAL_DECLARATION',
+		'VERIFY_PRINCIPAL_DECLARATION',
+		'CONTINUE_CONVERSATION',
+		'FINALIZE',
+	]);
+
 	const isAuthenticated = $derived(Boolean(session?.accessToken));
 	const showAuthPreviewNotice = $derived(!isAuthenticated && currentPage.requiresAuth !== false);
 	const showBlockingLoadError = $derived(Boolean(isAuthenticated && loadError));
+	const showLegacySigningPanel = $derived(Boolean(
+		appState.hostWorkflow.state?.bootstrapMode === 'WALLET_PRINCIPAL' ||
+		LEGACY_SIGNING_NEXT_ACTIONS.has(appState.hostWorkflow.state?.typedNextAction ?? '') ||
+		(
+			appState.hostWorkflow.signingCheckpoints.length > 0 &&
+			appState.hostWorkflow.state?.bootstrapMode !== 'HOSTED'
+		)
+	));
 
 	const socialBaseData = $derived({
 		hero: {
@@ -312,14 +329,23 @@
 							<p class="ft-panel__message">
 								{appState.hostWorkflow.bootstrap.stateLabel} · {appState.hostWorkflow.bootstrap.statusDetail}
 							</p>
-							<a class="ft-button ft-button--primary" href={appState.hostWorkflow.bootstrap.actionHref}>
-								{appState.hostWorkflow.bootstrap.actionLabel}
-							</a>
+							{#if appState.hostWorkflow.bootstrap.issue === 'body_required'}
+								<a class="ft-button ft-button--primary" href={appState.hostWorkflow.bootstrap.actionHref}>
+									{appState.hostWorkflow.bootstrap.actionLabel}
+								</a>
+							{/if}
 						</section>
-						<SoulBootstrapSigningPanel
-							result={appState.hostWorkflow.result}
-							onUpdated={refreshLiveState}
-						/>
+						{#if showLegacySigningPanel}
+							<SoulBootstrapSigningPanel
+								result={appState.hostWorkflow.result}
+								onUpdated={refreshLiveState}
+							/>
+						{:else}
+							<HostedSoulBootstrapPanel
+								result={appState.hostWorkflow.result}
+								onUpdated={refreshLiveState}
+							/>
+						{/if}
 					{/if}
 
 					{#if currentPage.key === 'identity'}

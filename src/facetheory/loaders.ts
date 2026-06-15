@@ -35,6 +35,7 @@ import type {
 	NexusDashboardData,
 	SoulRequestCenterData,
 } from '$lib/greater/faces/agent';
+import { isHostedSoulBootstrapPublishReady } from '$lib/greater/adapters';
 import type {
 	AgentIdentityCardData as FaceAgentIdentityCardData,
 	AgentLifecycleStep as FaceAgentLifecycleStep,
@@ -1213,6 +1214,9 @@ function createHostWorkflowFromSoulBootstrapResult(
 	const bootstrap = deriveSoulBootstrapUx({
 		result,
 		activeUsername: state?.username ?? result.surface?.username ?? null,
+		hostedPublishReady: isHostedSoulBootstrapPublishReady(state ?? null, {
+			conversationId: state?.hostConversationId ?? null,
+		}),
 	});
 	const transcript = parseBootstrapTranscript(state, bootstrap, signingCheckpoints);
 	const creationReady = Boolean(result.executable && result.hostBridgeAvailable);

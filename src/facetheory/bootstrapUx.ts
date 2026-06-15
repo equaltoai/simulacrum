@@ -10,7 +10,11 @@ import type {
 	SoulRequestCard,
 } from '../lib/api/droneWorkflow.ts';
 import type {
+	HostedSoulBootstrapNextAction,
+	HostedSoulBootstrapRecoveryAction,
+	HostedSoulBootstrapRecoveryCategory,
 	SoulBootstrapActionableError,
+	SoulBootstrapErrorState,
 	SoulBootstrapPhase,
 	SoulBootstrapResult,
 	SoulBootstrapSigningCheckpoint,
@@ -28,13 +32,18 @@ export type SoulBootstrapUxIssue =
 	| 'backend_contract_unsupported'
 	| 'wallet_signature_rejected'
 	| 'conversation_incomplete'
+	| 'declaration_evidence_missing'
 	| 'finalize_expired'
 	| 'binding_conflict'
 	| 'authorization_required'
 	| 'body_required'
 	| 'not_found'
 	| 'validation'
-	| 'backend_error';
+	| 'backend_error'
+	| 'restart_required'
+	| 'retry_same_step'
+	| 'refresh_state'
+	| 'operator_action_required';
 
 export type SoulBootstrapUxTone = 'neutral' | 'accent' | 'success' | 'warning' | 'critical';
 
@@ -54,6 +63,10 @@ export interface SoulBootstrapUxState {
 	finalizeReady: boolean;
 	signingReady: boolean;
 	statusDetail: string;
+	typedNextAction: HostedSoulBootstrapNextAction | null;
+	recoveryCategory: HostedSoulBootstrapRecoveryCategory | null;
+	recoveryAction: HostedSoulBootstrapRecoveryAction | null;
+	hostedPublishReady: boolean;
 }
 
 export interface DeriveSoulBootstrapUxInput {
@@ -61,17 +74,18 @@ export interface DeriveSoulBootstrapUxInput {
 	activeUsername?: string | null;
 	failureIssue?: SoulBootstrapUxIssue;
 	failureMessage?: string | null;
+	hostedPublishReady?: boolean;
 }
 
 const PHASE_LABELS: Record<SoulBootstrapPhase | 'UNAVAILABLE', string> = {
 	UNAVAILABLE: 'Backend unavailable',
-	NOT_STARTED: 'Ready to begin',
-	BEGIN: 'Wallet challenge ready',
-	WALLET_VERIFICATION: 'Wallet verification',
-	PRINCIPAL_DECLARATION: 'Principal declaration',
+	NOT_STARTED: 'Ready to start hosted definition',
+	BEGIN: 'Definition start acknowledged',
+	WALLET_VERIFICATION: 'Wallet assurance upgrade',
+	PRINCIPAL_DECLARATION: 'Principal assurance upgrade',
 	CONVERSATION: 'Genesis conversation',
-	FINALIZE: 'Finalize readiness',
-	COMPLETE: 'Production soul',
+	FINALIZE: 'Review and publish',
+	COMPLETE: 'Hosted soul bound',
 	ERROR: 'Backend action required',
 };
 
@@ -83,10 +97,10 @@ const ISSUE_COPY: Record<SoulBootstrapUxIssue, {
 	tone: SoulBootstrapUxTone;
 }> = {
 	none: {
-		title: 'Sim-led soul creation is available',
+		title: 'Hosted soul definition is available',
 		summary:
-			'Lesser is relaying Project 44 soul-bootstrap state over same-origin GraphQL, so Simulacrum can keep the creation path in-instance without a lesser-host portal detour.',
-		actionLabel: 'Open Genesis Lane',
+			'Lesser is relaying Project 44 hosted/off-chain soul-definition state over same-origin GraphQL. Authority is instance trust; the anchor is hosted/off-chain, mutable and revocable, with immutable/on-chain assurance optional later.',
+		actionLabel: 'Open Hosted Genesis',
 		routeKey: 'genesis',
 		tone: 'accent',
 	},
@@ -137,6 +151,14 @@ const ISSUE_COPY: Record<SoulBootstrapUxIssue, {
 		actionLabel: 'Open Genesis Lane',
 		routeKey: 'genesis',
 		tone: 'warning',
+	},
+	declaration_evidence_missing: {
+		title: 'Hosted declaration evidence is missing',
+		summary:
+			'Lesser reports that hosted publication is next, but the GraphQL surface does not include persisted conversation/declaration evidence. Simulacrum will not publish a hosted soul from a bare conversation id; retry or refresh after Lesser/Host returns declaration evidence.',
+		actionLabel: 'Refresh Hosted State',
+		routeKey: 'genesis',
+		tone: 'critical',
 	},
 	finalize_expired: {
 		title: 'Finalize payload expired',
@@ -194,6 +216,38 @@ const ISSUE_COPY: Record<SoulBootstrapUxIssue, {
 		routeKey: 'identity',
 		tone: 'warning',
 	},
+	restart_required: {
+		title: 'Hosted definition must restart',
+		summary:
+			'Lesser reports that the hosted/off-chain registration is stale or invalid and exposes a typed restart recovery. Restart through Lesser same-origin GraphQL; Simulacrum will not infer Host state or call raw Host routes.',
+		actionLabel: 'Restart Hosted Definition',
+		routeKey: 'genesis',
+		tone: 'warning',
+	},
+	retry_same_step: {
+		title: 'Hosted step can be retried',
+		summary:
+			'Lesser reports a typed retry for the current hosted/off-chain step. Retry the same Lesser GraphQL action without changing wallets, Host credentials, or raw control-plane state.',
+		actionLabel: 'Retry Hosted Step',
+		routeKey: 'genesis',
+		tone: 'warning',
+	},
+	refresh_state: {
+		title: 'Hosted state should refresh',
+		summary:
+			'Lesser reports that the hosted/off-chain projection should be refreshed before continuing. Refresh Simulacrum state rather than reconstructing Host semantics locally.',
+		actionLabel: 'Refresh Hosted State',
+		routeKey: 'identity',
+		tone: 'warning',
+	},
+	operator_action_required: {
+		title: 'Operator action required',
+		summary:
+			'Lesser reports that the instance operator must repair the server-side hosted bridge before soul definition can continue. The browser must not receive Host control-plane tokens or instance keys.',
+		actionLabel: 'Refresh After Operator Action',
+		routeKey: 'identity',
+		tone: 'critical',
+	},
 };
 
 export function deriveSoulBootstrapUx({
@@ -201,15 +255,34 @@ export function deriveSoulBootstrapUx({
 	activeUsername,
 	failureIssue,
 	failureMessage,
+	hostedPublishReady: hostedPublishReadyInput = false,
 }: DeriveSoulBootstrapUxInput): SoulBootstrapUxState {
-	const issue = result?.error
-		? issueFromActionableError(result.error)
+	const username = activeUsername?.trim() || result?.surface?.username || result?.state?.username || null;
+	const isProductionSoul = isProductionSoulBootstrapResult(result);
+	const typedNextAction = typedNextActionFromResult(result);
+	const recoveryCategory = recoveryCategoryFromResult(result);
+	const recoveryAction = recoveryActionFromResult(result);
+	const hostedMode = isHostedBootstrapResult(result);
+	const actionableError = result?.error ?? result?.state?.error ?? result?.surface?.error ?? null;
+	const hostedPublishCandidateReady = hostedMode && hostedPublishReadyInput;
+	let issue = actionableError
+		? issueFromActionableError(actionableError, hostedMode)
 		: result && isHostBridgeUnavailableIssue(result)
 			? 'host_unavailable'
 			: failureIssue ?? 'none';
+	if (
+		issue === 'none' &&
+		hostedMode &&
+		typedNextAction === 'PUBLISH_HOSTED_SOUL' &&
+		!hostedPublishCandidateReady
+	) {
+		issue = 'declaration_evidence_missing';
+	}
 	const phase = result?.state?.phase ?? (issue === 'none' && result ? 'NOT_STARTED' : 'UNAVAILABLE');
-	const username = activeUsername?.trim() || result?.surface?.username || result?.state?.username || null;
-	const isProductionSoul = isProductionSoulBootstrapResult(result);
+	const hostedPublishReady = hostedPublishCandidateReady && issue === 'none';
+	const conversationVisible = phase === 'CONVERSATION' || hostedPublishReady;
+	const finalizeReady = !hostedMode && phase === 'FINALIZE';
+	const signingReady = !hostedMode && isSoulBootstrapSigningPhase(phase);
 
 	if (isProductionSoul) {
 		const soulAgentId =
@@ -221,24 +294,28 @@ export function deriveSoulBootstrapUx({
 			issue: 'none',
 			phase,
 			stateLabel: PHASE_LABELS.COMPLETE,
-			title: 'Production soul is active',
-			summary: `Lesser reports hosted/off-chain finalization is complete and bound to ${soulAgentId}. Simulacrum treats that as production soul state and keeps continuity on the Identity Nexus.`,
+			title: 'Hosted/off-chain soul is active',
+			summary: `Lesser reports hosted/off-chain publication is complete and bound to ${soulAgentId}. Authority is instance trust; the hosted/off-chain anchor remains mutable and revocable, and immutable/on-chain assurance is optional later.`,
 			actionLabel: 'Inspect Identity Nexus',
 			actionHref: pageHref('identity', username),
-			actionDetail: 'Hosted/off-chain publication is accepted once finalized and bound.',
+			actionDetail: 'Hosted/off-chain publication is accepted once Lesser reports the soul bound.',
 			routeKey: 'identity',
 			tone: 'success',
 			isProductionSoul: true,
 			conversationVisible: true,
 			finalizeReady: false,
 			signingReady: false,
-			statusDetail: 'hosted/off-chain soul bound',
+			statusDetail: assuranceStatusDetail(result),
+			typedNextAction,
+			recoveryCategory,
+			recoveryAction,
+			hostedPublishReady: false,
 		};
 	}
 
 	if (issue !== 'none') {
 		const copy = ISSUE_COPY[issue];
-		const detail = result?.error?.message ??
+		const detail = actionableError?.message ??
 			(issue === 'body_required' || issue === 'authorization_required' ? null : failureMessage);
 		return {
 			issue,
@@ -252,10 +329,14 @@ export function deriveSoulBootstrapUx({
 			routeKey: copy.routeKey,
 			tone: copy.tone,
 			isProductionSoul: false,
-			conversationVisible: phase === 'CONVERSATION',
-			finalizeReady: phase === 'FINALIZE',
-			signingReady: isSoulBootstrapSigningPhase(phase),
-			statusDetail: result?.state?.state ?? result?.error?.code ?? issue.replaceAll('_', ' '),
+			conversationVisible,
+			finalizeReady,
+			signingReady,
+			statusDetail: result?.state?.state ?? actionableError?.code ?? issue.replaceAll('_', ' '),
+			typedNextAction,
+			recoveryCategory,
+			recoveryAction,
+			hostedPublishReady,
 		};
 	}
 
@@ -272,10 +353,16 @@ export function deriveSoulBootstrapUx({
 		routeKey: normal.routeKey,
 		tone: normal.tone,
 		isProductionSoul: false,
-		conversationVisible: phase === 'CONVERSATION',
-		finalizeReady: phase === 'FINALIZE',
-		signingReady: isSoulBootstrapSigningPhase(phase),
-		statusDetail: result?.nextAction ?? result?.state?.state ?? 'same-origin GraphQL state loaded',
+		conversationVisible,
+		finalizeReady,
+		signingReady,
+		statusDetail: hostedMode
+			? assuranceStatusDetail(result)
+			: result?.nextAction ?? result?.state?.state ?? 'same-origin GraphQL state loaded',
+		typedNextAction,
+		recoveryCategory,
+		recoveryAction,
+		hostedPublishReady,
 	};
 }
 
@@ -319,6 +406,102 @@ export function isProductionSoulBootstrapResult(result: SoulBootstrapResult | nu
 		result.surface?.existingSoulAgentId ?? result.state.publication?.agentId ?? result.state.hostSoulAgentId
 	);
 	return phaseComplete && (bound || hasSoulId);
+}
+
+export function typedNextActionFromResult(
+	result: SoulBootstrapResult | null
+): HostedSoulBootstrapNextAction | null {
+	const candidate =
+		(result as { typedNextAction?: HostedSoulBootstrapNextAction | null } | null)?.typedNextAction ??
+		result?.surface?.typedNextAction ??
+		result?.state?.typedNextAction ??
+		null;
+	return candidate ?? null;
+}
+
+function recoveryCategoryFromResult(
+	result: SoulBootstrapResult | null
+): HostedSoulBootstrapRecoveryCategory | null {
+	const candidate =
+		(result as { recoveryCategory?: HostedSoulBootstrapRecoveryCategory | null } | null)
+			?.recoveryCategory ??
+		result?.surface?.recoveryCategory ??
+		result?.state?.recoveryCategory ??
+		result?.error?.recoveryCategory ??
+		null;
+	return candidate ?? null;
+}
+
+function recoveryActionFromResult(
+	result: SoulBootstrapResult | null
+): HostedSoulBootstrapRecoveryAction | null {
+	const candidate =
+		(result as { recoveryAction?: HostedSoulBootstrapRecoveryAction | null } | null)
+			?.recoveryAction ??
+		result?.surface?.recoveryAction ??
+		result?.state?.recoveryAction ??
+		result?.error?.recoveryAction ??
+		null;
+	return candidate ?? null;
+}
+
+function isHostedBootstrapResult(result: SoulBootstrapResult | null): boolean {
+	if (!result?.state) return true;
+	if (result.state.bootstrapMode === 'HOSTED') return true;
+	const typedNextAction = typedNextActionFromResult(result);
+	return Boolean(typedNextAction && [
+		'START_HOSTED_BOOTSTRAP',
+		'SEND_HOSTED_SOUL_GENESIS_MESSAGE',
+		'COMPLETE_HOSTED_SOUL_GENESIS',
+		'PUBLISH_HOSTED_SOUL',
+	].includes(typedNextAction));
+}
+
+function assuranceStatusDetail(result: SoulBootstrapResult | null): string {
+	const state = result?.state;
+	const base = [
+		'authority: instance trust',
+		'anchor: hosted/off-chain',
+		'mutable/revocable: yes',
+		'immutable/on-chain: no',
+	].join(' · ');
+	const nextAction = typedNextActionFromResult(result);
+	const suffix = nextAction && nextAction !== 'COMPLETE'
+		? ` · next: ${formatEnumLabel(nextAction)}`
+		: '';
+	const stateSuffix = state?.state ? ` · state: ${state.state}` : '';
+	return `${base}${suffix}${stateSuffix}`;
+}
+
+function issueFromRecovery(
+	category?: HostedSoulBootstrapRecoveryCategory | null,
+	action?: HostedSoulBootstrapRecoveryAction | null
+): SoulBootstrapUxIssue | null {
+	switch (category) {
+		case 'RESTART_REQUIRED':
+			return 'restart_required';
+		case 'RETRY_SAME_STEP':
+			return 'retry_same_step';
+		case 'REFRESH_STATE':
+			return 'refresh_state';
+		case 'OPERATOR_ACTION_REQUIRED':
+			return 'operator_action_required';
+		default:
+			break;
+	}
+
+	switch (action) {
+		case 'RESTART_BOOTSTRAP':
+			return 'restart_required';
+		case 'RETRY_SAME_STEP':
+			return 'retry_same_step';
+		case 'REFRESH_STATE':
+			return 'refresh_state';
+		case 'CONTACT_OPERATOR':
+			return 'operator_action_required';
+		default:
+			return null;
+	}
 }
 
 export function buildSoulBootstrapAction(ux: SoulBootstrapUxState): AgentFaceAction {
@@ -443,24 +626,30 @@ export function buildSoulBootstrapGraduation(
 	ux: SoulBootstrapUxState,
 	checkpoints: readonly SoulBootstrapSigningCheckpoint[]
 ) {
-	if (!ux.finalizeReady && !ux.isProductionSoul && ux.issue !== 'wallet_signature_rejected') return null;
+	if (!ux.finalizeReady && !ux.hostedPublishReady && !ux.isProductionSoul && ux.issue !== 'wallet_signature_rejected') return null;
 	const completed = checkpoints.filter((checkpoint) => signerStatusFromCheckpoint(checkpoint) === 'approved').length;
 	const readiness: DroneGraduationReadiness = ux.isProductionSoul
 		? 'ready'
+		: ux.hostedPublishReady
+			? 'ready'
 		: ux.issue === 'wallet_signature_rejected'
 			? 'hold'
 			: 'watch';
 	return {
 		id: `bootstrap-graduation-${ux.phase.toLowerCase()}`,
-		title: ux.isProductionSoul ? 'Hosted/off-chain soul finalized' : 'Finalize readiness',
+		title: ux.isProductionSoul || ux.hostedPublishReady ? 'Hosted/off-chain soul publication' : 'Finalize readiness',
 		readiness,
 		summary: ux.summary,
 		launchOwner: undefined,
 		completedMilestones: ux.isProductionSoul
 			? ['same-origin bridge', 'hosted/off-chain publication', 'Lesser binding']
+			: ux.hostedPublishReady
+				? ['same-origin bridge', 'genesis conversation', 'declaration review']
 			: ['same-origin bridge', 'conversation state', `${completed} signer checkpoint${completed === 1 ? '' : 's'} complete`],
 		exitCriteria: ux.isProductionSoul
 			? ['Inspect continuity on Identity Nexus']
+			: ux.hostedPublishReady
+				? ['Publish hosted/off-chain soul through Lesser']
 			: ['Review Lesser-provided signing material', 'Wait for M4.3 interactive signing controls'],
 		nextStep: ux.actionLabel,
 		metrics: [
@@ -504,7 +693,9 @@ export function buildSoulBootstrapConversationMessages({
 		id: `bootstrap-${ux.phase.toLowerCase()}-state`,
 		role: 'system' as const,
 		label: 'Lesser',
-		content: ux.conversationVisible
+		content: ux.hostedPublishReady
+			? 'Lesser reports hosted genesis is complete. Review generated declaration evidence and publish the hosted/off-chain soul from Simulacrum; no wallet signing prompt is required.'
+			: ux.conversationVisible
 			? 'Lesser has routed this local body into the same-origin mint conversation. Continue from /l/souls/genesis; Simulacrum remains the canonical UX.'
 			: ux.finalizeReady
 				? 'Lesser reports the mint conversation is complete and finalize readiness belongs on /l/approvals.'
@@ -513,8 +704,16 @@ export function buildSoulBootstrapConversationMessages({
 	}];
 }
 
-function issueFromActionableError(error: SoulBootstrapActionableError): SoulBootstrapUxIssue {
-	switch (error.category) {
+function issueFromActionableError(
+	error: SoulBootstrapActionableError | SoulBootstrapErrorState,
+	hostedMode: boolean
+): SoulBootstrapUxIssue {
+	if (hostedMode) {
+		const recoveryIssue = issueFromRecovery(error.recoveryCategory, error.recoveryAction);
+		if (recoveryIssue) return recoveryIssue;
+	}
+	const category = 'category' in error ? error.category : categoryFromErrorState(error);
+	switch (category) {
 		case 'missing_trust':
 			return 'host_trust_not_configured';
 		case 'missing_instance_key':
@@ -550,15 +749,36 @@ function issueFromActionableError(error: SoulBootstrapActionableError): SoulBoot
 	}
 }
 
+function categoryFromErrorState(error: SoulBootstrapErrorState): SoulBootstrapActionableError['category'] {
+	const normalized = normalizeText(`${error.code} ${error.message} ${error.source ?? ''}`);
+	if (includesAny(normalized, ['missing trust', 'trust not configured'])) return 'missing_trust';
+	if (includesAny(normalized, ['missing instance key', 'instance key missing'])) return 'missing_instance_key';
+	if (includesAny(normalized, ['signature rejected', 'invalid signature', 'signature mismatch'])) return 'signature_rejection';
+	if (includesAny(normalized, ['conversation incomplete'])) return 'incomplete_conversation';
+	if (includesAny(normalized, ['finalize expired'])) return 'finalize_expiry';
+	if (includesAny(normalized, ['binding conflict'])) return 'binding_conflict';
+	if (error.statusCode === 401 || error.statusCode === 403) return 'unauthorized';
+	if (error.statusCode === 404) return 'not_found';
+	if (error.statusCode === 400 || error.statusCode === 422) return 'validation';
+	if ((error.statusCode ?? 0) >= 500) return 'host_unavailable';
+	return 'backend_error';
+}
+
 function normalPhaseCopy(phase: SoulBootstrapPhase | 'UNAVAILABLE', result: SoulBootstrapResult | null) {
+	const typedNextAction = typedNextActionFromResult(result);
+	const hostedMode = isHostedBootstrapResult(result);
 	switch (phase) {
 		case 'NOT_STARTED':
 			return {
-				title: 'Start Sim-led soul creation',
+				title: hostedMode ? 'Start hosted soul definition' : 'Start Sim-led soul creation',
 				summary:
-					'Lesser reports that the same-origin soul-bootstrap bridge is available for this unsouled local body. Begin from Simulacrum and keep the user on the in-instance creation path.',
-				actionLabel: 'Open Genesis Lane',
-				actionDetail: 'Begin the visible creation path at /l/souls/genesis.',
+					hostedMode
+						? 'Lesser reports that hosted/off-chain soul definition is ready for this local body. Start from Simulacrum with instance trust authority; no selected wallet, browser signing prompt, Host token, or Host instance key is required.'
+						: 'Lesser reports that the same-origin soul-bootstrap bridge is available for this unsouled local body. Begin from Simulacrum and keep the user on the in-instance creation path.',
+				actionLabel: hostedMode ? 'Start Hosted Definition' : 'Open Genesis Lane',
+				actionDetail: hostedMode
+					? 'Default authority: instance trust · anchor: hosted/off-chain · mutable/revocable: yes · immutable/on-chain: no.'
+					: 'Begin the visible creation path at /l/souls/genesis.',
 				routeKey: 'genesis' as const,
 				tone: 'accent' as const,
 			};
@@ -573,11 +793,28 @@ function normalPhaseCopy(phase: SoulBootstrapPhase | 'UNAVAILABLE', result: Soul
 				tone: 'warning' as const,
 			};
 		case 'CONVERSATION':
+			if (typedNextAction === 'PUBLISH_HOSTED_SOUL') {
+				return {
+					title: 'Publish hosted/off-chain soul',
+					summary:
+						'Lesser reports that hosted genesis is complete. Review the generated evidence and publish the hosted/off-chain soul through Lesser same-origin GraphQL; immutable/on-chain assurance remains an optional later upgrade.',
+					actionLabel: 'Publish Hosted Soul',
+					actionDetail: 'Authority: instance trust · anchor: hosted/off-chain · mutable/revocable: yes.',
+					routeKey: 'genesis' as const,
+					tone: 'accent' as const,
+				};
+			}
 			return {
-				title: 'Genesis conversation is ready',
+				title: typedNextAction === 'COMPLETE_HOSTED_SOUL_GENESIS'
+					? 'Review hosted genesis declarations'
+					: 'Genesis conversation is ready',
 				summary:
-					'Lesser has routed this body to the mint conversation phase. Continue in /l/souls/genesis; Simulacrum is the canonical UX and Lesser remains the same-origin backend.',
-				actionLabel: 'Open Genesis Lane',
+					hostedMode
+						? 'Lesser has routed this body into the hosted/off-chain genesis conversation. Continue from Simulacrum; the declaration review and publication steps use the typed hosted next action from Lesser/Greater.'
+						: 'Lesser has routed this body to the mint conversation phase. Continue in /l/souls/genesis; Simulacrum is the canonical UX and Lesser remains the same-origin backend.',
+				actionLabel: typedNextAction === 'COMPLETE_HOSTED_SOUL_GENESIS'
+					? 'Review Declarations'
+					: 'Open Genesis Lane',
 				actionDetail: result?.state?.hostConversationId
 					? `Conversation ${result.state.hostConversationId}`
 					: 'Conversation phase is visible in Simulacrum.',
@@ -596,6 +833,17 @@ function normalPhaseCopy(phase: SoulBootstrapPhase | 'UNAVAILABLE', result: Soul
 				tone: 'warning' as const,
 			};
 		case 'FINALIZE':
+			if (hostedMode) {
+				return {
+					title: 'Publish hosted/off-chain soul',
+					summary:
+						'Lesser reports that hosted genesis is complete. Review the generated evidence and publish the hosted/off-chain soul through Lesser same-origin GraphQL; immutable/on-chain assurance remains an optional later upgrade.',
+					actionLabel: 'Publish Hosted Soul',
+					actionDetail: 'Authority: instance trust · anchor: hosted/off-chain · mutable/revocable: yes.',
+					routeKey: 'genesis' as const,
+					tone: 'accent' as const,
+				};
+			}
 			return {
 				title: 'Finalize signing is ready',
 				summary:
@@ -641,7 +889,8 @@ function isHostBridgeUnavailableIssue(result: SoulBootstrapResult): boolean {
 	if (result.hostBridgeAvailable !== false) return false;
 	const phase = result.state?.phase;
 	const nextAction = result.nextAction?.trim() ?? '';
-	if (phase === 'NOT_STARTED' && (nextAction === '' || nextAction === 'begin')) {
+	const typedNextAction = typedNextActionFromResult(result);
+	if (phase === 'NOT_STARTED' && (typedNextAction === 'START_HOSTED_BOOTSTRAP' || nextAction === '' || nextAction === 'begin' || nextAction === 'start_hosted_bootstrap')) {
 		return false;
 	}
 	return true;
@@ -656,6 +905,7 @@ function isSoulBootstrapSigningPhase(phase: SoulBootstrapPhase | 'UNAVAILABLE'):
 
 function workflowPhaseFromBootstrap(ux: SoulBootstrapUxState): DroneWorkflowPhase {
 	if (ux.isProductionSoul) return 'continuity';
+	if (ux.hostedPublishReady) return 'graduation';
 	if (ux.conversationVisible) return 'declaration';
 	if (ux.signingReady) return 'signing';
 	if (ux.finalizeReady) return 'graduation';
@@ -667,6 +917,7 @@ function workflowStateFromBootstrap(ux: SoulBootstrapUxState): DroneWorkflowStat
 	if (ux.isProductionSoul) return 'continuity.stable';
 	if (ux.issue === 'wallet_signature_rejected' || ux.issue === 'binding_conflict') return 'review.blocked';
 	if (ux.issue !== 'none') return 'review.queued';
+	if (ux.hostedPublishReady) return 'graduation.ready';
 	if (ux.finalizeReady) return 'graduation.ready';
 	if (ux.signingReady) return 'signing.pending';
 	if (ux.conversationVisible) return 'declaration.ready';
@@ -774,6 +1025,10 @@ function titleCase(value: string): string {
 		.filter(Boolean)
 		.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
 		.join(' ');
+}
+
+function formatEnumLabel(value: string): string {
+	return titleCase(value.toLowerCase().replaceAll('_', ' '));
 }
 
 function initials(value: string): string {

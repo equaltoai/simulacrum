@@ -69,7 +69,8 @@ test('browser Host workflow bridge cannot be enabled with build-time env', async
 	assert.doesNotMatch(rolloutSource, /VITE_SIMULACRUM_ENABLE_HOST_WORKFLOW_BRIDGE/);
 	assert.doesNotMatch(rolloutSource, /When the flag is enabled/);
 	assert.doesNotMatch(rolloutSource, /prefer enabling the host workflow bridge/);
-	assert.match(rolloutSource, /Greater `greater-v0\.10\.4` soul-bootstrap/);
+	assert.match(rolloutSource, /Greater `greater-v0\.10\.6`/);
+	assert.match(rolloutSource, /terminal hosted-declaration evidence helpers/);
 	assert.match(rolloutSource, /M4\.2 route-lane/);
 	assert.match(rolloutSource, /M4\.3 signing-control boundary/);
 	assert.match(rolloutSource, /no deploy\/install environment variable is a supported way/);
@@ -277,6 +278,7 @@ test('CSR-016: natural-language strings survive redactUnknown unchanged', () => 
 test('Project 44 production bootstrap path has no browser Host credential storage or raw Host write imports', async () => {
 	const productionPaths = [
 		'../../../src/facetheory/App.svelte',
+		'../../../src/facetheory/components/HostedSoulBootstrapPanel.svelte',
 		'../../../src/facetheory/components/SoulBootstrapSigningPanel.svelte',
 		'../../../src/facetheory/bootstrapSigning.ts',
 		'../../../src/facetheory/loaders.ts',

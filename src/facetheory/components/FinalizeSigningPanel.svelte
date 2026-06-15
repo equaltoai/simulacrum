@@ -85,7 +85,7 @@
 
 			const selfAttestation = await personalSign(provider, {
 				address: wallet,
-				message: begin.digest_hex,
+				message: requireDigestHex(begin.digest_hex, 'final self-attestation'),
 			});
 
 			const hostResult = await finalizeAgentMintConversation({
@@ -134,7 +134,7 @@
 		for (const requirement of begin.boundary_requirements ?? []) {
 			signatures[requirement.boundary_id] = await personalSign(provider, {
 				address: wallet,
-				message: requirement.digest_hex,
+				message: requireDigestHex(requirement.digest_hex, `boundary ${requirement.boundary_id}`),
 			});
 		}
 		return signatures;
@@ -214,6 +214,14 @@
 			conversationId,
 			soulAgentId,
 		};
+	}
+
+	function requireDigestHex(value: string | undefined, label: string): string {
+		const digest = value?.trim() ?? '';
+		if (!digest) {
+			throw new Error(`Host finalize preflight did not return digest_hex for ${label}.`);
+		}
+		return digest;
 	}
 </script>
 

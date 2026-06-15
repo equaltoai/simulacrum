@@ -204,3 +204,77 @@ Sim keeps the operator in the same-origin flow, shows the latest Lesser message,
 refreshes after mutation failures, and exposes restart/re-sign recovery before
 final binding. It will adopt richer error categories when Lesser/Host expose
 them.
+
+## Upstream issue draft: hosted genesis conversation must stream and persist declaration evidence
+
+### Target repos
+
+`equaltoai/lesser-host` and `equaltoai/lesser`
+
+### Observed in sim
+
+TheoryLive hosted-first bootstrap for `@della-marlowe` reached the hosted
+genesis step and Lesser called Host request
+`ffb29fc0034bbed2c4a686f38aea6d47` against:
+
+```text
+POST /api/v1/soul/instance/agents/register/{registrationId}/mint-conversation
+Accept: text/event-stream
+```
+
+Host returned HTTP 200 quickly, but Lesser saw no terminal
+`conversation_done` SSE event and surfaced `HOST_RESPONSE_INVALID` /
+`Host bootstrap response is invalid.` Host state contained a mint conversation
+id, but the conversation remained `in_progress` with empty messages and empty
+produced declarations. That means the user-visible "genesis conversation" never
+actually happened.
+
+### Evidence
+
+- `lesser/pkg/services/souls/bootstrap.go` consumes the Host instance route as
+  SSE and requires a terminal `conversation_done` event before returning
+  `BootstrapConversationMessageResult`.
+- `lesser-host/internal/controlplane/handlers_soul_instance_bootstrap.go`
+  delegates the instance-key route to `handleSoulMintConversationForRegistration`.
+- `lesser-host/internal/controlplane/handlers_soul_mint_conversation.go` returns
+  `apptheory.SSEStreamResponse(...)` for that route and starts the LLM work in a
+  goroutine.
+- `lesser-host/cdk/lib/lesser-host-stack.ts` documents that AppTheory SSE works
+  through the REST API behavior, not HttpApi, and attaches the SSE CloudFront
+  behavior for:
+  - `api/v1/soul/agents/register/*/mint-conversation*`
+  - `api/v1/soul/agents/*/mint-conversation*`
+- The instance-key route used by Lesser is missing from that SSE behavior list:
+  - `api/v1/soul/instance/agents/register/*/mint-conversation*`
+
+### Expected upstream contract
+
+1. `lesser-host` should route the instance-key mint-conversation path through
+   the same SSE-capable REST API/CloudFront behavior as the portal-auth
+   mint-conversation paths, or provide a first-class non-streaming server-to-
+   server endpoint for Lesser that performs the LLM turn, persists transcript and
+   produced declaration material, and returns JSON.
+2. `lesser-host` must not leave a new conversation as `in_progress` with empty
+   messages/declarations after a nominal HTTP 200. A generation failure should
+   persist `failed` and return/emit a typed error.
+3. `lesser` should fail closed unless it receives terminal conversation evidence.
+   Once Host completion succeeds, Lesser should carry the produced declarations
+   in GraphQL state, not only a generic "completed" placeholder.
+4. `publishHostedSoul` should require persisted declaration evidence for the
+   hosted path, not merely a registration id and conversation id.
+
+### Why this is upstream
+
+Simulacrum cannot make the conversation happen in the browser without violating
+the GraphQL-first and no-Host-credentials boundaries. The missing stream and
+missing declaration evidence live at the Host route/infra and Lesser
+state-projection boundary.
+
+### Sim workaround posture
+
+Sim now fails closed at the UI boundary using the released Greater v0.10.6
+hosted-declaration helpers: if Lesser says hosted publication is next but does
+not return persisted conversation/declaration evidence for the active
+conversation id, the hosted publish action is blocked and labeled as missing
+evidence. This prevents another fake "publish" step, but it does not repair the
+upstream generation path. The real fix belongs in `lesser-host`/`lesser`.
