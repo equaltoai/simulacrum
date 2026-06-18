@@ -1,6 +1,7 @@
 import type { Page, Route } from '@playwright/test';
 
 import {
+	createProject44SoulBootstrapErrorState,
 	project44SoulBootstrapFixtures,
 	project44SoulBootstrapIds,
 	project44SoulBootstrapSigning,
@@ -171,6 +172,45 @@ export function createProject44HostedGenesisCompleteWithoutEvidenceSurface(): So
 				}
 			: surface.workflow,
 	} satisfies SoulBootstrapSurface;
+}
+
+export function createProject44HostedRefreshStateSurface({
+	hostConversationId = project44SoulBootstrapIds.conversationId,
+}: {
+	hostConversationId?: string | null;
+} = {}): SoulBootstrapSurface {
+	return createProject44SoulBootstrapSurface({
+		phase: 'ERROR',
+		state: 'hosted_refresh_state_required',
+		bootstrapMode: 'HOSTED',
+		authorityModel: 'INSTANCE_TRUST',
+		anchorState: 'HOSTED_OFFCHAIN',
+		assuranceState: 'HOSTED_OFFCHAIN',
+		typedNextAction: 'REFRESH_STATE',
+		nextAction: 'refresh_state',
+		executable: true,
+		hostBridgeAvailable: true,
+		recoveryCategory: 'REFRESH_STATE',
+		recoveryAction: 'REFRESH_STATE',
+		retryable: true,
+		restartRequired: false,
+		restartAvailable: false,
+		recoveryAttemptId: project44SoulBootstrapIds.recoveryAttemptId,
+		hostRegistrationId: project44SoulBootstrapIds.registrationId,
+		hostConversationId,
+		walletAddress: null,
+		principalAddress: null,
+		error: createProject44SoulBootstrapErrorState({
+			code: 'HOSTED_REFRESH_STATE_REQUIRED',
+			message: 'Hosted genesis conversation state is stale; refresh hosted declaration evidence.',
+			source: 'lesser',
+			statusCode: 409,
+			recoveryCategory: 'REFRESH_STATE',
+			recoveryAction: 'REFRESH_STATE',
+			retryable: true,
+			restartRequired: false,
+		}),
+	});
 }
 
 function buildIdentitySemantics(soulBindingState: 'UNBOUND' | 'BOUND' = 'UNBOUND') {
@@ -552,6 +592,7 @@ export async function installProject44Routes(
 		initialSurface?: SoulBootstrapFixtureKey | SoulBootstrapSurface;
 		myAgents?: 'fixture' | 'multiple' | 'none';
 		rejectConversationMessageWithMissingRegistration?: boolean;
+		rejectHostedGenesisComplete?: boolean;
 		rejectPrincipalVerification?: boolean;
 	} = {}
 ) {
@@ -644,9 +685,39 @@ export async function installProject44Routes(
 			case 'PrepareSoulBootstrapFinalize':
 			case 'FinalizeSoulBootstrap':
 			case 'StartHostedSoulBootstrap':
-			case 'CompleteHostedSoulGenesis':
 			case 'PublishHostedSoul':
 			case 'RestartSoulBootstrap': {
+				currentSurface = resolveProject44Surface(MUTATION_NEXT_SURFACE[operationName]);
+				await route.fulfill(jsonResponse({
+					data: {
+						[OPERATION_RESPONSE_FIELD[operationName]]: payloadForSurface(currentSurface),
+					},
+				}));
+				return;
+			}
+			case 'CompleteHostedSoulGenesis': {
+				if (options.rejectHostedGenesisComplete) {
+					const mutationError = createProject44SoulBootstrapErrorState({
+						code: 'HOSTED_REFRESH_RECONCILE_FAILED',
+						message: 'conversation is not in progress',
+						source: 'lesser-host',
+						statusCode: 409,
+						recoveryCategory: 'REFRESH_STATE',
+						recoveryAction: 'REFRESH_STATE',
+						retryable: true,
+						restartRequired: false,
+					});
+					await route.fulfill(jsonResponse({
+						data: {
+							completeHostedSoulGenesis: {
+								...payloadForSurface(currentSurface),
+								executable: false,
+								error: mutationError,
+							},
+						},
+					}));
+					return;
+				}
 				currentSurface = resolveProject44Surface(MUTATION_NEXT_SURFACE[operationName]);
 				await route.fulfill(jsonResponse({
 					data: {
