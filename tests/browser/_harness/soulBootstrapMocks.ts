@@ -213,6 +213,30 @@ export function createProject44HostedRefreshStateSurface({
 	});
 }
 
+export function createProject44NullableArrayHostedRefreshStateSurface(): SoulBootstrapSurface {
+	const surface = createProject44HostedRefreshStateSurface();
+	return {
+		...surface,
+		state: surface.state
+			? {
+					...surface.state,
+					signingCheckpoints: null,
+				}
+			: surface.state,
+		workflow: surface.workflow
+			? {
+					...surface.workflow,
+					soulBootstrap: surface.workflow.soulBootstrap
+						? {
+								...surface.workflow.soulBootstrap,
+								signingCheckpoints: null,
+							}
+						: surface.workflow.soulBootstrap,
+				}
+			: surface.workflow,
+	} as unknown as SoulBootstrapSurface;
+}
+
 function buildIdentitySemantics(soulBindingState: 'UNBOUND' | 'BOUND' = 'UNBOUND') {
 	return {
 		identityState: soulBindingState === 'BOUND' ? 'souled' : 'drone',
@@ -227,6 +251,95 @@ function buildIdentitySemantics(soulBindingState: 'UNBOUND' | 'BOUND' = 'UNBOUND
 		memoryReferencesPreserved: true,
 		attributionLabel: 'Project 44 continuity',
 		moderationLabel: 'Deterministic browser fixture',
+	};
+}
+
+function createProject44NullableArrayDroneWorkflow() {
+	const actor = {
+		id: 'reviewer-project-44',
+		name: 'Project 44 Reviewer',
+		role: 'instance steward',
+		handle: '@project44-reviewer',
+		avatarLabel: 'P4',
+		statusLabel: 'checking',
+	};
+	return {
+		__typename: 'AgentWorkflowSurface',
+		username: project44SoulBootstrapIds.username,
+		currentPhase: 'declaration',
+		currentState: 'declaration.null-array-contract',
+		identity: {
+			id: project44SoulBootstrapIds.bodyId,
+			name: 'Agent Zero',
+			handle: `@${project44SoulBootstrapIds.username}`,
+			summary: 'Null-array contract fixture for Project 44.',
+			currentPhase: 'declaration',
+			currentState: 'declaration.null-array-contract',
+			steward: actor,
+			tags: null,
+			metrics: null,
+		},
+		request: {
+			id: 'request-null-array-contract',
+			title: 'Null-array contract request',
+			summary: 'List-like request fields are intentionally null.',
+			requestedBy: actor,
+			submittedAt: DEFAULT_TIMESTAMP,
+			constraints: null,
+			artifacts: null,
+			routeDecision: 'sim.null-array-contract',
+			currentState: 'request.submitted',
+		},
+		review: {
+			id: 'review-null-array-contract',
+			title: 'Null-array contract review',
+			decision: 'approved',
+			reviewer: actor,
+			decisionSummary: 'Null list-like fields must normalize before rendering.',
+			findings: null,
+			evidence: null,
+		},
+		declaration: {
+			id: 'declaration-null-array-contract',
+			title: 'Null-array declaration',
+			statement: 'Sim must render this declaration while nullable arrays are null.',
+			confidence: 'contract-conformance',
+			owner: actor,
+			declaredScope: null,
+			risks: null,
+			supportingArtifacts: null,
+		},
+		checkpoint: {
+			id: 'checkpoint-null-array-contract',
+			title: 'Null-array checkpoint',
+			readinessLabel: 'Checking nullable checkpoint signers',
+			approvalMemo: null,
+			dueAt: null,
+			signers: null,
+		},
+		graduation: {
+			id: 'graduation-null-array-contract',
+			title: 'Null-array graduation',
+			readiness: 'watch',
+			summary: 'Graduation list-like fields are intentionally null.',
+			launchOwner: actor,
+			completedMilestones: null,
+			exitCriteria: null,
+			nextStep: null,
+			metrics: null,
+		},
+		continuity: {
+			id: 'continuity-null-array-contract',
+			title: 'Null-array continuity',
+			objective: 'Keep identity visible while nullable arrays are absent.',
+			owner: actor,
+			feedbackLoop: 'Browser fixture asserts render and refresh do not throw.',
+			metrics: null,
+			followUps: null,
+		},
+		lifecycle: null,
+		conversation: null,
+		identitySemantics: buildIdentitySemantics(),
 	};
 }
 
@@ -590,6 +703,7 @@ export async function installProject44Routes(
 	page: Page,
 	options: {
 		initialSurface?: SoulBootstrapFixtureKey | SoulBootstrapSurface;
+		droneWorkflow?: 'none' | 'nullable-arrays';
 		myAgents?: 'fixture' | 'multiple' | 'none';
 		rejectConversationMessageWithMissingRegistration?: boolean;
 		rejectHostedGenesisComplete?: boolean;
@@ -665,7 +779,13 @@ export async function installProject44Routes(
 				}));
 				return;
 			case 'DroneWorkflow':
-				await route.fulfill(jsonResponse({ data: { droneWorkflow: null } }));
+				await route.fulfill(jsonResponse({
+					data: {
+						droneWorkflow: options.droneWorkflow === 'nullable-arrays'
+							? createProject44NullableArrayDroneWorkflow()
+							: null,
+					},
+				}));
 				return;
 			case 'SoulBootstrap':
 				await route.fulfill(jsonResponse({ data: { soulBootstrap: currentSurface } }));

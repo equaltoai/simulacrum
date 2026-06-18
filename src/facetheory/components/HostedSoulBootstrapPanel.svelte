@@ -20,6 +20,7 @@
 		type HostedSoulBootstrapTerminalDeclarationEvidence,
 	} from '$lib/greater/adapters';
 
+	import { arrayOrEmpty } from '../nullability';
 	import { getPageHref } from '../routing';
 
 	interface Props {
@@ -551,7 +552,7 @@
 			updatedAt: state.updatedAt ?? null,
 			errorCode: state.error?.code ?? source?.error?.code ?? null,
 			errorMessage: state.error?.message ?? source?.error?.message ?? null,
-			checkpoints: state.signingCheckpoints.map((checkpoint) => ({
+			checkpoints: arrayOrEmpty(state.signingCheckpoints).map((checkpoint) => ({
 				name: checkpoint.name,
 				status: checkpoint.status,
 				hostRequestId: checkpoint.hostRequestId ?? null,
@@ -632,7 +633,7 @@
 		if (statement && statement !== 'Host mint conversation completed and produced declaration material.') {
 			return statement;
 		}
-		const checkpoint = source?.state?.signingCheckpoints.find((candidate) =>
+		const checkpoint = arrayOrEmpty(source?.state?.signingCheckpoints).find((candidate) =>
 			candidate.name.toLowerCase().includes('conversation') &&
 			(candidate.canonicalJson?.trim() || candidate.message?.trim())
 		);
