@@ -7,6 +7,7 @@ import {
 	createProject44GenericBootstrapErrorSurface,
 	createProject44HostUnavailableSurface,
 	createProject44HostedGenesisCompleteWithoutEvidenceSurface,
+	createProject44NullableArrayHostedRefreshStateSurface,
 	createProject44HostedRefreshStateSurface,
 	createProject44MissingRegistrationErrorSurface,
 	createProject44RecoverablePrincipalErrorSurface,
@@ -174,6 +175,37 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 		expect(JSON.stringify(input ?? {})).not.toMatch(
 			/walletAddress|principalAddress|signature|selfAttestation|hostToken|hostBaseUrl/i
 		);
+		await expectNoHostCredentialPrompt(page);
+		await expectNoHostCredentialStorage(page);
+	});
+
+	test('profile and hosted refresh normalize null list-like fields before rendering', async ({ page }) => {
+		const pageErrors: string[] = [];
+		page.on('pageerror', (error) => pageErrors.push(error.message));
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: createProject44NullableArrayHostedRefreshStateSurface(),
+			droneWorkflow: 'nullable-arrays',
+		});
+
+		await page.goto(`/l/identity/${project44SoulBootstrapIds.username}`);
+
+		const lane = page.getByTestId('soul-bootstrap-lane');
+		await expect(lane).toBeVisible();
+		await expect(page.getByTestId('hosted-soul-bootstrap-panel')).toBeVisible();
+		await expect(page.getByTestId('public-route-error')).toHaveCount(0);
+		await expect(page.getByText('Null-array continuity')).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Refresh Hosted State' })).toBeEnabled();
+		await page.getByRole('button', { name: 'Refresh Hosted State' }).click();
+
+		await expect(page.getByTestId('hosted-soul-success')).toContainText(
+			'Hosted declaration evidence reconciled from Lesser'
+		);
+		expect(pageErrors).toEqual([]);
+		const graphQLOperations = harness.graphQLRequests().map((request) => request.operationName);
+		expect(graphQLOperations).toContain('DroneWorkflow');
+		expect(graphQLOperations).toContain('CompleteHostedSoulGenesis');
+		expect(graphQLOperations).not.toContain('PublishHostedSoul');
 		await expectNoHostCredentialPrompt(page);
 		await expectNoHostCredentialStorage(page);
 	});

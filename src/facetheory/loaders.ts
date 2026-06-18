@@ -82,6 +82,7 @@ import type {
 	MintTranscriptMessage,
 } from './types';
 import { HOST_WORKFLOW_BRIDGE_DISABLED_NOTE } from './flags';
+import { arrayOrEmpty } from './nullability';
 
 const NO_DRONE_BODY_REQUIRED_NOTE =
 	'Create a local drone body in Simulacrum first. Soul-bootstrap remains on the Lesser same-origin facade, but it is not contacted until a body exists.';
@@ -328,6 +329,8 @@ function normalizeArtifact(artifact: {
 function normalizeIdentityCard(
 	identity: AgentWorkflowSurface['identity']
 ): FaceAgentIdentityCardData {
+	const tags = arrayOrEmpty(identity.tags);
+	const metrics = arrayOrEmpty(identity.metrics);
 	return {
 		id: identity.id,
 		name: identity.name,
@@ -336,23 +339,25 @@ function normalizeIdentityCard(
 		currentPhase: identity.currentPhase,
 		currentState: optional(identity.currentState),
 		steward: identity.steward ? normalizeActor(identity.steward) : undefined,
-		tags: identity.tags.length ? [...identity.tags] : undefined,
-		metrics: identity.metrics.length
-			? identity.metrics.map((metric) => normalizeMetric(metric))
+		tags: tags.length ? [...tags] : undefined,
+		metrics: metrics.length
+			? metrics.map((metric) => normalizeMetric(metric))
 			: undefined,
 	};
 }
 
 function normalizeSoulRequestCard(request: SoulRequestCard): FaceSoulRequestCardData {
+	const constraints = arrayOrEmpty(request.constraints);
+	const artifacts = arrayOrEmpty(request.artifacts);
 	return {
 		id: request.id,
 		title: request.title,
 		summary: request.summary,
 		requestedBy: normalizeActor(request.requestedBy),
 		submittedAt: optional(request.submittedAt),
-		constraints: request.constraints.length ? [...request.constraints] : undefined,
-		artifacts: request.artifacts.length
-			? request.artifacts.map((artifact) => normalizeArtifact(artifact))
+		constraints: constraints.length ? [...constraints] : undefined,
+		artifacts: artifacts.length
+			? artifacts.map((artifact) => normalizeArtifact(artifact))
 			: undefined,
 		routeDecision: optional(request.routeDecision),
 		currentState: optional(request.currentState),
@@ -362,22 +367,24 @@ function normalizeSoulRequestCard(request: SoulRequestCard): FaceSoulRequestCard
 function normalizeReviewDecision(
 	review: ReviewDecisionCard
 ): FaceReviewDecisionCardData {
+	const findings = arrayOrEmpty(review.findings);
+	const evidence = arrayOrEmpty(review.evidence);
 	return {
 		id: review.id,
 		title: review.title,
 		decision: review.decision,
 		reviewer: normalizeActor(review.reviewer),
 		decisionSummary: review.decisionSummary,
-		findings: review.findings.length
-			? review.findings.map((finding) => ({
+		findings: findings.length
+			? findings.map((finding) => ({
 					id: finding.id,
 					title: finding.title,
 					detail: finding.detail,
 					severity: normalizeFindingSeverity(finding.severity),
 				}))
 			: undefined,
-		evidence: review.evidence.length
-			? review.evidence.map((artifact) => normalizeArtifact(artifact))
+		evidence: evidence.length
+			? evidence.map((artifact) => normalizeArtifact(artifact))
 			: undefined,
 	};
 }
@@ -385,16 +392,19 @@ function normalizeReviewDecision(
 function normalizeDeclarationCard(
 	declaration: NonNullable<AgentWorkflowSurface['declaration']>
 ): FaceDeclarationPreviewCardData {
+	const declaredScope = arrayOrEmpty(declaration.declaredScope);
+	const risks = arrayOrEmpty(declaration.risks);
+	const supportingArtifacts = arrayOrEmpty(declaration.supportingArtifacts);
 	return {
 		id: declaration.id,
 		title: declaration.title,
 		statement: declaration.statement,
 		confidence: declaration.confidence,
 		owner: declaration.owner ? normalizeActor(declaration.owner) : undefined,
-		declaredScope: [...declaration.declaredScope],
-		risks: declaration.risks.length ? [...declaration.risks] : undefined,
-		supportingArtifacts: declaration.supportingArtifacts.length
-			? declaration.supportingArtifacts.map((artifact) => normalizeArtifact(artifact))
+		declaredScope: [...declaredScope],
+		risks: risks.length ? [...risks] : undefined,
+		supportingArtifacts: supportingArtifacts.length
+			? supportingArtifacts.map((artifact) => normalizeArtifact(artifact))
 			: undefined,
 	};
 }
@@ -402,13 +412,14 @@ function normalizeDeclarationCard(
 function normalizeCheckpointCard(
 	checkpoint: NonNullable<AgentWorkflowSurface['checkpoint']>
 ): FaceSignatureCheckpointCardData {
+	const signers = arrayOrEmpty(checkpoint.signers);
 	return {
 		id: checkpoint.id,
 		title: checkpoint.title,
 		readinessLabel: checkpoint.readinessLabel,
 		approvalMemo: optional(checkpoint.approvalMemo),
 		dueAt: optional(checkpoint.dueAt),
-		signers: checkpoint.signers.map((signer) => ({
+		signers: signers.map((signer) => ({
 			id: signer.id,
 			name: signer.name,
 			role: signer.role,
@@ -421,19 +432,22 @@ function normalizeCheckpointCard(
 function normalizeGraduationCard(
 	graduation: NonNullable<AgentWorkflowSurface['graduation']>
 ): FaceGraduationSummaryCardData {
+	const completedMilestones = arrayOrEmpty(graduation.completedMilestones);
+	const exitCriteria = arrayOrEmpty(graduation.exitCriteria);
+	const metrics = arrayOrEmpty(graduation.metrics);
 	return {
 		id: graduation.id,
 		title: graduation.title,
 		readiness: graduation.readiness,
 		summary: graduation.summary,
 		launchOwner: graduation.launchOwner ? normalizeActor(graduation.launchOwner) : undefined,
-		completedMilestones: graduation.completedMilestones.length
-			? [...graduation.completedMilestones]
+		completedMilestones: completedMilestones.length
+			? [...completedMilestones]
 			: undefined,
-		exitCriteria: graduation.exitCriteria.length ? [...graduation.exitCriteria] : undefined,
+		exitCriteria: exitCriteria.length ? [...exitCriteria] : undefined,
 		nextStep: optional(graduation.nextStep),
-		metrics: graduation.metrics.length
-			? graduation.metrics.map((metric) => normalizeMetric(metric))
+		metrics: metrics.length
+			? metrics.map((metric) => normalizeMetric(metric))
 			: undefined,
 	};
 }
@@ -441,17 +455,19 @@ function normalizeGraduationCard(
 function normalizeContinuityPanel(
 	continuity: NonNullable<AgentWorkflowSurface['continuity']>
 ): FaceContinuityPanelData {
+	const metrics = arrayOrEmpty(continuity.metrics);
+	const followUps = arrayOrEmpty(continuity.followUps);
 	return {
 		id: continuity.id,
 		title: continuity.title,
 		objective: continuity.objective,
 		owner: normalizeActor(continuity.owner),
 		feedbackLoop: continuity.feedbackLoop,
-		metrics: continuity.metrics.length
-			? continuity.metrics.map((metric) => normalizeMetric(metric))
+		metrics: metrics.length
+			? metrics.map((metric) => normalizeMetric(metric))
 			: undefined,
-		followUps: continuity.followUps.length
-			? continuity.followUps.map((followUp) => ({
+		followUps: followUps.length
+			? followUps.map((followUp) => ({
 					id: followUp.id,
 					title: followUp.title,
 					summary: followUp.summary,
@@ -463,9 +479,9 @@ function normalizeContinuityPanel(
 }
 
 function normalizeLifecycle(
-	lifecycle: AgentWorkflowSurface['lifecycle']
+	lifecycle: AgentWorkflowSurface['lifecycle'] | null | undefined
 ): readonly FaceAgentLifecycleStep[] {
-	return lifecycle.map((step) => ({
+	return arrayOrEmpty(lifecycle).map((step) => ({
 		phase: step.phase,
 		title: optional(step.title),
 		summary: optional(step.summary),
@@ -481,9 +497,9 @@ function normalizeArtifacts(
 		description?: string | null;
 		href?: string | null;
 		emphasis?: string | null;
-	}>
+	}> | null | undefined
 ): readonly FaceAgentSurfaceArtifact[] {
-	return artifacts.map((artifact) => normalizeArtifact(artifact));
+	return arrayOrEmpty(artifacts).map((artifact) => normalizeArtifact(artifact));
 }
 
 function shouldExposeSoulReachability(
@@ -924,7 +940,7 @@ export async function loadClientAppState({
 			fetchMyDroneReviews({ signal }),
 		]);
 
-		const myAgents = myAgentsRaw.map<AgentRosterRecord>((agent) => ({
+		const myAgents = arrayOrEmpty(myAgentsRaw).map<AgentRosterRecord>((agent) => ({
 			id: agent.id,
 			username: agent.username,
 			displayName: agent.displayName,
@@ -935,7 +951,7 @@ export async function loadClientAppState({
 			canDM: agent.agentCapabilities.canDM,
 		}));
 
-		const mySouls = mySoulsRaw.map<SoulInventoryRecord>((item) => ({
+		const mySouls = arrayOrEmpty(mySoulsRaw).map<SoulInventoryRecord>((item) => ({
 			bindingState: item.bindingState,
 			availableForIncorporation: item.availableForIncorporation,
 			agent: {
@@ -948,7 +964,7 @@ export async function loadClientAppState({
 				status: item.agent.status,
 				lifecycleStatus: item.agent.lifecycleStatus,
 				selfDescriptionVersion: item.agent.selfDescriptionVersion,
-				capabilities: item.agent.capabilities,
+				capabilities: arrayOrEmpty(item.agent.capabilities),
 				mintedAt: item.agent.mintedAt,
 				updatedAt: item.agent.updatedAt,
 			},
@@ -1071,8 +1087,8 @@ export async function loadClientAppState({
 			boundSoul,
 			activeAgent,
 			workflow,
-			myRequests,
-			myReviews,
+			myRequests: arrayOrEmpty(myRequests),
+			myReviews: arrayOrEmpty(myReviews),
 			channels,
 			channelsUpdatedAt,
 			preferences,
@@ -1209,7 +1225,7 @@ function createHostWorkflowFromSoulBootstrapResult(
 	const state = result.state;
 	const conversationId = state?.hostConversationId ?? null;
 	const expectedWallet = state?.walletAddress ?? null;
-	const signingCheckpoints = state?.signingCheckpoints ?? [];
+	const signingCheckpoints = arrayOrEmpty(state?.signingCheckpoints);
 	const producedDeclarations = parseBootstrapProducedDeclarations(state);
 	const bootstrap = deriveSoulBootstrapUx({
 		result,
@@ -1302,10 +1318,14 @@ function describeSoulBootstrapFailure(error: unknown): string {
 }
 
 function assembleAppState(input: AssembleAppStateInput): ClientAppState {
+	const myAgents = arrayOrEmpty(input.myAgents);
+	const mySouls = arrayOrEmpty(input.mySouls);
+	const myRequests = arrayOrEmpty(input.myRequests);
+	const myReviews = arrayOrEmpty(input.myReviews);
 	const activeAgent = input.activeAgent;
 	const workflow = input.workflow;
 	const activeUsername =
-		activeAgent?.username ?? input.agentHint?.trim() ?? input.myAgents[0]?.username ?? 'agent';
+		activeAgent?.username ?? input.agentHint?.trim() ?? myAgents[0]?.username ?? 'agent';
 	const rawIdentity = buildIdentityCard(activeAgent, workflow, activeUsername);
 	const identity = normalizeIdentityCard(rawIdentity);
 	const bootstrapRequest = buildSoulBootstrapRequestCard({
@@ -1316,9 +1336,9 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		viewerId: input.viewer.id,
 		viewerHandle: input.viewer.handle,
 	});
-	const rawRequestQueue = dedupeById([workflow?.request ?? null, bootstrapRequest, ...input.myRequests]);
+	const rawRequestQueue = dedupeById([workflow?.request ?? null, bootstrapRequest, ...myRequests]);
 	const requestQueue = rawRequestQueue.map((request) => normalizeSoulRequestCard(request));
-	const rawReviewDecision = workflow?.review ?? input.myReviews[0] ?? null;
+	const rawReviewDecision = workflow?.review ?? myReviews[0] ?? null;
 	const reviewDecision = rawReviewDecision ? normalizeReviewDecision(rawReviewDecision) : undefined;
 	const publishedDeclaration = buildPublishedSoulDeclaration(input.publishedSoulProfile, identity.name);
 	const hostConversationDeclaration = buildHostWorkflowDeclaration(
@@ -1348,20 +1368,22 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 				});
 	const rawCheckpoint =
 		workflow?.checkpoint ??
-		buildSoulBootstrapCheckpoint(input.hostWorkflow.bootstrap, input.hostWorkflow.signingCheckpoints);
+		buildSoulBootstrapCheckpoint(input.hostWorkflow.bootstrap, arrayOrEmpty(input.hostWorkflow.signingCheckpoints));
 	const checkpoint = rawCheckpoint ? normalizeCheckpointCard(rawCheckpoint) : undefined;
 	const rawGraduation =
 		workflow?.graduation ??
-		buildSoulBootstrapGraduation(input.hostWorkflow.bootstrap, input.hostWorkflow.signingCheckpoints);
+		buildSoulBootstrapGraduation(input.hostWorkflow.bootstrap, arrayOrEmpty(input.hostWorkflow.signingCheckpoints));
 	const graduation = rawGraduation ? normalizeGraduationCard(rawGraduation) : undefined;
 	const rawContinuity = workflow?.continuity ?? null;
 	const continuity = rawContinuity ? normalizeContinuityPanel(rawContinuity) : undefined;
-	const rawLifecycle = workflow?.lifecycle?.length
-		? workflow.lifecycle
+	const workflowLifecycle = arrayOrEmpty(workflow?.lifecycle);
+	const rawLifecycle = workflowLifecycle.length
+		? workflowLifecycle
 		: buildSoulBootstrapLifecycle(input.hostWorkflow.bootstrap);
-	const lifecycle = rawLifecycle.length ? normalizeLifecycle(rawLifecycle) : [];
-	const transcript = input.hostWorkflow.transcript.length
-		? input.hostWorkflow.transcript
+	const lifecycle = normalizeLifecycle(rawLifecycle);
+	const hostTranscript = arrayOrEmpty(input.hostWorkflow.transcript);
+	const transcript = hostTranscript.length
+		? hostTranscript
 		: [];
 	const notifications = buildWorkflowNotifications(
 		input.viewer,
@@ -1394,18 +1416,18 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 	const navItems = buildNavItems(
 		input.page,
 		activeUsername,
-		input.myAgents.length,
+		myAgents.length,
 		rawRequestQueue.length,
 		input.hostWorkflow.conversationCount,
-		input.mySouls.length,
+		mySouls.length,
 		!input.isPreview
 	);
 	const statusChips = buildStatusChips(workflow, activeAgent, input.hostWorkflow);
 	const metrics = buildMetrics(
-		input.myAgents.length,
-		input.mySouls.length,
+		myAgents.length,
+		mySouls.length,
 		rawRequestQueue.length,
-		input.myReviews.length,
+		myReviews.length,
 		input.hostWorkflow.conversationCount
 	);
 	const actions = buildActions(
@@ -1413,8 +1435,8 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		activeUsername,
 		activeAgent?.id ?? null,
 		Boolean(activeAgent?.agentCapabilities.canDM),
-		input.myAgents.length,
-		input.mySouls.length,
+		myAgents.length,
+		mySouls.length,
 		input.hostWorkflow
 	);
 	const shared = {
@@ -1443,12 +1465,12 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		focusRequest: requestQueue[0],
 		reviewDecision,
 		callouts: [
-			...(input.mySouls.length > 0 && input.myAgents.length === 0
+			...(mySouls.length > 0 && myAgents.length === 0
 				? [{
 						id: 'request-note-drones',
 						title: 'Create a drone body before binding souls',
-						summary: `${input.mySouls.length} soul${
-							input.mySouls.length === 1 ? '' : 's'
+						summary: `${mySouls.length} soul${
+							mySouls.length === 1 ? '' : 's'
 						} already exist on this instance, but Simulacrum only binds them to local drone bodies. Create a drone body first, then open that body's Identity page to bind a soul in context.`,
 						tone: 'warning' as const,
 					}]
@@ -1522,16 +1544,16 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		graduation,
 		continuity,
 		lifecycle,
-		roster: buildRoster(input.myAgents, activeUsername),
+		roster: buildRoster(myAgents, activeUsername),
 		continuityMoments: timeline,
 		workflowNotifications: notifications,
 		callouts: [
-			...(input.mySouls.length > 0 && input.myAgents.length === 0
+			...(mySouls.length > 0 && myAgents.length === 0
 				? [{
 						id: 'dashboard-note-drones',
 						title: 'Souls are waiting for bodies',
-						summary: `This instance already exposes ${input.mySouls.length} soul${
-							input.mySouls.length === 1 ? '' : 's'
+						summary: `This instance already exposes ${mySouls.length} soul${
+							mySouls.length === 1 ? '' : 's'
 						}, but the historic flow still applies: create a local drone body first, then open its Identity page to bind a soul.`,
 						meta: 'Historic flow preserved in the new shell: create body -> open identity -> bind soul',
 						tone: 'warning' as const,
@@ -1582,7 +1604,7 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		reachabilityNotice: input.reachabilityNotice ?? undefined,
 		mcpAccess: activeAgent?.mcpAccess ?? undefined,
 		agentUsername: activeUsername,
-		roster: buildRoster(input.myAgents, activeUsername),
+		roster: buildRoster(myAgents, activeUsername),
 		lifecycle,
 		continuity,
 		timeline,
@@ -1685,10 +1707,10 @@ function assembleAppState(input: AssembleAppStateInput): ClientAppState {
 		},
 		currentUserId: input.viewer.id,
 		currentUserName: input.viewer.name,
-		agentCount: input.myAgents.length,
-		soulCount: input.mySouls.length,
+		agentCount: myAgents.length,
+		soulCount: mySouls.length,
 		requestCount: requestQueue.length,
-		reviewCount: input.myReviews.length,
+		reviewCount: myReviews.length,
 		isPreview: input.isPreview,
 	};
 }
@@ -1704,13 +1726,14 @@ function pickActiveAgent(
 	myAgents: readonly AgentRosterRecord[],
 	agentHint?: string | null
 ): AgentRosterRecord | null {
-	if (!myAgents.length) return null;
+	const agents = arrayOrEmpty(myAgents);
+	if (!agents.length) return null;
 	const normalized = agentHint?.trim().toLowerCase();
-	if (!normalized) return myAgents[0] ?? null;
+	if (!normalized) return agents[0] ?? null;
 	return (
-		myAgents.find((agent) => agent.username.toLowerCase() === normalized) ??
-		myAgents.find((agent) => agent.displayName.toLowerCase() === normalized) ??
-		myAgents[0] ??
+		agents.find((agent) => agent.username.toLowerCase() === normalized) ??
+		agents.find((agent) => agent.displayName.toLowerCase() === normalized) ??
+		agents[0] ??
 		null
 	);
 }
@@ -1719,11 +1742,12 @@ function findBoundSoul(
 	mySouls: readonly SoulInventoryRecord[],
 	activeUsername: string | null
 ): SoulInventoryRecord | null {
+	const souls = arrayOrEmpty(mySouls);
 	const normalizedUsername = activeUsername?.trim().toLowerCase();
 	if (!normalizedUsername) return null;
 
 	return (
-		mySouls.find(
+		souls.find(
 			(item) =>
 				item.bindingState === 'BOUND' &&
 				item.binding?.agentUsername.trim().toLowerCase() === normalizedUsername
@@ -1796,6 +1820,7 @@ function buildIdentityCard(
 	}
 
 	if (activeAgent) {
+		const delegatedScopes = arrayOrEmpty(activeAgent.delegatedScopes);
 		return {
 			id: activeAgent.id,
 			name: activeAgent.displayName,
@@ -1824,8 +1849,8 @@ function buildIdentityCard(
 				},
 				{
 					label: 'Delegated scopes',
-					value: String(activeAgent.delegatedScopes.length),
-					detail: activeAgent.delegatedScopes.join(', ') || 'none',
+					value: String(delegatedScopes.length),
+					detail: delegatedScopes.join(', ') || 'none',
 				},
 			],
 		};
@@ -1848,7 +1873,7 @@ function buildRoster(
 	myAgents: readonly AgentRosterRecord[],
 	activeUsername: string | null
 ): NexusDashboardData['roster'] {
-	return myAgents.map((agent) => ({
+	return arrayOrEmpty(myAgents).map((agent) => ({
 		id: agent.id,
 		name: agent.displayName,
 		handle: `@${agent.username}`,
@@ -2239,7 +2264,7 @@ function buildMetrics(
 
 function buildRequestFilters(requestQueue: readonly SoulRequestCard[]): SoulRequestCenterData['filters'] {
 	const counts = new Map<string, number>();
-	for (const request of requestQueue) {
+	for (const request of arrayOrEmpty(requestQueue)) {
 		const key = request.currentState ?? 'request.submitted';
 		counts.set(key, (counts.get(key) ?? 0) + 1);
 	}
@@ -2259,6 +2284,7 @@ function buildWorkflowNotifications(
 	workflow: AgentWorkflowSurface | null,
 	hostWorkflow: HostWorkflowState
 ): readonly WorkflowEventNotification[] {
+	const signingCheckpoints = arrayOrEmpty(hostWorkflow.signingCheckpoints);
 	if (hostWorkflow.bootstrap.isProductionSoul) {
 		return [
 			createWorkflowNotification({
@@ -2275,8 +2301,8 @@ function buildWorkflowNotifications(
 		];
 	}
 
-	if (hostWorkflow.signingCheckpoints.length) {
-		return hostWorkflow.signingCheckpoints.map((checkpoint, index) =>
+	if (signingCheckpoints.length) {
+		return signingCheckpoints.map((checkpoint, index) =>
 			createWorkflowNotification({
 				id: `bootstrap-checkpoint-${checkpoint.name}-${index}`,
 				createdAt:
@@ -2381,8 +2407,9 @@ function buildThreadMessages(
 	threadSummary: MessagingWorkflowConversationSummary,
 	review: ReviewDecisionCard | null
 ): readonly DirectMessage[] {
-	if (transcript.length) {
-		return transcript.map((message, index) => ({
+	const messages = arrayOrEmpty(transcript);
+	if (messages.length) {
+		return messages.map((message, index) => ({
 			id: message.id,
 			conversationId: 'approval-thread',
 			sender:
@@ -2434,10 +2461,10 @@ function buildThreadMessages(
 
 function buildContinuityTimeline(
 	continuity: AgentWorkflowSurface['continuity'] | null | undefined,
-	lifecycle: AgentWorkflowSurface['lifecycle'],
+	lifecycle: AgentWorkflowSurface['lifecycle'] | null | undefined,
 	hostWorkflow: HostWorkflowState
 ): readonly AgentFaceTimelineMoment[] {
-	const lifecycleMoments = lifecycle.map<AgentFaceTimelineMoment>((step, index) => ({
+	const lifecycleMoments = arrayOrEmpty(lifecycle).map<AgentFaceTimelineMoment>((step, index) => ({
 		id: `lifecycle-${step.phase}-${index}`,
 		title: step.title ?? titleCase(step.phase),
 		summary: step.summary ?? 'Workflow phase update',
@@ -2453,7 +2480,7 @@ function buildContinuityTimeline(
 						: 'neutral',
 	}));
 
-	const hostMoments = hostWorkflow.signingCheckpoints.slice(0, 3).map<AgentFaceTimelineMoment>((checkpoint, index) => ({
+	const hostMoments = arrayOrEmpty(hostWorkflow.signingCheckpoints).slice(0, 3).map<AgentFaceTimelineMoment>((checkpoint, index) => ({
 		id: `bootstrap-checkpoint-${checkpoint.name}-${index}`,
 		title: titleCase(checkpoint.name.replaceAll('_', ' ')),
 		summary: checkpoint.message ?? `Bootstrap checkpoint ${checkpoint.status}`,
@@ -2508,14 +2535,16 @@ function buildPublishedSoulDeclaration(
 ): AgentWorkflowSurface['declaration'] | null {
 	if (!profile?.agent.principal_declaration?.trim()) return null;
 
-	const declaredScope = profile.capabilities.length
-		? profile.capabilities.map((capability) => titleCase(capability.capability.replaceAll('_', ' ')))
+	const capabilities = arrayOrEmpty(profile.capabilities);
+	const boundaries = arrayOrEmpty(profile.boundaries);
+	const declaredScope = capabilities.length
+		? capabilities.map((capability) => titleCase(capability.capability.replaceAll('_', ' ')))
 		: profile.agent.self_description_version
 			? [`Published soul record v${profile.agent.self_description_version}`]
 			: ['Published soul record'];
 
-	const risks = profile.boundaries.length
-		? profile.boundaries.map((boundary) => boundary.statement.trim()).filter(Boolean)
+	const risks = boundaries.length
+		? boundaries.map((boundary) => boundary.statement.trim()).filter(Boolean)
 		: [];
 	const transparencyCount = profile.transparency ? Object.keys(profile.transparency).length : 0;
 
@@ -2540,13 +2569,13 @@ function buildPublishedSoulDeclaration(
 			{
 				id: `published-capabilities-${profile.agent.agent_id}`,
 				title: 'Capability registry',
-				description: `${profile.capabilities.length} declared capability${profile.capabilities.length === 1 ? '' : 'ies'} published on lesser-host.`,
+				description: `${capabilities.length} declared capability${capabilities.length === 1 ? '' : 'ies'} published on lesser-host.`,
 				emphasis: 'reference',
 			},
 			{
 				id: `published-boundaries-${profile.agent.agent_id}`,
 				title: 'Signed boundaries',
-				description: `${profile.boundaries.length} published boundary commitment${profile.boundaries.length === 1 ? '' : 's'} attached to the soul.`,
+				description: `${boundaries.length} published boundary commitment${boundaries.length === 1 ? '' : 's'} attached to the soul.`,
 				emphasis: 'decision',
 			},
 			{
@@ -2644,7 +2673,7 @@ function buildPublishedSoulArtifacts(
 ): Array<{ id: string; title: string; description: string; emphasis: 'reference' | 'decision' }> {
 	if (!profile) return [];
 
-	const avatarStyles = (profile.agent.avatar?.styles ?? []).filter(
+	const avatarStyles = arrayOrEmpty(profile.agent.avatar?.styles).filter(
 		(style) => style.style_name?.trim() || style.image?.trim()
 	);
 	const currentAvatarStyle = profile.agent.avatar?.current_style_name?.trim();
@@ -2709,7 +2738,7 @@ function parseBootstrapTranscript(
 function parseBootstrapProducedDeclarations(
 	state: HostWorkflowState['state']
 ): Record<string, unknown> | null {
-	for (const checkpoint of state?.signingCheckpoints ?? []) {
+	for (const checkpoint of arrayOrEmpty(state?.signingCheckpoints)) {
 		const parsed = parseJsonRecord(
 			checkpoint.registrationPreviewJson ?? checkpoint.finalizeRequestTemplateJson ?? null
 		);
