@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tick } from 'svelte';
+
 	import {
 		completeHostedSoulGenesis,
 		publishHostedSoul,
@@ -292,10 +294,12 @@
 					await retryCurrentHostedStep();
 					break;
 				case 'OPERATOR_ACTION_REQUIRED':
-				case 'REFRESH_STATE':
-				default:
 					await onUpdated?.();
 					success = 'Hosted soul state refreshed from Lesser.';
+					break;
+				case 'REFRESH_STATE':
+				default:
+					await submitRefreshState();
 			}
 		} catch (actionFailure) {
 			error = actionFailure instanceof Error ? actionFailure.message : 'Hosted soul action failed.';
@@ -370,6 +374,56 @@
 		await handleMutationResult(mutation, 'Hosted/off-chain soul published and bound through Lesser.');
 	}
 
+	async function submitRefreshState() {
+		const beforeFingerprint = hostedStateFingerprint(result);
+		const conversationId = result?.state?.hostConversationId?.trim() ?? '';
+		if (!conversationId) {
+			await onUpdated?.();
+			await tick();
+			if (hostedStateFingerprint(result) !== beforeFingerprint) {
+				success = 'Hosted soul state refreshed from Lesser.';
+				return;
+			}
+			throw new Error(
+				'Lesser did not return a hosted genesis conversation id, so Simulacrum only refreshed state. The hosted projection is unchanged.'
+			);
+		}
+
+		const correlation = freshClientCorrelation('refresh-state-repair');
+		const mutation = await completeHostedSoulGenesis({
+			input: {
+				username: requireUsername(result),
+				conversationId,
+				...(result?.state?.hostRegistrationId ? { registrationId: result.state.hostRegistrationId } : {}),
+				...(result?.state?.recoveryAttemptId ? { recoveryAttemptId: result.state.recoveryAttemptId } : {}),
+				...(correlation.correlationKey ? { correlationKey: correlation.correlationKey } : {}),
+				...(correlation.idempotencyKey ? { idempotencyKey: correlation.idempotencyKey } : {}),
+			},
+		});
+		if (mutation.error) {
+			await onUpdated?.();
+			await tick();
+			throw new Error(mutation.error.message);
+		}
+
+		await onUpdated?.();
+		await tick();
+		if (hasHostedPublishEvidence(mutation) || hasHostedPublishEvidence(result)) {
+			success = 'Hosted declaration evidence reconciled from Lesser.';
+			return;
+		}
+		if (
+			hostedStateFingerprint(mutation) !== beforeFingerprint ||
+			hostedStateFingerprint(result) !== beforeFingerprint
+		) {
+			success = 'Hosted soul state refreshed from Lesser.';
+			return;
+		}
+		throw new Error(
+			'Lesser refreshed the hosted state, but did not reconcile hosted declaration evidence yet.'
+		);
+	}
+
 	async function submitRestart() {
 		const recoveryAttemptId = resolveRecoveryAttemptId(result);
 		if (!recoveryAttemptId) {
@@ -436,6 +490,16 @@
 		};
 	}
 
+	function freshClientCorrelation(purpose: string) {
+		if (typeof window === 'undefined') {
+			return { correlationKey: null, idempotencyKey: null };
+		}
+		return {
+			correlationKey: createClientKey(`${purpose}-correlation`),
+			idempotencyKey: createClientKey(`${purpose}-idempotency`),
+		};
+	}
+
 	function readOrCreateClientKey(
 		username: string,
 		purpose: string,
@@ -460,6 +524,41 @@
 			? crypto.randomUUID()
 			: `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 		return `sim-hosted-${purpose}-${randomId}`;
+	}
+
+	function hasHostedPublishEvidence(
+		source: HostedSoulBootstrapResult | SoulBootstrapResult | null
+	): boolean {
+		const conversationId = source?.state?.hostConversationId?.trim() ?? null;
+		return isHostedSoulBootstrapPublishReady(source?.state ?? null, { conversationId });
+	}
+
+	function hostedStateFingerprint(
+		source: HostedSoulBootstrapResult | SoulBootstrapResult | null
+	): string {
+		const state = source?.state;
+		if (!state) return 'missing';
+		return JSON.stringify({
+			phase: state.phase,
+			state: state.state,
+			typedNextAction: state.typedNextAction,
+			recoveryCategory: state.recoveryCategory ?? null,
+			recoveryAction: state.recoveryAction ?? null,
+			recoveryAttemptId: state.recoveryAttemptId ?? null,
+			hostRegistrationId: state.hostRegistrationId ?? null,
+			hostConversationId: state.hostConversationId ?? null,
+			lastHostRequestId: state.lastHostRequestId ?? null,
+			updatedAt: state.updatedAt ?? null,
+			errorCode: state.error?.code ?? source?.error?.code ?? null,
+			errorMessage: state.error?.message ?? source?.error?.message ?? null,
+			checkpoints: state.signingCheckpoints.map((checkpoint) => ({
+				name: checkpoint.name,
+				status: checkpoint.status,
+				hostRequestId: checkpoint.hostRequestId ?? null,
+				completedAt: checkpoint.completedAt ?? null,
+				hasCanonicalJson: Boolean(checkpoint.canonicalJson?.trim()),
+			})),
+		});
 	}
 
 	function resolveRecoveryAttemptId(source: HostedSoulBootstrapResult | SoulBootstrapResult | null): string | null {

@@ -7,6 +7,7 @@ import {
 	createProject44GenericBootstrapErrorSurface,
 	createProject44HostUnavailableSurface,
 	createProject44HostedGenesisCompleteWithoutEvidenceSurface,
+	createProject44HostedRefreshStateSurface,
 	createProject44MissingRegistrationErrorSurface,
 	createProject44RecoverablePrincipalErrorSurface,
 	createProject44RecoverablePrincipalPreflightSurface,
@@ -129,6 +130,73 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 			body: Buffer.from(JSON.stringify(graphQLOperations, null, 2), 'utf8'),
 			contentType: 'application/json',
 		});
+	});
+
+	test('REFRESH_STATE with hosted conversation actively reconciles declaration evidence', async ({ page }) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: createProject44HostedRefreshStateSurface(),
+		});
+
+		await page.goto(`/l/identity/${project44SoulBootstrapIds.username}`);
+
+		const lane = page.getByTestId('soul-bootstrap-lane');
+		await expect(lane).toContainText('Hosted state should refresh');
+		await expect(page.getByRole('button', { name: 'Refresh Hosted State' })).toBeEnabled();
+		await page.getByRole('button', { name: 'Refresh Hosted State' }).click();
+
+		await expect(page.getByTestId('hosted-soul-success')).toContainText(
+			'Hosted declaration evidence reconciled from Lesser'
+		);
+		await expect(lane).toContainText('Publish hosted/off-chain soul');
+		await expect(page.getByTestId('hosted-soul-evidence')).toContainText('ready for hosted publish');
+
+		const graphQLOperations = harness.graphQLRequests().map((request) => request.operationName);
+		expect(graphQLOperations).toContain('CompleteHostedSoulGenesis');
+		expect(graphQLOperations).toContain('SoulBootstrap');
+		expect(graphQLOperations).not.toContain('PublishHostedSoul');
+		const completeRequest = harness.graphQLRequests().find((request) =>
+			request.operationName === 'CompleteHostedSoulGenesis'
+		);
+		const input = completeRequest?.variables.input as Record<string, unknown> | undefined;
+		expect(input).toMatchObject({
+			username: project44SoulBootstrapIds.username,
+			registrationId: project44SoulBootstrapIds.registrationId,
+			conversationId: project44SoulBootstrapIds.conversationId,
+			recoveryAttemptId: project44SoulBootstrapIds.recoveryAttemptId,
+		});
+		expect(input?.correlationKey).toEqual(
+			expect.stringMatching(/^sim-hosted-refresh-state-repair-correlation-/)
+		);
+		expect(input?.idempotencyKey).toEqual(
+			expect.stringMatching(/^sim-hosted-refresh-state-repair-idempotency-/)
+		);
+		expect(JSON.stringify(input ?? {})).not.toMatch(
+			/walletAddress|principalAddress|signature|selfAttestation|hostToken|hostBaseUrl/i
+		);
+		await expectNoHostCredentialPrompt(page);
+		await expectNoHostCredentialStorage(page);
+	});
+
+	test('REFRESH_STATE surfaces complete errors instead of generic refresh success', async ({ page }) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: createProject44HostedRefreshStateSurface(),
+			rejectHostedGenesisComplete: true,
+		});
+
+		await page.goto(`/l/identity/${project44SoulBootstrapIds.username}`);
+
+		await page.getByRole('button', { name: 'Refresh Hosted State' }).click();
+		await expect(page.getByTestId('hosted-soul-error')).toContainText('conversation is not in progress');
+		await expect(page.getByTestId('hosted-soul-success')).toHaveCount(0);
+		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Hosted state should refresh');
+
+		const graphQLOperations = harness.graphQLRequests().map((request) => request.operationName);
+		expect(graphQLOperations).toContain('CompleteHostedSoulGenesis');
+		expect(graphQLOperations).not.toContain('PublishHostedSoul');
+		await expectNoHostCredentialPrompt(page);
+		await expectNoHostCredentialStorage(page);
 	});
 
 	test('hosted publish stays blocked when Lesser omits declaration evidence', async ({ page }) => {
