@@ -417,8 +417,8 @@
 			await onUpdated?.();
 			throw new Error(mutation.error.message);
 		}
-		success = message;
 		await onUpdated?.();
+		success = message;
 	}
 
 	function clientCorrelation(
