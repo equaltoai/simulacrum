@@ -35,7 +35,10 @@ import type {
 	NexusDashboardData,
 	SoulRequestCenterData,
 } from '$lib/greater/faces/agent';
-import { isHostedSoulBootstrapPublishReady } from '$lib/greater/adapters';
+import {
+	getHostedSoulBootstrapTerminalDeclarationEvidenceSummary,
+	isHostedSoulBootstrapPublishReady,
+} from '$lib/greater/adapters';
 import type {
 	AgentIdentityCardData as FaceAgentIdentityCardData,
 	AgentLifecycleStep as FaceAgentLifecycleStep,
@@ -1252,7 +1255,7 @@ function createHostWorkflowFromSoulBootstrapResult(
 		conversationCount: conversationId ? 1 : 0,
 		lifecycleEventCount: signingCheckpoints.length,
 		activeConversationId: conversationId,
-		activeConversationStatus: state?.phase ?? null,
+		activeConversationStatus: state?.hostConversationStatus ?? state?.phase ?? null,
 		transcript,
 		producedDeclarations,
 		expectedWallet,
@@ -2738,9 +2741,31 @@ function parseBootstrapTranscript(
 function parseBootstrapProducedDeclarations(
 	state: HostWorkflowState['state']
 ): Record<string, unknown> | null {
+	const terminalEvidence = getHostedSoulBootstrapTerminalDeclarationEvidenceSummary(state ?? null, {
+		conversationId: state?.hostConversationId ?? null,
+	});
+	if (terminalEvidence) {
+		const previewTitle = terminalEvidence.producedDeclarationsPreview?.title?.trim();
+		return {
+			selfDescription: {
+				summary: previewTitle || 'Terminal hosted declaration evidence is ready.',
+			},
+			capabilities: [],
+			boundaries: [],
+			transparency: {
+				source: terminalEvidence.source,
+				declarationsHash: terminalEvidence.declarationsHash,
+				conversationId: terminalEvidence.conversationId,
+			},
+		};
+	}
+
 	for (const checkpoint of arrayOrEmpty(state?.signingCheckpoints)) {
 		const parsed = parseJsonRecord(
-			checkpoint.registrationPreviewJson ?? checkpoint.finalizeRequestTemplateJson ?? null
+			checkpoint.canonicalJson ??
+				checkpoint.registrationPreviewJson ??
+				checkpoint.finalizeRequestTemplateJson ??
+				null
 		);
 		if (parsed) return parsed;
 	}

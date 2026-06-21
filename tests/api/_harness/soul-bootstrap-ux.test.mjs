@@ -72,6 +72,10 @@ function resultFor({
 	retryable = false,
 	restartRequired = false,
 	restartAvailable = false,
+	hostConversationStatus = null,
+	terminalDeclarationEvidence = null,
+	publicationEvidence = publication,
+	publishGate = createHostedPublishGate(),
 } = {}) {
 	const bootstrapState = {
 		__typename: 'SoulBootstrapState',
@@ -88,6 +92,7 @@ function resultFor({
 		authorityModel: bootstrapMode === 'HOSTED' ? 'INSTANCE_TRUST' : 'WALLET_PRINCIPAL',
 		anchorState: 'HOSTED_OFFCHAIN',
 		assuranceState: 'HOSTED_OFFCHAIN',
+		hostConversationStatus,
 		updatedAt: '2026-06-12T12:00:00Z',
 		typedNextAction,
 		recoveryCategory,
@@ -100,7 +105,10 @@ function resultFor({
 		lastHostRequestId: project44SoulBootstrapIds.hostRequestId,
 		restartedAt: null,
 		signingCheckpoints,
+		terminalDeclarationEvidence,
 		publication,
+		publicationEvidence,
+		publishGate,
 		error: null,
 		correlation: null,
 	};
@@ -152,6 +160,32 @@ function hostedDeclarationEvidenceCheckpoint() {
 	return {
 		__typename: 'SoulBootstrapSigningCheckpoint',
 		...project44SoulBootstrapSigning.hostedConversation,
+	};
+}
+
+function createHostedTerminalDeclarationEvidence(overrides = {}) {
+	return {
+		__typename: 'SoulBootstrapTerminalDeclarationEvidence',
+		conversationId: ids.conversationId,
+		hostStatus: 'declaration_ready',
+		hostRequestId: project44SoulBootstrapIds.hostRequestId,
+		declarationsHash: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+		producedDeclarationsPreview: {
+			__typename: 'SoulBootstrapDeclarationPreview',
+			title: 'Hosted genesis declaration',
+			declarationCount: 1,
+		},
+		...overrides,
+	};
+}
+
+function createHostedPublishGate(overrides = {}) {
+	return {
+		__typename: 'SoulBootstrapPublishGate',
+		canPublishHostedSoul: false,
+		reason: 'blocked:terminal_declaration_evidence_absent',
+		requiresActiveConversationTerminalDeclarationEvidence: true,
+		...overrides,
 	};
 }
 
@@ -222,7 +256,13 @@ test('M4.2 bootstrap UX routes unsouled, conversation, finalize, and hosted comp
 		nextAction: 'publish_hosted_soul',
 		typedNextAction: 'PUBLISH_HOSTED_SOUL',
 		hostConversationId: ids.conversationId,
+		hostConversationStatus: 'declaration_ready',
 		signingCheckpoints: [hostedDeclarationEvidenceCheckpoint()],
+		terminalDeclarationEvidence: createHostedTerminalDeclarationEvidence(),
+		publishGate: createHostedPublishGate({
+			canPublishHostedSoul: true,
+			reason: 'allowed:active_conversation_terminal_declaration_evidence',
+		}),
 		bootstrapMode: 'HOSTED',
 	});
 	const finalize = deriveSoulBootstrapUx({

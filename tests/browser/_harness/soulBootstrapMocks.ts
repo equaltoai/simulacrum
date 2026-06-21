@@ -5,6 +5,7 @@ import {
 	project44SoulBootstrapFixtures,
 	project44SoulBootstrapIds,
 	project44SoulBootstrapSigning,
+	project49HostedGenesisStatusFixtures,
 	type Project44SoulBootstrapSurfaceOptions,
 	createProject44SoulBootstrapSurface,
 } from '../../../src/lib/greater/adapters/fixtures/soul-bootstrap.ts';
@@ -145,6 +146,16 @@ function createProject44PrincipalDeclarationPreflightSurface() {
 	} satisfies Project44SoulBootstrapSurfaceOptions);
 }
 
+
+function blockedHostedPublishGate(reason = 'blocked:terminal_declaration_evidence_absent') {
+	return {
+		__typename: 'SoulBootstrapPublishGate',
+		canPublishHostedSoul: false,
+		reason,
+		requiresActiveConversationTerminalDeclarationEvidence: true,
+	} as const;
+}
+
 function resolveProject44Surface(surface: SoulBootstrapFixtureKey | SoulBootstrapSurface): SoulBootstrapSurface {
 	if (typeof surface !== 'string') return surface;
 	if (surface === 'principalDeclarationPreflight') {
@@ -155,11 +166,14 @@ function resolveProject44Surface(surface: SoulBootstrapFixtureKey | SoulBootstra
 
 export function createProject44HostedGenesisCompleteWithoutEvidenceSurface(): SoulBootstrapSurface {
 	const surface = project44SoulBootstrapFixtures.hostedGenesisComplete;
+	const publishGate = blockedHostedPublishGate();
 	return {
 		...surface,
 		state: {
 			...surface.state,
 			signingCheckpoints: [],
+			terminalDeclarationEvidence: null,
+			publishGate,
 		},
 		workflow: surface.workflow
 			? {
@@ -168,10 +182,65 @@ export function createProject44HostedGenesisCompleteWithoutEvidenceSurface(): So
 					soulBootstrap: {
 						...surface.workflow.soulBootstrap,
 						signingCheckpoints: [],
+						terminalDeclarationEvidence: null,
+						publishGate,
 					},
 				}
 			: surface.workflow,
 	} satisfies SoulBootstrapSurface;
+}
+
+export function createProject44HostedGenesisCompleteWithClosedPublishGateSurface(): SoulBootstrapSurface {
+	const surface = project44SoulBootstrapFixtures.hostedGenesisComplete;
+	const publishGate = blockedHostedPublishGate('blocked:stale_publish_gate');
+	return {
+		...surface,
+		state: {
+			...surface.state,
+			publishGate,
+		},
+		workflow: surface.workflow
+			? {
+					...surface.workflow,
+					soulBootstrap: {
+						...surface.workflow.soulBootstrap,
+						publishGate,
+					},
+				}
+			: surface.workflow,
+	} satisfies SoulBootstrapSurface;
+}
+
+export function createProject44HostedPublishWithStaleRecoverySurface(): SoulBootstrapSurface {
+	const surface = project44SoulBootstrapFixtures.hostedGenesisComplete;
+	return {
+		...surface,
+		recoveryCategory: 'REFRESH_STATE',
+		recoveryAction: 'REFRESH_STATE',
+		state: {
+			...surface.state,
+			recoveryCategory: 'REFRESH_STATE',
+			recoveryAction: 'REFRESH_STATE',
+		},
+		workflow: surface.workflow
+			? {
+					...surface.workflow,
+					soulBootstrap: {
+						...surface.workflow.soulBootstrap,
+						recoveryCategory: 'REFRESH_STATE',
+						recoveryAction: 'REFRESH_STATE',
+					},
+				}
+			: surface.workflow,
+	} satisfies SoulBootstrapSurface;
+}
+
+export function createProject49HostedGenesisSurface(label: string): SoulBootstrapSurface {
+	const fixture = project49HostedGenesisStatusFixtures.find((candidate) => candidate.label === label);
+	if (!fixture) {
+		throw new Error(`Unknown Project 49 hosted genesis fixture: ${label}`);
+	}
+	return fixture.surface;
 }
 
 export function createProject44HostedRefreshStateSurface({

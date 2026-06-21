@@ -6,7 +6,9 @@ import {
 	createProject44ConversationConflictSurface,
 	createProject44GenericBootstrapErrorSurface,
 	createProject44HostUnavailableSurface,
+	createProject44HostedGenesisCompleteWithClosedPublishGateSurface,
 	createProject44HostedGenesisCompleteWithoutEvidenceSurface,
+	createProject44HostedPublishWithStaleRecoverySurface,
 	createProject44NullableArrayHostedRefreshStateSurface,
 	createProject44HostedRefreshStateSurface,
 	createProject44MissingRegistrationErrorSurface,
@@ -88,7 +90,7 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 		await expect(page.getByRole('button', { name: 'Review Generated Declarations' })).toBeEnabled();
 		await page.getByRole('button', { name: 'Review Generated Declarations' }).click();
 		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Publish hosted/off-chain soul');
-		await expect(page.getByTestId('hosted-soul-evidence')).toContainText('ready for hosted publish');
+		await expect(page.getByTestId('hosted-soul-evidence')).toContainText('Hosted genesis declaration');
 		await expect(page.getByTestId('hosted-soul-default-action')).toHaveCount(1);
 		await expect(page.getByRole('button', { name: 'Publish Hosted Soul' })).toBeEnabled();
 		await page.getByRole('button', { name: 'Publish Hosted Soul' }).click();
@@ -133,7 +135,7 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 		});
 	});
 
-	test('REFRESH_STATE with hosted conversation actively reconciles declaration evidence', async ({ page }) => {
+	test('REFRESH_STATE re-queries Lesser only and does not repair through completeHostedSoulGenesis', async ({ page }) => {
 		await installProject44Auth(page);
 		const harness = await installProject44Routes(page, {
 			initialSurface: createProject44HostedRefreshStateSurface(),
@@ -147,34 +149,14 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 		await page.getByRole('button', { name: 'Refresh Hosted State' }).click();
 
 		await expect(page.getByTestId('hosted-soul-success')).toContainText(
-			'Hosted declaration evidence reconciled from Lesser'
+			'Hosted soul state refreshed from Lesser'
 		);
-		await expect(lane).toContainText('Publish hosted/off-chain soul');
-		await expect(page.getByTestId('hosted-soul-evidence')).toContainText('ready for hosted publish');
+		await expect(lane).toContainText('Hosted state should refresh');
 
 		const graphQLOperations = harness.graphQLRequests().map((request) => request.operationName);
-		expect(graphQLOperations).toContain('CompleteHostedSoulGenesis');
 		expect(graphQLOperations).toContain('SoulBootstrap');
+		expect(graphQLOperations).not.toContain('CompleteHostedSoulGenesis');
 		expect(graphQLOperations).not.toContain('PublishHostedSoul');
-		const completeRequest = harness.graphQLRequests().find((request) =>
-			request.operationName === 'CompleteHostedSoulGenesis'
-		);
-		const input = completeRequest?.variables.input as Record<string, unknown> | undefined;
-		expect(input).toMatchObject({
-			username: project44SoulBootstrapIds.username,
-			registrationId: project44SoulBootstrapIds.registrationId,
-			conversationId: project44SoulBootstrapIds.conversationId,
-			recoveryAttemptId: project44SoulBootstrapIds.recoveryAttemptId,
-		});
-		expect(input?.correlationKey).toEqual(
-			expect.stringMatching(/^sim-hosted-refresh-state-repair-correlation-/)
-		);
-		expect(input?.idempotencyKey).toEqual(
-			expect.stringMatching(/^sim-hosted-refresh-state-repair-idempotency-/)
-		);
-		expect(JSON.stringify(input ?? {})).not.toMatch(
-			/walletAddress|principalAddress|signature|selfAttestation|hostToken|hostBaseUrl/i
-		);
 		await expectNoHostCredentialPrompt(page);
 		await expectNoHostCredentialStorage(page);
 	});
@@ -199,18 +181,18 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 		await page.getByRole('button', { name: 'Refresh Hosted State' }).click();
 
 		await expect(page.getByTestId('hosted-soul-success')).toContainText(
-			'Hosted declaration evidence reconciled from Lesser'
+			'Hosted soul state refreshed from Lesser'
 		);
 		expect(pageErrors).toEqual([]);
 		const graphQLOperations = harness.graphQLRequests().map((request) => request.operationName);
 		expect(graphQLOperations).toContain('DroneWorkflow');
-		expect(graphQLOperations).toContain('CompleteHostedSoulGenesis');
+		expect(graphQLOperations).not.toContain('CompleteHostedSoulGenesis');
 		expect(graphQLOperations).not.toContain('PublishHostedSoul');
 		await expectNoHostCredentialPrompt(page);
 		await expectNoHostCredentialStorage(page);
 	});
 
-	test('REFRESH_STATE surfaces complete errors instead of generic refresh success', async ({ page }) => {
+	test('REFRESH_STATE does not call completeHostedSoulGenesis even when a conversation id exists', async ({ page }) => {
 		await installProject44Auth(page);
 		const harness = await installProject44Routes(page, {
 			initialSurface: createProject44HostedRefreshStateSurface(),
@@ -220,12 +202,12 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 		await page.goto(`/l/identity/${project44SoulBootstrapIds.username}`);
 
 		await page.getByRole('button', { name: 'Refresh Hosted State' }).click();
-		await expect(page.getByTestId('hosted-soul-error')).toContainText('conversation is not in progress');
-		await expect(page.getByTestId('hosted-soul-success')).toHaveCount(0);
+		await expect(page.getByTestId('hosted-soul-error')).toHaveCount(0);
+		await expect(page.getByTestId('hosted-soul-success')).toContainText('Hosted soul state refreshed from Lesser');
 		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Hosted state should refresh');
 
 		const graphQLOperations = harness.graphQLRequests().map((request) => request.operationName);
-		expect(graphQLOperations).toContain('CompleteHostedSoulGenesis');
+		expect(graphQLOperations).not.toContain('CompleteHostedSoulGenesis');
 		expect(graphQLOperations).not.toContain('PublishHostedSoul');
 		await expectNoHostCredentialPrompt(page);
 		await expectNoHostCredentialStorage(page);
@@ -250,6 +232,41 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 			'PublishHostedSoul'
 		);
 		await expectNoHostCredentialPrompt(page);
+		await expectNoHostCredentialStorage(page);
+	});
+
+	test('hosted publish stays blocked when Lesser terminal evidence exists but publishGate is closed', async ({ page }) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: createProject44HostedGenesisCompleteWithClosedPublishGateSurface(),
+		});
+
+		await page.goto(`/l/identity/${project44SoulBootstrapIds.username}`);
+
+		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Hosted declaration evidence is missing');
+		await expect(page.getByRole('button', { name: 'Publish Hosted Soul' })).toBeDisabled();
+		expect(harness.graphQLRequests().map((request) => request.operationName)).not.toContain('PublishHostedSoul');
+		await expectNoHostCredentialStorage(page);
+	});
+
+	test('typedNextAction publish is not hidden by stale recovery copy', async ({ page }) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: createProject44HostedPublishWithStaleRecoverySurface(),
+		});
+
+		await page.goto(`/l/identity/${project44SoulBootstrapIds.username}`);
+
+		const panel = page.getByTestId('hosted-soul-bootstrap-panel');
+		await expect(panel.getByTestId('hosted-soul-recovery')).toContainText('REFRESH_STATE');
+		await expect(page.getByTestId('hosted-soul-default-action')).toHaveCount(1);
+		await expect(page.getByRole('button', { name: 'Publish Hosted Soul' })).toBeEnabled();
+		await page.getByRole('button', { name: 'Publish Hosted Soul' }).click();
+		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Hosted/off-chain soul is active');
+
+		const graphQLOperations = harness.graphQLRequests().map((request) => request.operationName);
+		expect(graphQLOperations).toContain('PublishHostedSoul');
+		expect(graphQLOperations).not.toContain('CompleteHostedSoulGenesis');
 		await expectNoHostCredentialStorage(page);
 	});
 
