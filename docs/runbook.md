@@ -1,10 +1,15 @@
 # Simulacrum Client Deploy Runbook
 
 This runbook covers building and deploying the current FaceTheory app served at
-`/l/*` to Lesser dev-stage instances. Today we actively target:
+`/l/*` to Lesser-owned stages. Today the steward-validated canary targets are
+still the dev-stage instances:
 
 - `simulacrum` at `https://dev.simulacrum.greater.website/l/`
 - `theory` at `https://dev.theory.greater.website/l/`
+
+The operator-authorized Theory live stage uses the base domain
+`https://theory.greater.website/l/`, not a `dev.*` domain. Do not use this
+runbook for production-customer Lesser instances.
 
 ## Current deploy path
 
@@ -36,6 +41,19 @@ Current dev-stage targets:
 | --- | --- | --- | --- | --- |
 | `simulacrum` | `simulacrum.greater.website` | `https://dev.simulacrum.greater.website` | `Sim` | `~/.lesser/simulacrum/simulacrum.greater.website/state.json` |
 | `theory` | `theory.greater.website` | `https://dev.theory.greater.website` | `Theory` | `~/.lesser/theory/theory.greater.website/state.json` |
+
+Current principal-authorized live target:
+
+| app slug | base domain | stage URL | AWS profile | local receipt |
+| --- | --- | --- | --- | --- |
+| `theory` | `theory.greater.website` | `https://theory.greater.website` | `TheoryLive` | `~/.lesser/theory/theory.greater.website/state.json` |
+
+Stage URL rule:
+
+- `dev` -> `https://dev.<base-domain>`
+- `staging` -> `https://staging.<base-domain>`
+- `live` -> `https://<base-domain>`; live deploys do **not** get `dev.*`
+  domains
 
 If the receipt is missing, bootstrap or refresh the stage from the `lesser`
 repo before attempting a client install.
@@ -109,6 +127,49 @@ Expected artifacts:
 - `build/client/assets/*`
 - `facetheory.lesser.json`
 
+## Single-command operator deploy
+
+The repo provides an operator wrapper around the manual runbook steps:
+
+```bash
+pnpm run deploy -- --target <simulacrum|theory|all> --stage <dev|staging|live>
+```
+
+The wrapper runs, in order:
+
+1. `pnpm install --frozen-lockfile`
+2. `pnpm check`
+3. `pnpm build`
+4. `node scripts/render-install-manifest.mjs` for each target
+5. `lesser client install --skip-build`
+6. curl verification for `/l/`, `/l/identity`, and `/auth/login`
+
+Common commands:
+
+```bash
+# Canary both documented dev targets.
+pnpm deploy:dev
+
+# Deploy only one dev target.
+pnpm deploy:simulacrum:dev
+pnpm deploy:theory:dev
+
+# Principal-authorized Theory live-stage deploy.
+# Verifies https://theory.greater.website, never dev.theory.greater.website.
+pnpm deploy:theory:live
+```
+
+Use `--dry-run` to print the exact commands without executing them:
+
+```bash
+pnpm run deploy -- --target theory --stage live --dry-run
+```
+
+The wrapper is intentionally non-interactive. It does not run from CI, does not
+merge branches, does not skip review, and does not change the upstream-first,
+strict-CSP, GraphQL-first, browser-validation, or agent-first gates. It only
+removes copy/paste drift from an operator-approved install.
+
 ## Render an instance-specific install manifest
 
 The checked-in `facetheory.lesser.json` is the default manifest for the
@@ -144,10 +205,14 @@ app root correctly. The generated `facetheory.<app>.lesser.json` files are
 gitignored. You can also use the checked-in `facetheory.lesser.json` directly
 for the `simulacrum` instance if you do not need a separate output file.
 
-## Deploy to dev
+## Manual deploy commands
 
-If you just ran `pnpm build`, use `--skip-build` so the CLI installs the
-artifacts you already validated locally:
+The single-command wrapper above is preferred for routine operator deploys. If
+you need to run the underlying commands by hand and you just ran `pnpm build`,
+use `--skip-build` so the CLI installs the artifacts you already validated
+locally.
+
+### Dev stages
 
 Simulacrum dev:
 
@@ -210,6 +275,40 @@ Expected:
 - deep routes such as `/l/identity` return `200`
 - HTML references `/l/_assets/...`
 - `/auth/login` still resolves correctly on the same domain
+
+### Theory live stage
+
+Live-stage URLs use the base domain, not a dev subdomain. The wrapper command is
+preferred:
+
+```bash
+pnpm deploy:theory:live
+```
+
+The equivalent manual install command is:
+
+```bash
+node scripts/render-install-manifest.mjs \
+  --app theory \
+  --display-name Theory \
+  --out ./facetheory.theory.lesser.json
+
+"$HOME/.local/bin/lesser" client install \
+  --app theory \
+  --base-domain theory.greater.website \
+  --aws-profile TheoryLive \
+  --stage live \
+  --config ./facetheory.theory.lesser.json \
+  --skip-build
+```
+
+Verify the live base-domain routes:
+
+```bash
+curl -i -sS https://theory.greater.website/l/ | sed -n '1,40p'
+curl -i -sS https://theory.greater.website/l/identity | sed -n '1,40p'
+curl -i -sS https://theory.greater.website/auth/login | sed -n '1,40p'
+```
 
 After the deploy-level checks pass, run the public browser smoke either:
 
