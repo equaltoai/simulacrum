@@ -16,6 +16,7 @@ legacy clone-shaped client with the agent-first Simulacrum.
   `src/lib/api/soulWorkflowHost.ts` is retained only as non-production legacy
   quarantine for retired panels.
 - Product status: canonical for the rewrite
+- Project 49 M5 update (2026-06-21): hosted/off-chain genesis now treats Lesser `typedNextAction` as the only primary-action authority. Recovery fields explain state only; Simulacrum refreshes by re-querying Lesser and gates publish on Lesser terminal declaration evidence plus `publishGate`.
 - Legacy status: the SvelteKit social shell remains in the repo during
   migration, but it is no longer the target product model
 - Rollout notes: `docs/drones/agent-first-rollout.md`
@@ -222,6 +223,19 @@ For hosted/off-chain bootstrap:
 
 - Lesser same-origin auth plus Lesser's server-side Host instance trust is the
   authority boundary.
+- Lesser's `typedNextAction` is the sole source of the visible primary action.
+  Simulacrum must not override it with recovery heuristics, raw Host status, or
+  browser-held state.
+- `recoveryCategory`, `recoveryAction`, and recovery identifiers explain how the
+  current Lesser-authored state can recover. They do not choose the primary
+  action unless Lesser also returns the corresponding `typedNextAction`.
+- `REFRESH_STATE` means re-query Lesser only. It must not call
+  `completeHostedSoulGenesis` as a repair path or manufacture declaration
+  readiness from an in-progress conversation.
+- Hosted publish is enabled only when Lesser returns active-conversation
+  terminal declaration evidence and an open `publishGate` for
+  `PUBLISH_HOSTED_SOUL`. Stale, missing, malformed, or conversation-mismatched
+  evidence fails closed.
 - The browser should not be required to provide a wallet address, wallet
   challenge signature, principal declaration digest signature, boundary
   signature, or final self-attestation before the hosted soul can be bound.
@@ -303,6 +317,34 @@ Implementation rule for the rewrite:
   soul-bootstrap bridge plus the Greater facade, or an explicitly equivalent
   first-party contract that keeps Host credentials server-side
 - do not regress to a portal-only UX
+
+## Disposable-drone hosted-genesis canary contract
+
+The live disposable-drone canary is an operator/steward follow-up after the
+release train is deployed in order: Host, then Lesser, then Greater, then
+Simulacrum. The Simulacrum implementation PR prepares the browser contract and
+runbook only; it must not deploy, install, or execute the live canary itself.
+
+The canary must prove one disposable hosted/off-chain soul can be created from
+Simulacrum without any of the forbidden bypasses:
+
+1. Start with a disposable local drone body on a dev-stage Lesser instance.
+2. Use the Simulacrum `/l/identity/:username` and `/l/souls/genesis` surfaces.
+3. Confirm every visible primary action matches Lesser `typedNextAction` and
+   exactly one primary action is visible at each step.
+4. During long hosted-genesis progress, reload the browser and confirm the same
+   in-progress state resumes from Lesser GraphQL.
+5. Use restart/supersede only when Lesser returns the typed restart action and
+   recovery attempt id.
+6. Review declaration-ready evidence only when Lesser returns terminal
+   declaration evidence for the active conversation.
+7. Publish only when `publishGate.canPublishHostedSoul` is true for that active
+   terminal declaration evidence.
+8. Confirm no raw Host browser token, raw Host workflow read, fake publish,
+   direct DynamoDB edit, or backend-log-only diagnosis was used.
+
+Record canary evidence in the install handoff or follow-up issue, not in this
+contract unless the contract itself changes.
 
 ## Deployment Contract
 

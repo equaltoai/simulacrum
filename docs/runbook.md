@@ -217,6 +217,43 @@ After the deploy-level checks pass, run the public browser smoke either:
 - remotely with the manual GitHub Actions workflow
   `.github/workflows/browser-live-smoke.yml`
 
+## Project 49 hosted-genesis disposable-drone canary
+
+This is an operator/steward follow-up after the release train is deployed in
+order: `lesser-host` v1.0.5, Lesser v1.5.6, Greater `greater-v0.11.2`, then the
+merged Simulacrum PR. Do not run this canary from an implementation branch and
+do not run it before the installed-client deploy has completed.
+
+Use a disposable dev-stage drone body only; never use production-customer
+instances or durable research identities for the canary.
+
+1. Confirm the Simulacrum PR is merged and installed through `lesser client
+   install` by the operator.
+2. Open the dev-stage Simulacrum `/l/identity/:username` surface for the
+   disposable drone.
+3. Confirm there is exactly one visible hosted primary action and that it
+   matches Lesser `typedNextAction`.
+4. Start hosted definition and send the hosted genesis message through the
+   Simulacrum UI.
+5. While Host/Lesser reports long in-progress genesis, reload the browser and
+   confirm the state resumes from Lesser GraphQL. `REFRESH_STATE` must only
+   re-query Lesser; it must not call `completeHostedSoulGenesis` as a repair.
+6. If restart/supersede is returned, use only the Simulacrum restart action
+   backed by Lesser `restartSoulBootstrap` and the Lesser recovery attempt id.
+7. When declaration-ready, verify the UI shows Lesser terminal declaration
+   evidence for the active conversation.
+8. Publish only after `publishGate.canPublishHostedSoul` is true and the active
+   terminal declaration evidence is present.
+9. Capture evidence: route URL, visible state/action sequence, GraphQL
+   operation names, reload/resume result, restart/supersede result if exercised,
+   declaration-ready evidence, publish result, and Browser Live Smoke outcome.
+
+Fail the canary and route upstream rather than working around if any of these
+forbidden conditions appear: raw Host browser token or instance key, raw Host
+workflow reads gating hosted genesis, fake publish, direct DynamoDB edits,
+backend-log-only diagnosis, new REST data paths, or multiple visible primary
+actions.
+
 The browser-suite operating guide and API-boundary notes live in:
 
 - [`docs/browser-validation-operating-model.md`](./browser-validation-operating-model.md)

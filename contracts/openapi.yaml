@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
     title: Lesser REST API
     version: 0.1.0
-    description: Auto-generated route skeleton; fill request/response schemas over time. Do not serve this file at runtime; use it for build-time client generation.
+    description: Auto-generated route skeleton; fill request/response schemas over time. Do not serve this file at runtime; use it for build-time client generation. This contract covers the REST surface only; the anonymous GraphQL public-read subset is documented in docs/api-reference.md and docs/security-public-surface.md.
 components:
     securitySchemes:
         bearerAuth:
@@ -794,6 +794,31 @@ components:
                 - total_edges
                 - total_nodes
             type: object
+        AdminUnlockAgentRequest:
+            additionalProperties: false
+            properties:
+                reason:
+                    type: string
+            type: object
+        AdminUnlockAgentResponse:
+            additionalProperties: false
+            properties:
+                reason:
+                    type: string
+                unlocked:
+                    type: boolean
+                unlocked_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                unlocked_by:
+                    type: string
+                username:
+                    type: string
+            required:
+                - unlocked
+                - unlocked_at
+                - unlocked_by
+                - username
+            type: object
         AdminUpdateTrustRequest:
             additionalProperties: false
             properties:
@@ -864,6 +889,28 @@ components:
                     type: array
                 display_name:
                     type: string
+                identity_semantics:
+                    $ref: '#/components/schemas/AgentIdentitySemantics'
+                mcp_access:
+                    $ref: '#/components/schemas/AgentMCPAccess'
+                quarantine_active:
+                    type: boolean
+                quarantine_approved_at:
+                    anyOf:
+                        - $ref: '#/components/schemas/RFC3339DateTime'
+                        - type: "null"
+                quarantine_approved_by:
+                    type: string
+                quarantine_end:
+                    anyOf:
+                        - $ref: '#/components/schemas/RFC3339DateTime'
+                        - type: "null"
+                quarantine_start:
+                    anyOf:
+                        - $ref: '#/components/schemas/RFC3339DateTime'
+                        - type: "null"
+                quarantine_status:
+                    type: string
                 username:
                     type: string
                 verified:
@@ -877,8 +924,201 @@ components:
                 - agent_type
                 - agent_version
                 - display_name
+                - identity_semantics
+                - mcp_access
+                - quarantine_active
                 - username
                 - verified
+            type: object
+        AgentAccessLease:
+            additionalProperties: false
+            properties:
+                absolute_expires_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                agent_wallet:
+                    type: string
+                created_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                device_label:
+                    type: string
+                id:
+                    type: string
+                idle_expires_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                idle_timeout_hours:
+                    type: integer
+                last_used_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                lease_version:
+                    type: integer
+                principal_username:
+                    type: string
+                principal_wallet:
+                    type: string
+                revoked_at:
+                    anyOf:
+                        - $ref: '#/components/schemas/RFC3339DateTime'
+                        - type: "null"
+                revoked_by:
+                    type: string
+                revoked_reason:
+                    type: string
+                scopes:
+                    items:
+                        type: string
+                    type: array
+                session_key_created_at:
+                    anyOf:
+                        - $ref: '#/components/schemas/RFC3339DateTime'
+                        - type: "null"
+                session_key_last_used_at:
+                    anyOf:
+                        - $ref: '#/components/schemas/RFC3339DateTime'
+                        - type: "null"
+                session_key_type:
+                    type: string
+                session_public_key:
+                    type: string
+                status:
+                    type: string
+                token_ttl_hours:
+                    type: integer
+                updated_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                username:
+                    type: string
+            required:
+                - absolute_expires_at
+                - agent_wallet
+                - created_at
+                - device_label
+                - id
+                - idle_expires_at
+                - idle_timeout_hours
+                - last_used_at
+                - lease_version
+                - principal_username
+                - principal_wallet
+                - scopes
+                - status
+                - token_ttl_hours
+                - updated_at
+                - username
+            type: object
+        AgentAccessLeaseChallengeRequest:
+            additionalProperties: false
+            properties:
+                absolute_ttl_hours:
+                    type: integer
+                agent_wallet:
+                    type: string
+                device_label:
+                    type: string
+                idle_timeout_hours:
+                    type: integer
+                lease_id:
+                    type: string
+                principal_wallet:
+                    type: string
+                scopes:
+                    items:
+                        type: string
+                    type: array
+                session_public_key:
+                    type: string
+                token_ttl_hours:
+                    type: integer
+            required:
+                - agent_wallet
+                - device_label
+                - principal_wallet
+                - scopes
+            type: object
+        AgentAccessLeaseChallengeResponse:
+            additionalProperties: false
+            properties:
+                absolute_ttl_hours:
+                    type: integer
+                action:
+                    type: string
+                agent_wallet:
+                    type: string
+                device_label:
+                    type: string
+                expires_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                id:
+                    type: string
+                idle_timeout_hours:
+                    type: integer
+                issued_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                lease_id:
+                    type: string
+                message:
+                    type: string
+                principal_wallet:
+                    type: string
+                scopes:
+                    items:
+                        type: string
+                    type: array
+                session_key_type:
+                    type: string
+                session_public_key:
+                    type: string
+                token_ttl_hours:
+                    type: integer
+                typed_data: {}
+                username:
+                    type: string
+                wallet_address:
+                    type: string
+            required:
+                - absolute_ttl_hours
+                - action
+                - agent_wallet
+                - device_label
+                - expires_at
+                - id
+                - idle_timeout_hours
+                - issued_at
+                - lease_id
+                - message
+                - principal_wallet
+                - scopes
+                - token_ttl_hours
+                - username
+                - wallet_address
+            type: object
+        AgentAccessLeaseListResponse:
+            additionalProperties: false
+            properties:
+                leases:
+                    items:
+                        $ref: '#/components/schemas/AgentAccessLease'
+                    type: array
+            required:
+                - leases
+            type: object
+        AgentAccessLeaseSessionKeyChallengeRequest:
+            additionalProperties: false
+            properties:
+                session_public_key:
+                    type: string
+            required:
+                - session_public_key
+            type: object
+        AgentAccessLeaseTokenResponse:
+            additionalProperties: false
+            properties:
+                lease_id:
+                    type: string
+                token:
+                    $ref: '#/components/schemas/OAuthTokenResponse'
+            required:
+                - lease_id
+                - token
             type: object
         AgentActivityLogEntry:
             additionalProperties: false
@@ -939,6 +1179,8 @@ components:
                     type: string
                 bio:
                     type: string
+                device_label:
+                    type: string
                 display_name:
                     type: string
                 expires_in:
@@ -962,6 +1204,46 @@ components:
             required:
                 - account
                 - token
+            type: object
+        AgentIdentitySemantics:
+            additionalProperties: false
+            properties:
+                attribution_label:
+                    type: string
+                body_identity_preserved:
+                    type: boolean
+                continuity_state:
+                    type: string
+                continuity_summary:
+                    type: string
+                identity_label:
+                    type: string
+                identity_state:
+                    type: string
+                lifecycle_state:
+                    type: string
+                memory_references_preserved:
+                    type: boolean
+                moderation_label:
+                    type: string
+                soul_agent_id:
+                    type: string
+                soul_binding_state:
+                    type: string
+                timeline_presence_preserved:
+                    type: boolean
+            required:
+                - attribution_label
+                - body_identity_preserved
+                - continuity_state
+                - continuity_summary
+                - identity_label
+                - identity_state
+                - lifecycle_state
+                - memory_references_preserved
+                - moderation_label
+                - soul_binding_state
+                - timeline_presence_preserved
             type: object
         AgentKeyChallengeRequest:
             additionalProperties: false
@@ -998,6 +1280,33 @@ components:
             items:
                 $ref: '#/components/schemas/Agent'
             type: array
+        AgentMCPAccess:
+            additionalProperties: false
+            properties:
+                authorization_server_url:
+                    type: string
+                guidance:
+                    items:
+                        type: string
+                    type: array
+                mcp_url:
+                    type: string
+                protected_resource_url:
+                    type: string
+                registration_url:
+                    type: string
+                scopes:
+                    items:
+                        type: string
+                    type: array
+            required:
+                - authorization_server_url
+                - guidance
+                - mcp_url
+                - protected_resource_url
+                - registration_url
+                - scopes
+            type: object
         AgentMemoryEventRequest:
             additionalProperties: false
             properties:
@@ -1094,9 +1403,17 @@ components:
                     items:
                         type: string
                     type: array
+                continuity_state:
+                    type: string
+                continuity_summary:
+                    type: string
                 delegated_by:
                     type: string
                 delegated_by_did:
+                    type: string
+                identity_label:
+                    type: string
+                identity_state:
                     type: string
                 memory_citations:
                     items:
@@ -1104,12 +1421,16 @@ components:
                     type: array
                 model_id:
                     type: string
+                moderation_label:
+                    type: string
                 schema_version:
                     type: string
                 scopes:
                     items:
                         type: string
                     type: array
+                soul_agent_id:
+                    type: string
                 trigger_details:
                     type: string
                 trigger_type:
@@ -1132,10 +1453,54 @@ components:
                 - public_key
                 - signature
             type: object
+        AgentRuntimeSession:
+            additionalProperties: false
+            properties:
+                absolute_expires_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                client_id:
+                    type: string
+                created_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                device_label:
+                    type: string
+                idle_expires_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                last_used_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                revoked:
+                    type: boolean
+                revoked_at:
+                    anyOf:
+                        - $ref: '#/components/schemas/RFC3339DateTime'
+                        - type: "null"
+                revoked_reason:
+                    type: string
+                scope:
+                    type: string
+                session_id:
+                    type: string
+            required:
+                - absolute_expires_at
+                - client_id
+                - created_at
+                - device_label
+                - idle_expires_at
+                - last_used_at
+                - revoked
+                - scope
+                - session_id
+            type: object
+        AgentRuntimeSessionList:
+            items:
+                $ref: '#/components/schemas/AgentRuntimeSession'
+            type: array
         AgentSelfAuthTokenRequest:
             additionalProperties: false
             properties:
                 challenge_id:
+                    type: string
+                device_label:
                     type: string
                 signature:
                     type: string
@@ -1153,6 +1518,8 @@ components:
                 bio:
                     type: string
                 challenge_id:
+                    type: string
+                device_label:
                     type: string
                 display_name:
                     type: string
@@ -1317,12 +1684,17 @@ components:
             additionalProperties: false
             properties:
                 client_class:
+                    description: Optional Lesser client classification. Public registration accepts `cli` and `web`; `agent` is not accepted on public registration surfaces.
                     type: string
                 client_name:
+                    type: string
+                grant_types:
                     type: string
                 redirect_uris:
                     type: string
                 scopes:
+                    type: string
+                token_endpoint_auth_method:
                     type: string
                 website:
                     type: string
@@ -1338,11 +1710,17 @@ components:
                     type: string
                 client_secret:
                     type: string
+                grant_types:
+                    items:
+                        type: string
+                    type: array
                 id:
                     type: string
                 name:
                     type: string
                 redirect_uri:
+                    type: string
+                token_endpoint_auth_method:
                     type: string
                 vapid_key:
                     type: string
@@ -1353,6 +1731,57 @@ components:
                 - id
                 - name
                 - redirect_uri
+            type: object
+        AppSecretRotationRequest:
+            additionalProperties: false
+            properties:
+                force_invalidate:
+                    type: boolean
+                grace_period_seconds:
+                    type: integer
+            type: object
+        AppSecretRotationResponse:
+            additionalProperties: false
+            properties:
+                client_id:
+                    type: string
+                client_secret:
+                    type: string
+                forced_invalidation:
+                    type: boolean
+                grace_period_seconds:
+                    type: integer
+                previous_secret_valid_until:
+                    type: string
+                rotated_at:
+                    type: string
+                token_endpoint_auth_method:
+                    type: string
+            required:
+                - client_id
+                - client_secret
+            type: object
+        ApproveSkillRevisionRequest:
+            additionalProperties: false
+            properties:
+                approval_authority_id:
+                    type: string
+                approval_authority_type:
+                    type: string
+                approval_digest:
+                    type: string
+                approval_id:
+                    type: string
+                approval_reason:
+                    type: string
+                approval_ref:
+                    type: string
+                approval_signature:
+                    type: string
+                principal_approval_id:
+                    type: string
+                principal_id:
+                    type: string
             type: object
         AuthAuthResponse:
             additionalProperties: false
@@ -1398,9 +1827,108 @@ components:
                 - message
                 - signature
             type: object
+        AuthorizeAgentAccessLeaseSessionKeyRequest:
+            additionalProperties: false
+            properties:
+                challenge_id:
+                    type: string
+                signature:
+                    type: string
+            required:
+                - challenge_id
+                - signature
+            type: object
+        BoundSoulResponse:
+            additionalProperties: false
+            properties:
+                agent:
+                    $ref: '#/components/schemas/SoulAgentIdentity'
+                binding:
+                    $ref: '#/components/schemas/SoulAgentBinding'
+                binding_state:
+                    type: string
+            required:
+                - agent
+                - binding
+                - binding_state
+            type: object
         ClearNotificationsRequest:
             additionalProperties: false
             properties: {}
+            type: object
+        CommunicationAttachment:
+            additionalProperties: false
+            properties:
+                content_type:
+                    type: string
+                filename:
+                    type: string
+                id:
+                    type: string
+                sha256:
+                    type: string
+                size_bytes:
+                    type: integer
+            required:
+                - content_type
+                - filename
+                - id
+                - sha256
+                - size_bytes
+            type: object
+        CommunicationFrom:
+            additionalProperties: false
+            properties:
+                address:
+                    type: string
+                display_name:
+                    type: string
+                soul_agent_id:
+                    type: string
+            required:
+                - address
+            type: object
+        CommunicationNotification:
+            additionalProperties: false
+            properties:
+                attachments:
+                    items:
+                        $ref: '#/components/schemas/CommunicationAttachment'
+                    type: array
+                body:
+                    type: string
+                channel:
+                    type: string
+                from:
+                    $ref: '#/components/schemas/CommunicationFrom'
+                in_reply_to:
+                    type: string
+                message_id:
+                    type: string
+                received_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                subject:
+                    type: string
+                thread_id:
+                    type: string
+                to:
+                    anyOf:
+                        - $ref: '#/components/schemas/CommunicationTo'
+                        - type: "null"
+            required:
+                - channel
+                - from
+                - message_id
+                - received_at
+                - thread_id
+            type: object
+        CommunicationTo:
+            additionalProperties: false
+            properties:
+                address:
+                    type: string
+            required:
+                - address
             type: object
         CommunityNoteRateLimit:
             additionalProperties: false
@@ -1420,6 +1948,7 @@ components:
             additionalProperties: false
             properties:
                 url:
+                    format: uri
                     type: string
             required:
                 - url
@@ -1587,10 +2116,52 @@ components:
                 - id
                 - unread
             type: object
+        ConversationDetail:
+            additionalProperties: false
+            properties:
+                accounts:
+                    items:
+                        $ref: '#/components/schemas/Account'
+                    type: array
+                id:
+                    type: string
+                last_status:
+                    anyOf:
+                        - $ref: '#/components/schemas/Status'
+                        - type: "null"
+                messages:
+                    items:
+                        $ref: '#/components/schemas/Status'
+                    type: array
+                unread:
+                    type: boolean
+            required:
+                - accounts
+                - id
+                - messages
+                - unread
+            type: object
         ConversationList:
             items:
                 $ref: '#/components/schemas/Conversation'
             type: array
+        CreateAgentAccessLeaseRequest:
+            additionalProperties: false
+            properties:
+                agent_challenge_id:
+                    type: string
+                agent_signature:
+                    type: string
+                principal_challenge_id:
+                    type: string
+                principal_signature:
+                    type: string
+            required:
+                - agent_challenge_id
+                - agent_signature
+                - principal_challenge_id
+                - principal_signature
+            type: object
         CreateAnnouncementRequest:
             additionalProperties: false
             properties:
@@ -1612,8 +2183,12 @@ components:
             additionalProperties: false
             properties:
                 content:
+                    maxLength: 500
+                    minLength: 10
                     type: string
                 language:
+                    maxLength: 2
+                    minLength: 2
                     type: string
                 object_id:
                     type: string
@@ -1622,6 +2197,7 @@ components:
                 sources:
                     items:
                         $ref: '#/components/schemas/CommunityNoteSource'
+                    maxItems: 5
                     type: array
             required:
                 - content
@@ -1762,6 +2338,29 @@ components:
                 - account_id
                 - forward
             type: object
+        CreateSkillAssignmentRequest:
+            additionalProperties: false
+            properties:
+                approval_id:
+                    type: string
+                assignment_id:
+                    type: string
+                exposure:
+                    type: string
+                principal_approval_id:
+                    type: string
+                principal_id:
+                    type: string
+                revision_number:
+                    type: integer
+                subject_id:
+                    type: string
+                subject_type:
+                    type: string
+            required:
+                - subject_id
+                - subject_type
+            type: object
         CreateStatusRequest:
             additionalProperties: false
             properties:
@@ -1770,6 +2369,7 @@ components:
                         - $ref: '#/components/schemas/AgentPostAttribution'
                         - type: "null"
                 in_reply_to_id:
+                    description: Reply parent reference. Accepts a local status ID or a canonical remote status URL. Canonical remote URLs are resolved locally first and materialized on the create path when needed. Direct replies remain conversations-owned.
                     type: string
                 language:
                     type: string
@@ -1796,6 +2396,12 @@ components:
                 status:
                     type: string
                 visibility:
+                    description: 'Status visibility. `direct` creates are 1:1 only: the content must contain exactly one resolvable local or remote @mention, and Lesser serializes that resolved actor into the ActivityPub addressing fields. Stored DM visibility and repair tooling use the addressing fields as the source of truth; content mentions alone do not authorize or backfill participants.'
+                    enum:
+                        - public
+                        - unlisted
+                        - private
+                        - direct
                     type: string
             required:
                 - sensitive
@@ -1878,6 +2484,41 @@ components:
                 - reject_media
                 - reject_reports
                 - severity
+            type: object
+        EffectiveSkillResource:
+            additionalProperties: false
+            properties:
+                assignment:
+                    $ref: '#/components/schemas/SkillAssignmentResource'
+                revision:
+                    $ref: '#/components/schemas/SkillRevisionResource'
+                skill:
+                    $ref: '#/components/schemas/SkillResource'
+            required:
+                - assignment
+                - revision
+                - skill
+            type: object
+        EffectiveSkillsResponse:
+            additionalProperties: false
+            properties:
+                count:
+                    type: integer
+                next_cursor:
+                    type: string
+                skills:
+                    items:
+                        $ref: '#/components/schemas/EffectiveSkillResource'
+                    type: array
+                subject_id:
+                    type: string
+                subject_type:
+                    type: string
+            required:
+                - count
+                - skills
+                - subject_id
+                - subject_type
             type: object
         EmailDomainBlockRequest:
             additionalProperties: false
@@ -3196,10 +3837,16 @@ components:
             properties:
                 account:
                     $ref: '#/components/schemas/Account'
+                communication:
+                    anyOf:
+                        - $ref: '#/components/schemas/CommunicationNotification'
+                        - type: "null"
                 created_at:
                     $ref: '#/components/schemas/RFC3339DateTime'
                 id:
                     type: string
+                read:
+                    type: boolean
                 status:
                     anyOf:
                         - $ref: '#/components/schemas/Status'
@@ -3210,7 +3857,99 @@ components:
                 - account
                 - created_at
                 - id
+                - read
                 - type
+            type: object
+        NotificationDeliveryAttachment:
+            additionalProperties: false
+            properties:
+                contentType:
+                    type: string
+                filename:
+                    type: string
+                id:
+                    type: string
+                sha256:
+                    type: string
+                sizeBytes:
+                    type: integer
+            required:
+                - contentType
+                - filename
+                - id
+                - sha256
+                - sizeBytes
+            type: object
+        NotificationDeliveryFrom:
+            additionalProperties: false
+            properties:
+                address:
+                    type: string
+                displayName:
+                    type: string
+                number:
+                    type: string
+                soulAgentId:
+                    anyOf:
+                        - type: string
+                        - type: "null"
+            required:
+                - address
+                - displayName
+            type: object
+        NotificationDeliveryRequest:
+            additionalProperties: false
+            properties:
+                attachments:
+                    items:
+                        $ref: '#/components/schemas/NotificationDeliveryAttachment'
+                    type: array
+                body:
+                    type: string
+                bodyMimeType:
+                    type: string
+                channel:
+                    type: string
+                from:
+                    $ref: '#/components/schemas/NotificationDeliveryFrom'
+                inReplyTo:
+                    anyOf:
+                        - type: string
+                        - type: "null"
+                messageId:
+                    type: string
+                receivedAt:
+                    type: string
+                subject:
+                    type: string
+                to:
+                    anyOf:
+                        - $ref: '#/components/schemas/NotificationDeliveryTo'
+                        - type: "null"
+                type:
+                    type: string
+            required:
+                - body
+                - channel
+                - from
+                - messageId
+                - receivedAt
+                - subject
+                - type
+            type: object
+        NotificationDeliveryTo:
+            additionalProperties: false
+            properties:
+                address:
+                    type: string
+                number:
+                    type: string
+                soulAgentId:
+                    anyOf:
+                        - type: string
+                        - type: "null"
+            required:
+                - address
             type: object
         NotificationFilter:
             additionalProperties: false
@@ -3312,10 +4051,16 @@ components:
             properties:
                 action:
                     type: string
+                client_id:
+                    type: string
+                scope:
+                    type: string
                 user_code:
                     type: string
             required:
                 - action
+                - client_id
+                - scope
                 - user_code
             type: object
         OAuthDeviceConsentResponse:
@@ -3364,6 +4109,102 @@ components:
                 - status
                 - user_code
             type: object
+        OAuthDynamicClientRegistrationRequest:
+            additionalProperties: false
+            properties:
+                client_class:
+                    description: Optional Lesser client classification. Public registration accepts `cli` and `web`; `agent` is not accepted on public registration surfaces.
+                    type: string
+                client_name:
+                    type: string
+                client_uri:
+                    type: string
+                contacts:
+                    items:
+                        type: string
+                    type: array
+                grant_types:
+                    items:
+                        type: string
+                    type: array
+                logo_uri:
+                    type: string
+                policy_uri:
+                    type: string
+                redirect_uris:
+                    items:
+                        type: string
+                    type: array
+                response_types:
+                    items:
+                        type: string
+                    type: array
+                scope:
+                    type: string
+                software_id:
+                    type: string
+                software_version:
+                    type: string
+                token_endpoint_auth_method:
+                    type: string
+                tos_uri:
+                    type: string
+            type: object
+        OAuthDynamicClientRegistrationResponse:
+            additionalProperties: false
+            properties:
+                client_class:
+                    description: Lesser client classification persisted for the registered public client.
+                    type: string
+                client_id:
+                    type: string
+                client_id_issued_at:
+                    type: integer
+                client_name:
+                    type: string
+                client_secret:
+                    type: string
+                client_secret_expires_at:
+                    type: integer
+                client_uri:
+                    type: string
+                contacts:
+                    items:
+                        type: string
+                    type: array
+                grant_types:
+                    items:
+                        type: string
+                    type: array
+                logo_uri:
+                    type: string
+                policy_uri:
+                    type: string
+                redirect_uris:
+                    items:
+                        type: string
+                    type: array
+                registration_source:
+                    type: string
+                response_types:
+                    items:
+                        type: string
+                    type: array
+                scope:
+                    type: string
+                software_id:
+                    type: string
+                software_version:
+                    type: string
+                token_endpoint_auth_method:
+                    type: string
+                tos_uri:
+                    type: string
+            required:
+                - client_id
+                - client_id_issued_at
+                - client_secret_expires_at
+            type: object
         OAuthErrorResponse:
             additionalProperties: false
             properties:
@@ -3410,6 +4251,9 @@ components:
                 redirect_uri:
                     type: string
                 refresh_token:
+                    type: string
+                resource:
+                    description: Canonical target resource URI. For remote MCP authorization, this must match the actor-scoped MCP URL used during the authorize request.
                     type: string
                 scope:
                     type: string
@@ -3614,6 +4458,46 @@ components:
             items:
                 $ref: '#/components/schemas/PreviewCard'
             type: array
+        PromoteSkillProposalRequest:
+            additionalProperties: false
+            properties:
+                approval_authority_id:
+                    type: string
+                approval_authority_type:
+                    type: string
+                approval_digest:
+                    type: string
+                approval_id:
+                    type: string
+                approval_reason:
+                    type: string
+                approval_ref:
+                    type: string
+                approval_signature:
+                    type: string
+                expected_manifest_digest:
+                    type: string
+                expected_source_digest:
+                    type: string
+                principal_approval_id:
+                    type: string
+                principal_id:
+                    type: string
+            type: object
+        PromoteSkillProposalResponse:
+            additionalProperties: false
+            properties:
+                created:
+                    type: boolean
+                proposal:
+                    $ref: '#/components/schemas/SkillProposalResource'
+                revision:
+                    $ref: '#/components/schemas/SkillRevisionResource'
+            required:
+                - created
+                - proposal
+                - revision
+            type: object
         PushNotification:
             additionalProperties: false
             properties:
@@ -3851,6 +4735,17 @@ components:
                     type: array
             required:
                 - account_ids
+            type: object
+        RenewAgentAccessLeaseTokenRequest:
+            additionalProperties: false
+            properties:
+                challenge_id:
+                    type: string
+                signature:
+                    type: string
+            required:
+                - challenge_id
+                - signature
             type: object
         Report:
             additionalProperties: false
@@ -4226,6 +5121,37 @@ components:
                 - event_id
                 - severity
             type: object
+        RevokeAgentAccessLeaseRequest:
+            additionalProperties: false
+            properties:
+                reason:
+                    type: string
+            type: object
+        RevokeAgentRuntimeSessionRequest:
+            additionalProperties: false
+            properties:
+                reason:
+                    type: string
+            type: object
+        RevokeSkillAssignmentRequest:
+            additionalProperties: false
+            properties:
+                reason:
+                    type: string
+                subject_id:
+                    type: string
+                subject_type:
+                    type: string
+            required:
+                - subject_id
+                - subject_type
+            type: object
+        RevokeSkillRevisionRequest:
+            additionalProperties: false
+            properties:
+                reason:
+                    type: string
+            type: object
         Role:
             additionalProperties: false
             properties:
@@ -4563,10 +5489,871 @@ components:
                 - locked
                 - urls
             type: object
+        SkillAssignmentResource:
+            additionalProperties: false
+            properties:
+                approval_id:
+                    type: string
+                assigned_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                assigned_by:
+                    type: string
+                created_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                exposure:
+                    type: string
+                id:
+                    type: string
+                principal_approval_id:
+                    type: string
+                principal_id:
+                    type: string
+                provenance:
+                    items:
+                        $ref: '#/components/schemas/SkillProvenanceRef'
+                    type: array
+                revision_id:
+                    type: string
+                revision_number:
+                    type: integer
+                revoked_at:
+                    anyOf:
+                        - $ref: '#/components/schemas/RFC3339DateTime'
+                        - type: "null"
+                revoked_by:
+                    type: string
+                revoked_reason:
+                    type: string
+                skill_id:
+                    type: string
+                status:
+                    type: string
+                subject_id:
+                    type: string
+                subject_type:
+                    type: string
+                updated_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                version:
+                    type: integer
+            required:
+                - assigned_at
+                - created_at
+                - exposure
+                - id
+                - skill_id
+                - status
+                - subject_id
+                - subject_type
+                - updated_at
+                - version
+            type: object
+        SkillAssignmentResponse:
+            additionalProperties: false
+            properties:
+                assignment:
+                    $ref: '#/components/schemas/SkillAssignmentResource'
+            required:
+                - assignment
+            type: object
+        SkillAssignmentsResponse:
+            additionalProperties: false
+            properties:
+                assignments:
+                    items:
+                        $ref: '#/components/schemas/SkillAssignmentResource'
+                    type: array
+                count:
+                    type: integer
+                next_cursor:
+                    type: string
+            required:
+                - assignments
+                - count
+            type: object
+        SkillBundleDigestsResource:
+            additionalProperties: false
+            properties:
+                approval_digest:
+                    type: string
+                bundle_digest:
+                    type: string
+                content_digest:
+                    type: string
+                manifest_digest:
+                    type: string
+                publication_digest:
+                    type: string
+            required:
+                - bundle_digest
+                - publication_digest
+            type: object
+        SkillBundleFileResource:
+            additionalProperties: false
+            properties:
+                content:
+                    type: string
+                content_included:
+                    type: boolean
+                content_type:
+                    type: string
+                digest:
+                    type: string
+                encoding:
+                    type: string
+                install_path:
+                    type: string
+                path:
+                    type: string
+                role:
+                    type: string
+                size_bytes:
+                    type: integer
+            required:
+                - content_included
+                - digest
+                - install_path
+                - path
+            type: object
+        SkillBundleResource:
+            additionalProperties: false
+            properties:
+                approval_authority_id:
+                    type: string
+                approval_authority_type:
+                    type: string
+                approval_id:
+                    type: string
+                approval_ref:
+                    type: string
+                approval_signature:
+                    type: string
+                approved_at:
+                    anyOf:
+                        - $ref: '#/components/schemas/RFC3339DateTime'
+                        - type: "null"
+                approved_by:
+                    type: string
+                bundle_id:
+                    type: string
+                default_exposure:
+                    type: string
+                digests:
+                    $ref: '#/components/schemas/SkillBundleDigestsResource'
+                files:
+                    items:
+                        $ref: '#/components/schemas/SkillBundleFileResource'
+                    type: array
+                install_hints:
+                    $ref: '#/components/schemas/SkillInstallHintsResource'
+                principal_approval_id:
+                    type: string
+                principal_id:
+                    type: string
+                provenance:
+                    items:
+                        $ref: '#/components/schemas/SkillProvenanceRef'
+                    type: array
+                published:
+                    type: boolean
+                revision_id:
+                    type: string
+                revision_number:
+                    type: integer
+                schema_version:
+                    type: string
+                skill_id:
+                    type: string
+                source:
+                    type: string
+            required:
+                - bundle_id
+                - default_exposure
+                - digests
+                - install_hints
+                - published
+                - revision_id
+                - revision_number
+                - schema_version
+                - skill_id
+                - source
+            type: object
+        SkillBundleResponse:
+            additionalProperties: false
+            properties:
+                bundle:
+                    $ref: '#/components/schemas/SkillBundleResource'
+            required:
+                - bundle
+            type: object
+        SkillCatalogEntryResource:
+            additionalProperties: false
+            properties:
+                bundle:
+                    $ref: '#/components/schemas/SkillBundleResource'
+                revision:
+                    $ref: '#/components/schemas/SkillRevisionResource'
+                skill:
+                    $ref: '#/components/schemas/SkillResource'
+            required:
+                - bundle
+                - revision
+                - skill
+            type: object
+        SkillCatalogResponse:
+            additionalProperties: false
+            properties:
+                count:
+                    type: integer
+                entries:
+                    items:
+                        $ref: '#/components/schemas/SkillCatalogEntryResource'
+                    type: array
+                next_cursor:
+                    type: string
+            required:
+                - count
+                - entries
+            type: object
+        SkillInstallHintsResource:
+            additionalProperties: false
+            properties:
+                directory_name:
+                    type: string
+                entrypoint:
+                    type: string
+                layout:
+                    type: string
+                required_files:
+                    items:
+                        type: string
+                    type: array
+                runtime_targets:
+                    items:
+                        type: string
+                    type: array
+            required:
+                - directory_name
+                - entrypoint
+                - layout
+            type: object
+        SkillListResponse:
+            additionalProperties: false
+            properties:
+                count:
+                    type: integer
+                next_cursor:
+                    type: string
+                skills:
+                    items:
+                        $ref: '#/components/schemas/SkillResource'
+                    type: array
+            required:
+                - count
+                - skills
+            type: object
+        SkillProposalResource:
+            additionalProperties: false
+            properties:
+                conversation_id:
+                    type: string
+                conversation_message_id:
+                    type: string
+                created_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                created_by:
+                    type: string
+                id:
+                    type: string
+                principal_approval_id:
+                    type: string
+                principal_id:
+                    type: string
+                promoted_at:
+                    anyOf:
+                        - $ref: '#/components/schemas/RFC3339DateTime'
+                        - type: "null"
+                promoted_by:
+                    type: string
+                promoted_revision_id:
+                    type: string
+                promoted_revision_number:
+                    type: integer
+                promotion_digest:
+                    type: string
+                proposed_manifest_digest:
+                    type: string
+                proposed_revision_number:
+                    type: integer
+                provenance:
+                    items:
+                        $ref: '#/components/schemas/SkillProvenanceRef'
+                    type: array
+                requested_exposure:
+                    type: string
+                review_reason:
+                    type: string
+                reviewed_at:
+                    anyOf:
+                        - $ref: '#/components/schemas/RFC3339DateTime'
+                        - type: "null"
+                reviewed_by:
+                    type: string
+                skill_id:
+                    type: string
+                source_digest:
+                    type: string
+                source_type:
+                    type: string
+                source_uri:
+                    type: string
+                status:
+                    type: string
+                summary:
+                    type: string
+                title:
+                    type: string
+                updated_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                version:
+                    type: integer
+            required:
+                - created_at
+                - id
+                - requested_exposure
+                - skill_id
+                - status
+                - updated_at
+                - version
+            type: object
+        SkillProposalResponse:
+            additionalProperties: false
+            properties:
+                proposal:
+                    $ref: '#/components/schemas/SkillProposalResource'
+            required:
+                - proposal
+            type: object
+        SkillProposalsResponse:
+            additionalProperties: false
+            properties:
+                count:
+                    type: integer
+                next_cursor:
+                    type: string
+                proposals:
+                    items:
+                        $ref: '#/components/schemas/SkillProposalResource'
+                    type: array
+            required:
+                - count
+                - proposals
+            type: object
+        SkillProvenanceRef:
+            additionalProperties: false
+            properties:
+                digest:
+                    type: string
+                notes:
+                    type: string
+                ref:
+                    type: string
+                source_type:
+                    type: string
+                source_uri:
+                    type: string
+            required:
+                - source_type
+            type: object
+        SkillResource:
+            additionalProperties: false
+            properties:
+                capabilities:
+                    items:
+                        type: string
+                    type: array
+                created_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                created_by:
+                    type: string
+                current_revision_id:
+                    type: string
+                current_revision_number:
+                    type: integer
+                default_exposure:
+                    type: string
+                description:
+                    type: string
+                id:
+                    type: string
+                name:
+                    type: string
+                provenance:
+                    items:
+                        $ref: '#/components/schemas/SkillProvenanceRef'
+                    type: array
+                slug:
+                    type: string
+                status:
+                    type: string
+                tags:
+                    items:
+                        type: string
+                    type: array
+                updated_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                updated_by:
+                    type: string
+                version:
+                    type: integer
+            required:
+                - created_at
+                - default_exposure
+                - id
+                - name
+                - slug
+                - status
+                - updated_at
+                - version
+            type: object
+        SkillResponse:
+            additionalProperties: false
+            properties:
+                skill:
+                    $ref: '#/components/schemas/SkillResource'
+            required:
+                - skill
+            type: object
+        SkillRevisionFile:
+            additionalProperties: false
+            properties:
+                content_type:
+                    type: string
+                digest:
+                    type: string
+                path:
+                    type: string
+                role:
+                    type: string
+                size_bytes:
+                    type: integer
+            required:
+                - digest
+                - path
+            type: object
+        SkillRevisionResource:
+            additionalProperties: false
+            properties:
+                approval_authority_id:
+                    type: string
+                approval_authority_type:
+                    type: string
+                approval_digest:
+                    type: string
+                approval_id:
+                    type: string
+                approval_reason:
+                    type: string
+                approval_ref:
+                    type: string
+                approval_signature:
+                    type: string
+                approved_at:
+                    anyOf:
+                        - $ref: '#/components/schemas/RFC3339DateTime'
+                        - type: "null"
+                approved_by:
+                    type: string
+                bundle_digest:
+                    type: string
+                capabilities:
+                    items:
+                        type: string
+                    type: array
+                content_digest:
+                    type: string
+                created_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                created_by:
+                    type: string
+                default_exposure:
+                    type: string
+                files:
+                    items:
+                        $ref: '#/components/schemas/SkillRevisionFile'
+                    type: array
+                id:
+                    type: string
+                manifest_digest:
+                    type: string
+                principal_approval_id:
+                    type: string
+                principal_id:
+                    type: string
+                proposal_id:
+                    type: string
+                provenance:
+                    items:
+                        $ref: '#/components/schemas/SkillProvenanceRef'
+                    type: array
+                revision_number:
+                    type: integer
+                revoked_at:
+                    anyOf:
+                        - $ref: '#/components/schemas/RFC3339DateTime'
+                        - type: "null"
+                revoked_by:
+                    type: string
+                revoked_reason:
+                    type: string
+                skill_id:
+                    type: string
+                status:
+                    type: string
+                updated_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                updated_by:
+                    type: string
+                version:
+                    type: integer
+            required:
+                - created_at
+                - default_exposure
+                - id
+                - revision_number
+                - skill_id
+                - status
+                - updated_at
+                - version
+            type: object
+        SkillRevisionResponse:
+            additionalProperties: false
+            properties:
+                revision:
+                    $ref: '#/components/schemas/SkillRevisionResource'
+            required:
+                - revision
+            type: object
+        SkillRevisionsResponse:
+            additionalProperties: false
+            properties:
+                count:
+                    type: integer
+                next_cursor:
+                    type: string
+                revisions:
+                    items:
+                        $ref: '#/components/schemas/SkillRevisionResource'
+                    type: array
+            required:
+                - count
+                - revisions
+            type: object
         SnowflakeID:
             description: Mastodon-compatible snowflake identifier (stringified uint).
             pattern: ^[0-9]+$
             type: string
+        SoulAgentAvatar:
+            additionalProperties: false
+            properties:
+                current_renderer_address:
+                    type: string
+                current_style_id:
+                    anyOf:
+                        - type: integer
+                        - type: "null"
+                current_style_name:
+                    type: string
+                image:
+                    type: string
+                styles:
+                    items:
+                        $ref: '#/components/schemas/SoulAgentAvatarStyle'
+                    type: array
+                token_uri:
+                    type: string
+            type: object
+        SoulAgentAvatarStyle:
+            additionalProperties: false
+            properties:
+                image:
+                    type: string
+                renderer_address:
+                    type: string
+                selected:
+                    type: boolean
+                style_id:
+                    type: integer
+                style_name:
+                    type: string
+            required:
+                - style_id
+            type: object
+        SoulAgentBinding:
+            additionalProperties: false
+            properties:
+                agent_username:
+                    type: string
+                bound_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                principal_address:
+                    type: string
+                updated_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+            required:
+                - agent_username
+                - bound_at
+                - updated_at
+            type: object
+        SoulAgentIdentity:
+            additionalProperties: false
+            properties:
+                agent_id:
+                    type: string
+                avatar:
+                    anyOf:
+                        - $ref: '#/components/schemas/SoulAgentAvatar'
+                        - type: "null"
+                capabilities:
+                    items:
+                        type: string
+                    type: array
+                domain:
+                    type: string
+                ens_name:
+                    anyOf:
+                        - type: string
+                        - type: "null"
+                lifecycle_reason:
+                    type: string
+                lifecycle_status:
+                    type: string
+                local_id:
+                    type: string
+                meta_uri:
+                    type: string
+                mint_tx_hash:
+                    type: string
+                minted_at:
+                    anyOf:
+                        - $ref: '#/components/schemas/RFC3339DateTime'
+                        - type: "null"
+                predecessor_agent_id:
+                    type: string
+                principal_address:
+                    type: string
+                principal_declaration:
+                    type: string
+                principal_declared_at:
+                    type: string
+                principal_signature:
+                    type: string
+                self_description_version:
+                    anyOf:
+                        - type: integer
+                        - type: "null"
+                status:
+                    type: string
+                successor_agent_id:
+                    type: string
+                token_id:
+                    type: string
+                updated_at:
+                    anyOf:
+                        - $ref: '#/components/schemas/RFC3339DateTime'
+                        - type: "null"
+                wallet:
+                    type: string
+            required:
+                - agent_id
+                - domain
+                - local_id
+                - status
+                - wallet
+            type: object
+        SoulBodyBinding:
+            additionalProperties: false
+            properties:
+                bound_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                principal_address:
+                    type: string
+                updated_at:
+                    $ref: '#/components/schemas/RFC3339DateTime'
+                username:
+                    type: string
+            required:
+                - bound_at
+                - updated_at
+                - username
+            type: object
+        SoulIncorporateRequest:
+            additionalProperties: false
+            properties:
+                target_agent_username:
+                    type: string
+            required:
+                - target_agent_username
+            type: object
+        SoulIncorporateResponse:
+            additionalProperties: false
+            properties:
+                soul:
+                    $ref: '#/components/schemas/SoulInventoryItem'
+            required:
+                - soul
+            type: object
+        SoulInventoryItem:
+            additionalProperties: false
+            properties:
+                agent:
+                    $ref: '#/components/schemas/SoulAgentIdentity'
+                available_for_incorporation:
+                    type: boolean
+                binding:
+                    anyOf:
+                        - $ref: '#/components/schemas/SoulAgentBinding'
+                        - type: "null"
+                binding_state:
+                    type: string
+            required:
+                - agent
+                - available_for_incorporation
+                - binding_state
+            type: object
+        SoulMintConversation:
+            additionalProperties: false
+            properties:
+                agent_id:
+                    pattern: ^0x[0-9a-fA-F]{64}$
+                    type: string
+                charged_credits:
+                    anyOf:
+                        - type: integer
+                        - type: "null"
+                    minimum: 0
+                completed_at:
+                    format: date-time
+                    type: string
+                conversation_id:
+                    maxLength: 128
+                    minLength: 1
+                    pattern: ^[A-Za-z0-9._:-]{1,128}$
+                    type: string
+                created_at:
+                    format: date-time
+                    type: string
+                messages:
+                    type: string
+                model:
+                    type: string
+                produced_declarations:
+                    type: string
+                status:
+                    enum:
+                        - in_progress
+                        - completed
+                        - failed
+                    type: string
+                usage:
+                    additionalProperties: {}
+                    type: object
+            required:
+                - agent_id
+                - conversation_id
+                - created_at
+                - model
+                - status
+            type: object
+        SoulMintConversationResponse:
+            additionalProperties: false
+            properties:
+                conversation:
+                    $ref: '#/components/schemas/SoulMintConversation'
+                version:
+                    enum:
+                        - "1"
+                    type: string
+            required:
+                - conversation
+                - version
+            type: object
+        SoulMintConversationSummary:
+            additionalProperties: false
+            properties:
+                agent_id:
+                    pattern: ^0x[0-9a-fA-F]{64}$
+                    type: string
+                charged_credits:
+                    anyOf:
+                        - type: integer
+                        - type: "null"
+                    minimum: 0
+                completed_at:
+                    format: date-time
+                    type: string
+                conversation_id:
+                    maxLength: 128
+                    minLength: 1
+                    pattern: ^[A-Za-z0-9._:-]{1,128}$
+                    type: string
+                created_at:
+                    format: date-time
+                    type: string
+                model:
+                    type: string
+                status:
+                    enum:
+                        - in_progress
+                        - completed
+                        - failed
+                    type: string
+                usage:
+                    additionalProperties: {}
+                    type: object
+            required:
+                - agent_id
+                - conversation_id
+                - created_at
+                - status
+            type: object
+        SoulMintConversationsResponse:
+            additionalProperties: false
+            properties:
+                conversations:
+                    items:
+                        $ref: '#/components/schemas/SoulMintConversationSummary'
+                    type: array
+                count:
+                    minimum: 0
+                    type: integer
+                limit:
+                    maximum: 50
+                    minimum: 1
+                    type: integer
+                version:
+                    enum:
+                        - "1"
+                    type: string
+            required:
+                - conversations
+                - count
+                - limit
+                - version
+            type: object
+        SoulsMineResponse:
+            additionalProperties: false
+            properties:
+                count:
+                    type: integer
+                souls:
+                    items:
+                        $ref: '#/components/schemas/SoulInventoryItem'
+                    type: array
+            required:
+                - count
+                - souls
+            type: object
         Status:
             additionalProperties: false
             properties:
@@ -5689,36 +7476,6 @@ components:
                     anyOf:
                         - additionalProperties: false
                           properties:
-                            agentAttribution:
-                                anyOf:
-                                    - additionalProperties: false
-                                      properties:
-                                        constraints:
-                                            items:
-                                                type: string
-                                            type: array
-                                        delegated_by:
-                                            type: string
-                                        delegated_by_did:
-                                            type: string
-                                        memory_citations:
-                                            items:
-                                                type: string
-                                            type: array
-                                        model_id:
-                                            type: string
-                                        schema_version:
-                                            type: string
-                                        scopes:
-                                            items:
-                                                type: string
-                                            type: array
-                                        trigger_details:
-                                            type: string
-                                        trigger_type:
-                                            type: string
-                                      type: object
-                                    - type: "null"
                             _:quoteContext:
                                 anyOf:
                                     - additionalProperties: false
@@ -5795,6 +7552,48 @@ components:
                                     - id
                                     - type
                                 type: object
+                            agentAttribution:
+                                anyOf:
+                                    - additionalProperties: false
+                                      properties:
+                                        constraints:
+                                            items:
+                                                type: string
+                                            type: array
+                                        continuity_state:
+                                            type: string
+                                        continuity_summary:
+                                            type: string
+                                        delegated_by:
+                                            type: string
+                                        delegated_by_did:
+                                            type: string
+                                        identity_label:
+                                            type: string
+                                        identity_state:
+                                            type: string
+                                        memory_citations:
+                                            items:
+                                                type: string
+                                            type: array
+                                        model_id:
+                                            type: string
+                                        moderation_label:
+                                            type: string
+                                        schema_version:
+                                            type: string
+                                        scopes:
+                                            items:
+                                                type: string
+                                            type: array
+                                        soul_agent_id:
+                                            type: string
+                                        trigger_details:
+                                            type: string
+                                        trigger_type:
+                                            type: string
+                                      type: object
+                                    - type: "null"
                             attachment:
                                 items:
                                     additionalProperties: false
@@ -6199,6 +7998,8 @@ components:
                     type: string
                 nonce:
                     type: string
+                registration_completed:
+                    type: boolean
                 spent:
                     type: boolean
                 used:
@@ -6841,8 +8642,13 @@ components:
             additionalProperties: false
             properties:
                 reason:
+                    maxLength: 200
                     type: string
                 vote_type:
+                    enum:
+                        - helpful
+                        - not_helpful
+                        - neutral
                     type: string
             required:
                 - vote_type
@@ -7160,6 +8966,12 @@ components:
                 application/json:
                     schema:
                         $ref: '#/components/schemas/Error'
+        RequestTimeout:
+            description: Request Timeout
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/Error'
         ServiceUnavailable:
             description: Service Unavailable
             content:
@@ -7222,6 +9034,26 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+    /.well-known/lesser-soul-agent:
+        get:
+            operationId: get_well_known_lesser_soul_agent
+            tags:
+                - well-known
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Map7d31df2b'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleWellKnownLesserSoulAgentLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
     /.well-known/nodeinfo:
         get:
             operationId: get_well_known_nodeinfo
@@ -7243,6 +9075,26 @@ paths:
             x-lesser-routeSources:
                 - cmd/api/routes.go
                 - infra/cdk/inventory/lambdas.go:api
+    /.well-known/oauth-authorization-server:
+        get:
+            operationId: get_well_known_oauth_authorization_server
+            tags:
+                - well-known
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Map7d31df2b'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleOAuthAuthorizationServerMetadataLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
     /.well-known/reputation-keys:
         get:
             operationId: get_well_known_reputation_keys
@@ -7554,6 +9406,78 @@ paths:
                 - cmd/api/routes.go
             x-oauth-scopes:
                 - write
+    /api/v1/accounts/{id}/followers:
+        get:
+            operationId: get_api_v1_accounts_by_id_followers
+            tags:
+                - accounts
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AccountList'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleGetAccountFollowersLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - read:accounts
+    /api/v1/accounts/{id}/following:
+        get:
+            operationId: get_api_v1_accounts_by_id_following
+            tags:
+                - accounts
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AccountList'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleGetAccountFollowingLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - read:accounts
     /api/v1/accounts/{id}/mute:
         post:
             operationId: post_api_v1_accounts_by_id_mute
@@ -7649,6 +9573,8 @@ paths:
             operationId: get_api_v1_accounts_by_id_quote_permissions
             tags:
                 - accounts
+            security:
+                - bearerAuth: []
             parameters:
                 - name: id
                   in: path
@@ -7664,6 +9590,10 @@ paths:
                                 $ref: '#/components/schemas/QuotePermissionsResponse'
                 "400":
                     $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
                 "404":
                     $ref: '#/components/responses/NotFound'
                 "500":
@@ -7672,11 +9602,16 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read:accounts
     /api/v1/accounts/{id}/statuses:
         get:
             operationId: get_api_v1_accounts_by_id_statuses
             tags:
                 - accounts
+            security:
+                - {}
+                - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/Limit'
                 - $ref: '#/components/parameters/MaxID'
@@ -7715,6 +9650,10 @@ paths:
                                 type: string
                 "400":
                     $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
                 "404":
                     $ref: '#/components/responses/NotFound'
                 "500":
@@ -7723,6 +9662,8 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read:statuses
     /api/v1/accounts/{id}/unblock:
         post:
             operationId: post_api_v1_accounts_by_id_unblock
@@ -7970,6 +9911,7 @@ paths:
             tags:
                 - accounts
             security:
+                - {}
                 - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/Limit'
@@ -8467,6 +10409,49 @@ paths:
                 - cmd/api/routes.go
             x-oauth-scopes:
                 - admin:write
+    /api/v1/admin/agents/{username}/unlock:
+        post:
+            operationId: post_api_v1_admin_agents_by_username_unlock
+            tags:
+                - admin
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: username
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AdminUnlockAgentRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AdminUnlockAgentResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleAdminUnlockAgentLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin
     /api/v1/admin/agents/{username}/unverify:
         post:
             operationId: post_api_v1_admin_agents_by_username_unverify
@@ -9784,6 +11769,372 @@ paths:
                 - cmd/api/routes.go
             x-oauth-scopes:
                 - admin:write
+    /api/v1/admin/skills/{skillId}/assignments:
+        get:
+            operationId: get_api_v1_admin_skills_by_skillId_assignments
+            tags:
+                - admin
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: skillId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillAssignmentsResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleAdminListSkillAssignmentsLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin:read
+        post:
+            operationId: post_api_v1_admin_skills_by_skillId_assignments
+            tags:
+                - admin
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: skillId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateSkillAssignmentRequest'
+            responses:
+                "201":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillAssignmentResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleAdminCreateSkillAssignmentLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin:write
+    /api/v1/admin/skills/{skillId}/assignments/{assignmentId}/revoke:
+        post:
+            operationId: post_api_v1_admin_skills_by_skillId_assignments_by_assignmentId_revoke
+            tags:
+                - admin
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: assignmentId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: skillId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RevokeSkillAssignmentRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillAssignmentResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleAdminRevokeSkillAssignmentLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin:write
+    /api/v1/admin/skills/{skillId}/proposals/{proposalId}/promote:
+        post:
+            operationId: post_api_v1_admin_skills_by_skillId_proposals_by_proposalId_promote
+            tags:
+                - admin
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: proposalId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: skillId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PromoteSkillProposalRequest'
+            responses:
+                "201":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PromoteSkillProposalResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/Conflict'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleAdminPromoteSkillProposalLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin:write
+    /api/v1/admin/skills/{skillId}/revisions/{revisionNumber}/approve:
+        post:
+            operationId: post_api_v1_admin_skills_by_skillId_revisions_by_revisionNumber_approve
+            tags:
+                - admin
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: revisionNumber
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: skillId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ApproveSkillRevisionRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillRevisionResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleAdminApproveSkillRevisionLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin:write
+    /api/v1/admin/skills/{skillId}/revisions/{revisionNumber}/revoke:
+        post:
+            operationId: post_api_v1_admin_skills_by_skillId_revisions_by_revisionNumber_revoke
+            tags:
+                - admin
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: revisionNumber
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: skillId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RevokeSkillRevisionRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillRevisionResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleAdminRevokeSkillRevisionLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin:write
+    /api/v1/admin/skills/proposals:
+        get:
+            operationId: get_api_v1_admin_skills_proposals
+            tags:
+                - admin
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillProposalsResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleAdminListSkillProposalsLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin:read
+    /api/v1/admin/skills/proposals/{proposalId}:
+        get:
+            operationId: get_api_v1_admin_skills_proposals_by_proposalId
+            tags:
+                - admin
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: proposalId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillProposalResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleAdminGetSkillProposalLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin:read
+    /api/v1/admin/soul/well-known:
+        put:
+            operationId: put_api_v1_admin_soul_well_known
+            tags:
+                - admin
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Map7d31df2b'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleAdminSetSoulWellKnownProofLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin
     /api/v1/admin/statuses:
         get:
             operationId: get_api_v1_admin_statuses
@@ -10007,6 +12358,8 @@ paths:
             operationId: get_api_v1_agents
             tags:
                 - agents
+            security:
+                - bearerAuth: []
             responses:
                 "200":
                     description: OK
@@ -10016,17 +12369,27 @@ paths:
                                 $ref: '#/components/schemas/AgentList'
                 "400":
                     $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
                 "500":
                     $ref: '#/components/responses/InternalServerError'
             x-lesser-handler: HandleListAgentsLift
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin
+                - admin:all
+                - admin:write
     /api/v1/agents/{username}:
         get:
             operationId: get_api_v1_agents_by_username
             tags:
                 - agents
+            security:
+                - bearerAuth: []
             parameters:
                 - name: username
                   in: path
@@ -10042,6 +12405,10 @@ paths:
                                 $ref: '#/components/schemas/Agent'
                 "400":
                     $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
                 "404":
                     $ref: '#/components/responses/NotFound'
                 "500":
@@ -10050,10 +12417,16 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin
+                - admin:all
+                - admin:write
         patch:
             operationId: patch_api_v1_agents_by_username
             tags:
                 - agents
+            security:
+                - bearerAuth: []
             parameters:
                 - name: username
                   in: path
@@ -10088,10 +12461,18 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin
+                - admin:all
+                - admin:write
+                - write
+                - write:accounts
         delete:
             operationId: delete_api_v1_agents_by_username
             tags:
                 - agents
+            security:
+                - bearerAuth: []
             parameters:
                 - name: username
                   in: path
@@ -10119,6 +12500,422 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin
+                - admin:all
+                - admin:write
+                - write
+                - write:accounts
+    /api/v1/agents/{username}/access-leases:
+        get:
+            operationId: get_api_v1_agents_by_username_access_leases
+            tags:
+                - agents
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: username
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AgentAccessLeaseListResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleListAgentAccessLeasesLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin
+                - admin:all
+                - admin:write
+                - write
+                - write:accounts
+        post:
+            operationId: post_api_v1_agents_by_username_access_leases
+            tags:
+                - agents
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: username
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateAgentAccessLeaseRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AgentAccessLease'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleCreateAgentAccessLeaseLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
+                - write:accounts
+    /api/v1/agents/{username}/access-leases/{leaseID}/renew/challenge:
+        post:
+            operationId: post_api_v1_agents_by_username_access_leases_by_leaseID_renew_challenge
+            tags:
+                - agents
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: leaseID
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: username
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AgentAccessLeaseChallengeResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleCreateAgentAccessLeaseRenewChallengeLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
+    /api/v1/agents/{username}/access-leases/{leaseID}/revoke:
+        post:
+            operationId: post_api_v1_agents_by_username_access_leases_by_leaseID_revoke
+            tags:
+                - agents
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: leaseID
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: username
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RevokeAgentAccessLeaseRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AgentAccessLease'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleRevokeAgentAccessLeaseLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin
+                - admin:all
+                - admin:write
+                - write
+                - write:accounts
+    /api/v1/agents/{username}/access-leases/{leaseID}/session-key:
+        post:
+            operationId: post_api_v1_agents_by_username_access_leases_by_leaseID_session_key
+            tags:
+                - agents
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: leaseID
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: username
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AuthorizeAgentAccessLeaseSessionKeyRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AgentAccessLease'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleAuthorizeAgentAccessLeaseSessionKeyLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
+    /api/v1/agents/{username}/access-leases/{leaseID}/session-key/challenge:
+        post:
+            operationId: post_api_v1_agents_by_username_access_leases_by_leaseID_session_key_challenge
+            tags:
+                - agents
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: leaseID
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: username
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AgentAccessLeaseSessionKeyChallengeRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AgentAccessLeaseChallengeResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleCreateAgentAccessLeaseSessionKeyChallengeLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
+    /api/v1/agents/{username}/access-leases/{leaseID}/token:
+        post:
+            operationId: post_api_v1_agents_by_username_access_leases_by_leaseID_token
+            tags:
+                - agents
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: leaseID
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: username
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RenewAgentAccessLeaseTokenRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AgentAccessLeaseTokenResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleExchangeAgentAccessLeaseTokenLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
+    /api/v1/agents/{username}/access-leases/challenge/agent:
+        post:
+            operationId: post_api_v1_agents_by_username_access_leases_challenge_agent
+            tags:
+                - agents
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: username
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AgentAccessLeaseChallengeRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AgentAccessLeaseChallengeResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleCreateAgentAccessLeaseAgentChallengeLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
+                - write:accounts
+    /api/v1/agents/{username}/access-leases/challenge/principal:
+        post:
+            operationId: post_api_v1_agents_by_username_access_leases_challenge_principal
+            tags:
+                - agents
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: username
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AgentAccessLeaseChallengeRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AgentAccessLeaseChallengeResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleCreateAgentAccessLeasePrincipalChallengeLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
+                - write:accounts
     /api/v1/agents/{username}/activity:
         get:
             operationId: get_api_v1_agents_by_username_activity
@@ -10239,6 +13036,98 @@ paths:
                 - cmd/api/routes.go
             x-oauth-scopes:
                 - read
+    /api/v1/agents/{username}/runtime-sessions:
+        get:
+            operationId: get_api_v1_agents_by_username_runtime_sessions
+            tags:
+                - agents
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: username
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AgentRuntimeSessionList'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleListAgentRuntimeSessionsLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin
+                - admin:all
+                - admin:write
+                - write
+                - write:accounts
+    /api/v1/agents/{username}/runtime-sessions/{sessionID}/revoke:
+        post:
+            operationId: post_api_v1_agents_by_username_runtime_sessions_by_sessionID_revoke
+            tags:
+                - agents
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: sessionID
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: username
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RevokeAgentRuntimeSessionRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AgentRuntimeSession'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleRevokeAgentRuntimeSessionLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin
+                - admin:all
+                - admin:write
+                - write
+                - write:accounts
     /api/v1/agents/{username}/suspend:
         post:
             operationId: post_api_v1_agents_by_username_suspend
@@ -10282,6 +13171,8 @@ paths:
             operationId: post_api_v1_agents_auth_challenge
             tags:
                 - agents
+            security:
+                - bearerAuth: []
             requestBody:
                 content:
                     application/json:
@@ -10296,6 +13187,10 @@ paths:
                                 $ref: '#/components/schemas/AgentKeyChallengeResponse'
                 "400":
                     $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
                 "422":
                     $ref: '#/components/responses/UnprocessableEntity'
                 "500":
@@ -10304,11 +13199,15 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
     /api/v1/agents/auth/token:
         post:
             operationId: post_api_v1_agents_auth_token
             tags:
                 - agents
+            security:
+                - bearerAuth: []
             requestBody:
                 content:
                     application/json:
@@ -10323,6 +13222,10 @@ paths:
                                 $ref: '#/components/schemas/OAuthTokenResponse'
                 "400":
                     $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
                 "422":
                     $ref: '#/components/responses/UnprocessableEntity'
                 "500":
@@ -10331,11 +13234,15 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
     /api/v1/agents/delegate:
         post:
             operationId: post_api_v1_agents_delegate
             tags:
                 - agents
+            security:
+                - bearerAuth: []
             requestBody:
                 required: true
                 content:
@@ -10363,6 +13270,12 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - admin
+                - admin:all
+                - admin:write
+                - write
+                - write:accounts
     /api/v1/agents/memory/search:
         get:
             operationId: get_api_v1_agents_memory_search
@@ -10428,8 +13341,11 @@ paths:
     /api/v1/agents/register:
         post:
             operationId: post_api_v1_agents_register
+            description: Self-sovereign agent registration. Disabled by default until the operator explicitly enables agents and agent registration.
             tags:
                 - agents
+            security:
+                - bearerAuth: []
             requestBody:
                 content:
                     application/json:
@@ -10444,19 +13360,29 @@ paths:
                                 $ref: '#/components/schemas/AgentSelfRegistrationResponse'
                 "400":
                     $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
                 "422":
                     $ref: '#/components/responses/UnprocessableEntity'
+                "429":
+                    $ref: '#/components/responses/TooManyRequests'
                 "500":
                     $ref: '#/components/responses/InternalServerError'
-            x-lesser-handler: HandleAgentRegisterLift
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
     /api/v1/agents/register/challenge:
         post:
             operationId: post_api_v1_agents_register_challenge
+            description: Issues a self-sovereign agent registration challenge. Disabled by default until the operator explicitly enables agents and agent registration.
             tags:
                 - agents
+            security:
+                - bearerAuth: []
             requestBody:
                 content:
                     application/json:
@@ -10471,19 +13397,29 @@ paths:
                                 $ref: '#/components/schemas/AgentKeyChallengeResponse'
                 "400":
                     $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
                 "422":
                     $ref: '#/components/responses/UnprocessableEntity'
+                "429":
+                    $ref: '#/components/responses/TooManyRequests'
                 "500":
                     $ref: '#/components/responses/InternalServerError'
-            x-lesser-handler: HandleAgentRegisterChallengeLift
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
     /api/v1/announcements:
         get:
             operationId: get_api_v1_announcements
             tags:
                 - announcements
+            security:
+                - {}
+                - bearerAuth: []
             responses:
                 "200":
                     description: OK
@@ -10503,6 +13439,8 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
     /api/v1/announcements/{id}/dismiss:
         post:
             operationId: post_api_v1_announcements_by_id_dismiss
@@ -10629,9 +13567,6 @@ paths:
             operationId: post_api_v1_apps
             tags:
                 - apps
-            security:
-                - {}
-                - bearerAuth: []
             requestBody:
                 required: true
                 content:
@@ -10662,6 +13597,42 @@ paths:
                 "500":
                     $ref: '#/components/responses/InternalServerError'
             x-lesser-handler: HandleAppRegistrationLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+    /api/v1/apps/{id}/rotate_secret:
+        post:
+            operationId: post_api_v1_apps_by_id_rotate_secret
+            tags:
+                - apps
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AppSecretRotationResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleAppRotateSecretLift
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
@@ -11089,6 +14060,48 @@ paths:
             x-oauth-scopes:
                 - read
     /api/v1/conversations/{id}:
+        get:
+            operationId: get_api_v1_conversations_by_id
+            tags:
+                - conversations
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/Limit'
+                - $ref: '#/components/parameters/MaxID'
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConversationDetail'
+                    headers:
+                        Link:
+                            description: RFC 8288 pagination links for recent messages.
+                            schema:
+                                type: string
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleGetConversationLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
         delete:
             operationId: delete_api_v1_conversations_by_id
             tags:
@@ -11162,6 +14175,68 @@ paths:
                 - cmd/api/routes.go
             x-oauth-scopes:
                 - write
+    /api/v1/conversations/lookup:
+        get:
+            operationId: get_api_v1_conversations_lookup
+            tags:
+                - conversations
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: counterpart
+                  in: query
+                  required: true
+                  description: Exact 1:1 direct-message counterpart identifier. Accepts local username, acct value, or actor URL where resolvable.
+                  schema:
+                    type: string
+                    minLength: 1
+                - $ref: '#/components/parameters/Limit'
+                - $ref: '#/components/parameters/MaxID'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConversationDetail'
+                    headers:
+                        Link:
+                            description: RFC 8288 pagination links for recent messages.
+                            schema:
+                                type: string
+                        X-RateLimit-Limit:
+                            description: Request limit per window.
+                            schema:
+                                type: integer
+                                format: int32
+                        X-RateLimit-Remaining:
+                            description: Requests remaining in the current window.
+                            schema:
+                                type: integer
+                                format: int32
+                        X-RateLimit-Reset:
+                            description: Unix timestamp (seconds) when the current window resets.
+                            schema:
+                                type: integer
+                                format: int64
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "429":
+                    $ref: '#/components/responses/TooManyRequests'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleLookupConversationByCounterpartLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
     /api/v1/custom_emojis:
         get:
             operationId: get_api_v1_custom_emojis
@@ -11572,7 +14647,6 @@ paths:
             x-lesser-routeSources:
                 - cmd/api/routes.go
             x-oauth-scopes:
-                - read
                 - read:follows
     /api/v1/follow_requests/{account_id}/authorize:
         post:
@@ -11607,7 +14681,6 @@ paths:
             x-lesser-routeSources:
                 - cmd/api/routes.go
             x-oauth-scopes:
-                - write
                 - write:follows
     /api/v1/follow_requests/{account_id}/reject:
         post:
@@ -11642,7 +14715,6 @@ paths:
             x-lesser-routeSources:
                 - cmd/api/routes.go
             x-oauth-scopes:
-                - write
                 - write:follows
     /api/v1/imports:
         get:
@@ -11852,6 +14924,26 @@ paths:
                 "500":
                     $ref: '#/components/responses/InternalServerError'
             x-lesser-handler: HandleGetInstanceDomainBlocksLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+    /api/v1/instance/metrics/daily:
+        get:
+            operationId: get_api_v1_instance_metrics_daily
+            tags:
+                - instance
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Map7d31df2b'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleGetInstanceMetricsDailyLift
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
@@ -12400,6 +15492,8 @@ paths:
             operationId: get_api_v1_moderation_consensus_by_event_id
             tags:
                 - moderation
+            security:
+                - bearerAuth: []
             parameters:
                 - name: event_id
                   in: path
@@ -12427,11 +15521,15 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
     /api/v1/moderation/flag:
         post:
             operationId: post_api_v1_moderation_flag
             tags:
                 - moderation
+            security:
+                - bearerAuth: []
             requestBody:
                 content:
                     application/json:
@@ -12476,11 +15574,15 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
     /api/v1/moderation/history/{object_id}:
         get:
             operationId: get_api_v1_moderation_history_by_object_id
             tags:
                 - moderation
+            security:
+                - bearerAuth: []
             parameters:
                 - name: object_id
                   in: path
@@ -12508,11 +15610,15 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
     /api/v1/moderation/queue:
         get:
             operationId: get_api_v1_moderation_queue
             tags:
                 - moderation
+            security:
+                - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/Cursor'
                 - $ref: '#/components/parameters/Limit'
@@ -12535,11 +15641,15 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
     /api/v1/moderation/review:
         post:
             operationId: post_api_v1_moderation_review
             tags:
                 - moderation
+            security:
+                - bearerAuth: []
             requestBody:
                 content:
                     application/json:
@@ -12584,11 +15694,15 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
     /api/v1/moderation/trust:
         get:
             operationId: get_api_v1_moderation_trust
             tags:
                 - moderation
+            security:
+                - bearerAuth: []
             parameters:
                 - name: direction
                   in: query
@@ -12613,10 +15727,14 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
         put:
             operationId: put_api_v1_moderation_trust
             tags:
                 - moderation
+            security:
+                - bearerAuth: []
             requestBody:
                 content:
                     application/json:
@@ -12643,11 +15761,15 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
     /api/v1/moderation/trust/{actor_id}/score:
         get:
             operationId: get_api_v1_moderation_trust_by_actor_id_score
             tags:
                 - moderation
+            security:
+                - bearerAuth: []
             parameters:
                 - name: actor_id
                   in: path
@@ -12675,6 +15797,8 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
     /api/v1/mutes:
         get:
             operationId: get_api_v1_mutes
@@ -12733,12 +15857,32 @@ paths:
             operationId: post_api_v1_notes
             tags:
                 - notes
+            security:
+                - bearerAuth: []
             requestBody:
                 content:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/CreateCommunityNoteRequest'
             responses:
+                "200":
+                    description: OK
+                    headers:
+                        X-RateLimit-Limit:
+                            description: Request limit per window.
+                            schema:
+                                type: integer
+                                format: int32
+                        X-RateLimit-Remaining:
+                            description: Requests remaining in the current window.
+                            schema:
+                                type: integer
+                                format: int32
+                        X-RateLimit-Reset:
+                            description: Unix timestamp (seconds) when the current window resets.
+                            schema:
+                                type: integer
+                                format: int64
                 "201":
                     description: OK
                     content:
@@ -12777,11 +15921,15 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
     /api/v1/notes/{id}/vote:
         post:
             operationId: post_api_v1_notes_by_id_vote
             tags:
                 - notes
+            security:
+                - bearerAuth: []
             parameters:
                 - name: id
                   in: path
@@ -12834,11 +15982,16 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
     /api/v1/notes/{object_id}:
         get:
             operationId: get_api_v1_notes_by_object_id
             tags:
                 - notes
+            security:
+                - {}
+                - bearerAuth: []
             parameters:
                 - name: object_id
                   in: path
@@ -12866,6 +16019,8 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
     /api/v1/notifications:
         get:
             operationId: get_api_v1_notifications
@@ -13020,6 +16175,39 @@ paths:
                 - cmd/api/routes.go
             x-oauth-scopes:
                 - write:notifications
+    /api/v1/notifications/deliver:
+        post:
+            operationId: post_api_v1_notifications_deliver
+            tags:
+                - notifications
+            security:
+                - bearerAuth: []
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/NotificationDeliveryRequest'
+            responses:
+                "200":
+                    description: OK
+                "204":
+                    description: No Content
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleDeliverNotificationLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - write:notifications
     /api/v1/preferences:
         get:
             operationId: get_api_v1_preferences
@@ -13087,6 +16275,8 @@ paths:
             operationId: get_api_v1_push_subscription
             tags:
                 - push
+            security:
+                - bearerAuth: []
             responses:
                 "200":
                     description: OK
@@ -13106,10 +16296,14 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - push
         post:
             operationId: post_api_v1_push_subscription
             tags:
                 - push
+            security:
+                - bearerAuth: []
             requestBody:
                 content:
                     application/json:
@@ -13154,10 +16348,14 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - push
         put:
             operationId: put_api_v1_push_subscription
             tags:
                 - push
+            security:
+                - bearerAuth: []
             requestBody:
                 content:
                     application/json:
@@ -13202,10 +16400,14 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - push
         delete:
             operationId: delete_api_v1_push_subscription
             tags:
                 - push
+            security:
+                - bearerAuth: []
             responses:
                 "204":
                     description: No Content
@@ -13221,11 +16423,15 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - push
     /api/v1/reports:
         post:
             operationId: post_api_v1_reports
             tags:
                 - reports
+            security:
+                - bearerAuth: []
             requestBody:
                 content:
                     application/json:
@@ -13270,6 +16476,8 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
     /api/v1/reputation/{actor_id}:
         get:
             operationId: get_api_v1_reputation_by_actor_id
@@ -13376,6 +16584,8 @@ paths:
             operationId: post_api_v1_reputation_verify
             tags:
                 - reputation
+            security:
+                - bearerAuth: []
             requestBody:
                 content:
                     application/json:
@@ -13390,6 +16600,10 @@ paths:
                                 $ref: '#/components/schemas/ReputationVerificationResult'
                 "400":
                     $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
                 "422":
                     $ref: '#/components/responses/UnprocessableEntity'
                 "500":
@@ -13398,6 +16612,8 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
     /api/v1/scheduled_statuses:
         get:
             operationId: get_api_v1_scheduled_statuses
@@ -13681,9 +16897,532 @@ paths:
                 - cmd/api/routes.go
             x-oauth-scopes:
                 - read
+    /api/v1/skills:
+        get:
+            operationId: get_api_v1_skills
+            tags:
+                - skills
+            security:
+                - {}
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillListResponse'
+                    headers:
+                        X-RateLimit-Limit:
+                            description: Request limit per window.
+                            schema:
+                                type: integer
+                                format: int32
+                        X-RateLimit-Remaining:
+                            description: Requests remaining in the current window.
+                            schema:
+                                type: integer
+                                format: int32
+                        X-RateLimit-Reset:
+                            description: Unix timestamp (seconds) when the current window resets.
+                            schema:
+                                type: integer
+                                format: int64
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "429":
+                    $ref: '#/components/responses/TooManyRequests'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleListSkillsLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
+    /api/v1/skills/{skillId}:
+        get:
+            operationId: get_api_v1_skills_by_skillId
+            tags:
+                - skills
+            security:
+                - {}
+                - bearerAuth: []
+            parameters:
+                - name: skillId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleGetSkillLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
+    /api/v1/skills/{skillId}/revisions:
+        get:
+            operationId: get_api_v1_skills_by_skillId_revisions
+            tags:
+                - skills
+            security:
+                - {}
+                - bearerAuth: []
+            parameters:
+                - name: skillId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillRevisionsResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleListSkillRevisionsLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
+    /api/v1/skills/{skillId}/revisions/{revisionNumber}:
+        get:
+            operationId: get_api_v1_skills_by_skillId_revisions_by_revisionNumber
+            tags:
+                - skills
+            security:
+                - {}
+                - bearerAuth: []
+            parameters:
+                - name: revisionNumber
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: skillId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillRevisionResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleGetSkillRevisionLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
+    /api/v1/skills/{skillId}/revisions/{revisionNumber}/bundle:
+        get:
+            operationId: get_api_v1_skills_by_skillId_revisions_by_revisionNumber_bundle
+            tags:
+                - skills
+            security:
+                - {}
+                - bearerAuth: []
+            parameters:
+                - name: revisionNumber
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: skillId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: include_content
+                  in: query
+                  description: When true, include inline file content that is present in the approved canonical revision manifest. Lesser never writes files into the caller workspace.
+                  schema:
+                    type: boolean
+                    default: false
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillBundleResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleGetSkillBundleLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
+    /api/v1/skills/catalog:
+        get:
+            operationId: get_api_v1_skills_catalog
+            tags:
+                - skills
+            security:
+                - {}
+                - bearerAuth: []
+            parameters:
+                - name: exposure
+                  in: query
+                  description: 'Optional approved catalog exposure filter: public, instance, or private. Visibility remains fail-closed for the caller.'
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  description: Maximum catalog entries to return. Defaults to 25 and is capped at 100.
+                  schema:
+                    type: integer
+                    default: 25
+                    minimum: 1
+                    maximum: 100
+                - name: cursor
+                  in: query
+                  description: Opaque pagination cursor returned by a previous catalog response.
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillCatalogResponse'
+                    headers:
+                        X-RateLimit-Limit:
+                            description: Request limit per window.
+                            schema:
+                                type: integer
+                                format: int32
+                        X-RateLimit-Remaining:
+                            description: Requests remaining in the current window.
+                            schema:
+                                type: integer
+                                format: int32
+                        X-RateLimit-Reset:
+                            description: Unix timestamp (seconds) when the current window resets.
+                            schema:
+                                type: integer
+                                format: int64
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "429":
+                    $ref: '#/components/responses/TooManyRequests'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleListSkillCatalogLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
+    /api/v1/skills/resolve:
+        get:
+            operationId: get_api_v1_skills_resolve
+            tags:
+                - skills
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/EffectiveSkillsResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleResolveEffectiveSkillsLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
+    /api/v1/souls/{agentId}/incorporate:
+        post:
+            operationId: post_api_v1_souls_by_agentId_incorporate
+            tags:
+                - souls
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: agentId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SoulIncorporateRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SoulIncorporateResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleIncorporateSoulLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
+    /api/v1/souls/bound/me:
+        get:
+            operationId: get_api_v1_souls_bound_me
+            description: 'Return the active soul identity bound to the authenticated local runtime-agent principal. The endpoint is fail-closed: unbound, inactive, missing host identity, or wrong-domain identities return 404.'
+            tags:
+                - souls
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/BoundSoulResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleGetBoundSoulMeLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
+                - write
+    /api/v1/souls/bound/me/mint-conversations:
+        get:
+            operationId: get_api_v1_souls_bound_me_mint_conversations
+            description: Return compact private mint-conversation metadata for the authenticated local principal's bound soul. Lesser derives the Host agent ID from the existing bound-self authority and calls lesser-host with instance trust only; caller bearer tokens are never forwarded upstream.
+            tags:
+                - souls
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: limit
+                  in: query
+                  description: Maximum compact conversations to return. Defaults to 20 and is capped at 50.
+                  schema:
+                    type: integer
+                    default: 20
+                    minimum: 1
+                    maximum: 50
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SoulMintConversationsResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/Conflict'
+                "413":
+                    description: Private conversation response too large
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "429":
+                    $ref: '#/components/responses/TooManyRequests'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+                "503":
+                    $ref: '#/components/responses/ServiceUnavailable'
+            x-lesser-handler: HandleListBoundSoulMintConversationsLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
+    /api/v1/souls/bound/me/mint-conversations/{conversationId}:
+        get:
+            operationId: get_api_v1_souls_bound_me_mint_conversations_by_conversationId
+            description: Return one bounded private mint-conversation record for the authenticated local principal's bound soul. Lesser validates the opaque conversation ID, derives the Host agent ID from bound self, and calls lesser-host with instance trust only.
+            tags:
+                - souls
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: conversationId
+                  in: path
+                  required: true
+                  description: Opaque safe mint-conversation identifier.
+                  schema:
+                    type: string
+                    pattern: ^[A-Za-z0-9._:-]{1,128}$
+                    minLength: 1
+                    maxLength: 128
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SoulMintConversationResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/Conflict'
+                "413":
+                    description: Private conversation response too large
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "429":
+                    $ref: '#/components/responses/TooManyRequests'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+                "503":
+                    $ref: '#/components/responses/ServiceUnavailable'
+            x-lesser-handler: HandleGetBoundSoulMintConversationLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
+    /api/v1/souls/mine:
+        get:
+            operationId: get_api_v1_souls_mine
+            tags:
+                - souls
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SoulsMineResponse'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleGetMySoulsLift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
+                - write
     /api/v1/statuses:
         post:
             operationId: post_api_v1_statuses
+            description: Create a status. `in_reply_to_id` accepts local status IDs and canonical remote status URLs. When a canonical remote URL is not yet materialized locally, Lesser performs request-scoped remote parent acquisition on the write path only. Direct replies continue through the conversations service. Self-directed direct posts are intentionally rejected with `DIRECT_SELF_POST_NOT_ALLOWED`. Failure classes distinguish invalid references (400), acquisition timeouts (408), fetched-but-unusable parents (422), and upstream unavailability (503).
             tags:
                 - statuses
             security:
@@ -13722,12 +17461,16 @@ paths:
                     $ref: '#/components/responses/Unauthorized'
                 "403":
                     $ref: '#/components/responses/Forbidden'
+                "408":
+                    $ref: '#/components/responses/RequestTimeout'
                 "422":
                     $ref: '#/components/responses/UnprocessableEntity'
                 "429":
                     $ref: '#/components/responses/TooManyRequests'
                 "500":
                     $ref: '#/components/responses/InternalServerError'
+                "503":
+                    $ref: '#/components/responses/ServiceUnavailable'
             x-lesser-handler: HandleCreateStatusLift
             x-lesser-lambda: api
             x-lesser-routeSources:
@@ -13739,6 +17482,9 @@ paths:
             operationId: get_api_v1_statuses_by_id
             tags:
                 - statuses
+            security:
+                - {}
+                - bearerAuth: []
             parameters:
                 - name: id
                   in: path
@@ -13766,10 +17512,14 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read:statuses
         put:
             operationId: put_api_v1_statuses_by_id
             tags:
                 - statuses
+            security:
+                - bearerAuth: []
             parameters:
                 - name: id
                   in: path
@@ -13822,6 +17572,8 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
         delete:
             operationId: delete_api_v1_statuses_by_id
             tags:
@@ -13936,6 +17688,9 @@ paths:
             operationId: get_api_v1_statuses_by_id_context
             tags:
                 - statuses
+            security:
+                - {}
+                - bearerAuth: []
             parameters:
                 - name: id
                   in: path
@@ -13951,6 +17706,10 @@ paths:
                                 $ref: '#/components/schemas/StatusContext'
                 "400":
                     $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
                 "404":
                     $ref: '#/components/responses/NotFound'
                 "500":
@@ -13959,6 +17718,8 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read:statuses
     /api/v1/statuses/{id}/favourite:
         post:
             operationId: post_api_v1_statuses_by_id_favourite
@@ -14020,6 +17781,8 @@ paths:
             operationId: get_api_v1_statuses_by_id_favourited_by
             tags:
                 - statuses
+            security:
+                - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/Limit'
                 - $ref: '#/components/parameters/MaxID'
@@ -14042,6 +17805,10 @@ paths:
                                 type: string
                 "400":
                     $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
                 "404":
                     $ref: '#/components/responses/NotFound'
                 "500":
@@ -14050,11 +17817,16 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
     /api/v1/statuses/{id}/history:
         get:
             operationId: get_api_v1_statuses_by_id_history
             tags:
                 - statuses
+            security:
+                - {}
+                - bearerAuth: []
             parameters:
                 - name: id
                   in: path
@@ -14082,6 +17854,8 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read:statuses
     /api/v1/statuses/{id}/mute:
         post:
             operationId: post_api_v1_statuses_by_id_mute
@@ -14387,6 +18161,8 @@ paths:
             operationId: get_api_v1_statuses_by_id_reblogged_by
             tags:
                 - statuses
+            security:
+                - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/Limit'
                 - $ref: '#/components/parameters/MaxID'
@@ -14409,6 +18185,10 @@ paths:
                                 type: string
                 "400":
                     $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
                 "404":
                     $ref: '#/components/responses/NotFound'
                 "500":
@@ -14417,6 +18197,8 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
     /api/v1/statuses/{id}/source:
         get:
             operationId: get_api_v1_statuses_by_id_source
@@ -15122,6 +18904,8 @@ paths:
             operationId: get_api_v1_suggestions
             tags:
                 - suggestions
+            security:
+                - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/Limit'
             responses:
@@ -15143,11 +18927,15 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
     /api/v1/suggestions/{account_id}:
         delete:
             operationId: delete_api_v1_suggestions_by_account_id
             tags:
                 - suggestions
+            security:
+                - bearerAuth: []
             parameters:
                 - name: account_id
                   in: path
@@ -15175,6 +18963,8 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
     /api/v1/timelines/direct:
         get:
             operationId: get_api_v1_timelines_direct
@@ -15305,6 +19095,9 @@ paths:
             operationId: get_api_v1_timelines_public
             tags:
                 - timelines
+            security:
+                - {}
+                - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/Limit'
                 - $ref: '#/components/parameters/MaxID'
@@ -15336,11 +19129,16 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
     /api/v1/timelines/tag/{hashtag}:
         get:
             operationId: get_api_v1_timelines_tag_by_hashtag
             tags:
                 - timelines
+            security:
+                - {}
+                - bearerAuth: []
             parameters:
                 - name: hashtag
                   in: path
@@ -15368,6 +19166,8 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
     /api/v1/trends:
         get:
             operationId: get_api_v1_trends
@@ -15519,32 +19319,22 @@ paths:
             operationId: get_api_v1_trust_attestations
             tags:
                 - trust
-            security:
-                - bearerAuth: []
             responses:
                 "200":
                     description: OK
                 "400":
                     $ref: '#/components/responses/BadRequest'
-                "401":
-                    $ref: '#/components/responses/Unauthorized'
-                "403":
-                    $ref: '#/components/responses/Forbidden'
                 "500":
                     $ref: '#/components/responses/InternalServerError'
             x-lesser-handler: HandleTrustLookupAttestationLift
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
-            x-oauth-scopes:
-                - read
     /api/v1/trust/attestations/{id}:
         get:
             operationId: get_api_v1_trust_attestations_by_id
             tags:
                 - trust
-            security:
-                - bearerAuth: []
             parameters:
                 - name: id
                   in: path
@@ -15556,10 +19346,6 @@ paths:
                     description: OK
                 "400":
                     $ref: '#/components/responses/BadRequest'
-                "401":
-                    $ref: '#/components/responses/Unauthorized'
-                "403":
-                    $ref: '#/components/responses/Forbidden'
                 "404":
                     $ref: '#/components/responses/NotFound'
                 "500":
@@ -15568,32 +19354,22 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
-            x-oauth-scopes:
-                - read
     /api/v1/trust/jwks.json:
         get:
             operationId: get_api_v1_trust_jwks_json
             tags:
                 - trust
-            security:
-                - bearerAuth: []
             responses:
                 "200":
                     description: OK
                 "400":
                     $ref: '#/components/responses/BadRequest'
-                "401":
-                    $ref: '#/components/responses/Unauthorized'
-                "403":
-                    $ref: '#/components/responses/Forbidden'
                 "500":
                     $ref: '#/components/responses/InternalServerError'
             x-lesser-handler: HandleTrustJWKSJSONLift
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
-            x-oauth-scopes:
-                - read
     /api/v1/trust/previews:
         post:
             operationId: post_api_v1_trust_previews
@@ -16564,6 +20340,9 @@ paths:
             operationId: get_api_v2_search
             tags:
                 - search
+            security:
+                - {}
+                - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/Limit'
                 - name: account_id
@@ -16597,11 +20376,15 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
     /api/v2/suggestions:
         get:
             operationId: get_api_v2_suggestions
             tags:
                 - suggestions
+            security:
+                - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/Limit'
             responses:
@@ -16623,6 +20406,8 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
     /api/v2/trends:
         get:
             operationId: get_api_v2_trends
@@ -16708,6 +20493,45 @@ paths:
                 "500":
                     $ref: '#/components/responses/InternalServerError'
             x-lesser-handler: HandleGetTrendingTagsV2Lift
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+    /articles/{slug}:
+        get:
+            operationId: get_articles_by_slug
+            tags:
+                - articles
+            parameters:
+                - name: slug
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-lambda: objects
+            x-lesser-routeSources:
+                - infra/cdk/inventory/lambdas.go:objects
+    /auth/device:
+        get:
+            operationId: get_auth_device
+            tags:
+                - auth
+            responses:
+                "200":
+                    description: OK
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-handler: HandleOAuthDevicePageLift
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
@@ -16992,11 +20816,17 @@ paths:
             operationId: get_health_detailed
             tags:
                 - health
+            security:
+                - bearerAuth: []
             responses:
                 "200":
                     description: OK
                 "400":
                     $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
                 "500":
                     $ref: '#/components/responses/InternalServerError'
                 "503":
@@ -17004,6 +20834,8 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/main.go
+            x-oauth-scopes:
+                - read
     /health/live:
         get:
             operationId: get_health_live
@@ -17038,6 +20870,43 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/main.go
+    /inbox:
+        get:
+            operationId: get_inbox
+            tags:
+                - activitypub
+            responses:
+                "200":
+                    description: OK
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "405":
+                    description: Method Not Allowed
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-lambda: inbox
+            x-lesser-routeSources:
+                - infra/cdk/inventory/lambdas.go:inbox
+        post:
+            operationId: post_inbox
+            tags:
+                - activitypub
+            responses:
+                "200":
+                    description: OK
+                "202":
+                    description: Accepted
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-lambda: inbox
+            x-lesser-routeSources:
+                - infra/cdk/inventory/lambdas.go:inbox
     /nodeinfo/2.0:
         get:
             operationId: get_nodeinfo_2_0
@@ -17063,6 +20932,9 @@ paths:
             operationId: get_oauth_authorize
             tags:
                 - oauth
+            security:
+                - {}
+                - bearerAuth: []
             parameters:
                 - name: client_id
                   in: query
@@ -17089,6 +20961,12 @@ paths:
                   in: query
                   required: true
                   description: OAuth redirect URI (must match registered redirect URI).
+                  schema:
+                    type: string
+                    format: uri
+                - name: resource
+                  in: query
+                  description: Canonical target resource URI. Required for remote MCP authorization; must be the actor-scoped MCP URL served by this Lesser instance.
                   schema:
                     type: string
                     format: uri
@@ -17150,6 +21028,8 @@ paths:
                     - Location
             x-lesser-routeSources:
                 - cmd/api/routes.go
+            x-oauth-scopes:
+                - read
     /oauth/consent:
         post:
             operationId: post_oauth_consent
@@ -17342,6 +21222,62 @@ paths:
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
+    /oauth/register:
+        post:
+            operationId: post_oauth_register
+            tags:
+                - oauth
+            security:
+                - {}
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/OAuthDynamicClientRegistrationRequest'
+            responses:
+                "201":
+                    description: Created
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OAuthDynamicClientRegistrationResponse'
+                    headers:
+                        X-RateLimit-Limit:
+                            description: Request limit per window.
+                            schema:
+                                type: integer
+                                format: int32
+                        X-RateLimit-Remaining:
+                            description: Requests remaining in the current window.
+                            schema:
+                                type: integer
+                                format: int32
+                        X-RateLimit-Reset:
+                            description: Unix timestamp (seconds) when the current window resets.
+                            schema:
+                                type: integer
+                                format: int64
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthorized'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "415":
+                    description: Unsupported media type
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
+                "429":
+                    $ref: '#/components/responses/TooManyRequests'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-lambda: api
+            x-lesser-routeSources:
+                - cmd/api/routes.go
+            x-oauth-scopes:
+                - write
     /oauth/revoke:
         post:
             operationId: post_oauth_revoke
@@ -17424,7 +21360,6 @@ paths:
                     $ref: '#/components/responses/TooManyRequests'
                 "500":
                     $ref: '#/components/responses/InternalServerError'
-            x-lesser-handler: HandleOAuthTokenLift
             x-lesser-lambda: api
             x-lesser-routeSources:
                 - cmd/api/routes.go
@@ -17827,3 +21762,32 @@ paths:
             x-lesser-lambda: outbox
             x-lesser-routeSources:
                 - infra/cdk/inventory/lambdas.go:outbox
+    /users/{username}/statuses/{id}:
+        get:
+            operationId: get_users_by_username_statuses_by_id
+            tags:
+                - activitypub
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: username
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalServerError'
+            x-lesser-lambda: objects
+            x-lesser-routeSources:
+                - infra/cdk/inventory/lambdas.go:objects
+

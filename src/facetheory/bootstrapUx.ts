@@ -833,7 +833,7 @@ function normalPhaseCopy(phase: SoulBootstrapPhase | 'UNAVAILABLE', result: Soul
 				tone: 'warning' as const,
 			};
 		case 'FINALIZE':
-			if (hostedMode) {
+			if (hostedMode && typedNextAction === 'PUBLISH_HOSTED_SOUL') {
 				return {
 					title: 'Publish hosted/off-chain soul',
 					summary:
@@ -842,6 +842,17 @@ function normalPhaseCopy(phase: SoulBootstrapPhase | 'UNAVAILABLE', result: Soul
 					actionDetail: 'Authority: instance trust · anchor: hosted/off-chain · mutable/revocable: yes.',
 					routeKey: 'genesis' as const,
 					tone: 'accent' as const,
+				};
+			}
+			if (hostedMode) {
+				return {
+					title: 'Hosted publish state must refresh',
+					summary:
+						'Lesser did not provide a hosted publish typedNextAction for this finalize state. Simulacrum fails closed and re-queries Lesser rather than manufacturing publish readiness.',
+					actionLabel: 'Refresh Hosted State',
+					actionDetail: 'Re-query Lesser same-origin GraphQL before continuing.',
+					routeKey: 'genesis' as const,
+					tone: 'warning' as const,
 				};
 			}
 			return {

@@ -15,12 +15,11 @@
 		type SoulBootstrapResult,
 	} from '$lib/api/soulBootstrap';
 	import {
-		getHostedSoulBootstrapTerminalDeclarationEvidence,
+		getHostedSoulBootstrapTerminalDeclarationEvidenceSummary,
 		isHostedSoulBootstrapPublishReady,
-		type HostedSoulBootstrapTerminalDeclarationEvidence,
+		type HostedSoulBootstrapTerminalDeclarationEvidenceSummary,
 	} from '$lib/greater/adapters';
 
-	import { arrayOrEmpty } from '../nullability';
 	import { getPageHref } from '../routing';
 
 	interface Props {
@@ -28,7 +27,16 @@
 		onUpdated?: () => Promise<void> | void;
 	}
 
-	type HostedDefaultAction = HostedSoulBootstrapNextAction | 'REFRESH_STATE';
+	type HostedDefaultAction =
+		| 'START_HOSTED_BOOTSTRAP'
+		| 'SEND_HOSTED_SOUL_GENESIS_MESSAGE'
+		| 'COMPLETE_HOSTED_SOUL_GENESIS'
+		| 'PUBLISH_HOSTED_SOUL'
+		| 'RESTART_SOUL_BOOTSTRAP'
+		| 'RETRY_SAME_STEP'
+		| 'REFRESH_STATE'
+		| 'OPERATOR_ACTION_REQUIRED'
+		| 'COMPLETE';
 	type HostedStepKey = 'body' | 'start' | 'genesis' | 'review' | 'publish' | 'bound';
 	type StepStatus = 'complete' | 'active' | 'pending' | 'blocked';
 
@@ -53,7 +61,7 @@
 	const defaultAction = $derived(resolveHostedDefaultAction(result));
 	const activeConversationId = $derived(result?.state?.hostConversationId ?? null);
 	const declarationEvidence = $derived(
-		getHostedSoulBootstrapTerminalDeclarationEvidence(result?.state ?? null, {
+		getHostedSoulBootstrapTerminalDeclarationEvidenceSummary(result?.state ?? null, {
 			conversationId: activeConversationId,
 		})
 	);
@@ -105,6 +113,7 @@
 					authorityModel: source.state.authorityModel,
 					anchorState: source.state.anchorState ?? null,
 					assuranceState: source.state.assuranceState ?? null,
+					hostConversationStatus: source.state.hostConversationStatus ?? null,
 					typedNextAction: source.state.typedNextAction,
 					nextAction: source.nextAction ?? null,
 					recoveryCategory: source.surface?.recoveryCategory ?? source.state.recoveryCategory ?? null,
@@ -118,6 +127,9 @@
 					existingSoulAgentId: source.surface?.existingSoulAgentId ?? null,
 					soulBindingState: source.surface?.soulBindingState ?? 'UNBOUND',
 					publication: source.state.publication ?? null,
+					publicationEvidence: source.state.publicationEvidence ?? source.state.publication ?? null,
+					terminalDeclarationEvidence: source.state.terminalDeclarationEvidence ?? null,
+					publishGate: source.state.publishGate ?? null,
 					hostRequest: {
 						hostRequestId: source.state.error?.hostRequestId ?? source.state.lastHostRequestId ?? null,
 						lastHostRequestId: source.state.lastHostRequestId ?? null,
@@ -136,13 +148,20 @@
 		source: HostedSoulBootstrapResult | SoulBootstrapResult | null
 	): HostedDefaultAction {
 		if (!source?.state) return 'REFRESH_STATE';
-		if (source.surface?.soulBindingState === 'BOUND' || source.state.phase === 'COMPLETE') return 'COMPLETE';
-		const recoveryAction = readRecoveryAction(source);
-		if (recoveryAction === 'RESTART_BOOTSTRAP') return 'RESTART_SOUL_BOOTSTRAP';
-		if (recoveryAction === 'RETRY_SAME_STEP') return 'RETRY_SAME_STEP';
-		if (recoveryAction === 'REFRESH_STATE') return 'REFRESH_STATE';
-		if (recoveryAction === 'CONTACT_OPERATOR') return 'OPERATOR_ACTION_REQUIRED';
-		return readTypedNextAction(source) ?? 'REFRESH_STATE';
+		const typedNextAction = readTypedNextAction(source);
+		return isHostedDefaultAction(typedNextAction) ? typedNextAction : 'REFRESH_STATE';
+	}
+
+	function isHostedDefaultAction(action: HostedSoulBootstrapNextAction | null): action is HostedDefaultAction {
+		return action === 'START_HOSTED_BOOTSTRAP' ||
+			action === 'SEND_HOSTED_SOUL_GENESIS_MESSAGE' ||
+			action === 'COMPLETE_HOSTED_SOUL_GENESIS' ||
+			action === 'PUBLISH_HOSTED_SOUL' ||
+			action === 'RESTART_SOUL_BOOTSTRAP' ||
+			action === 'RETRY_SAME_STEP' ||
+			action === 'REFRESH_STATE' ||
+			action === 'OPERATOR_ACTION_REQUIRED' ||
+			action === 'COMPLETE';
 	}
 
 	function buildHostedSteps(
@@ -376,53 +395,9 @@
 	}
 
 	async function submitRefreshState() {
-		const beforeFingerprint = hostedStateFingerprint(result);
-		const conversationId = result?.state?.hostConversationId?.trim() ?? '';
-		if (!conversationId) {
-			await onUpdated?.();
-			await tick();
-			if (hostedStateFingerprint(result) !== beforeFingerprint) {
-				success = 'Hosted soul state refreshed from Lesser.';
-				return;
-			}
-			throw new Error(
-				'Lesser did not return a hosted genesis conversation id, so Simulacrum only refreshed state. The hosted projection is unchanged.'
-			);
-		}
-
-		const correlation = freshClientCorrelation('refresh-state-repair');
-		const mutation = await completeHostedSoulGenesis({
-			input: {
-				username: requireUsername(result),
-				conversationId,
-				...(result?.state?.hostRegistrationId ? { registrationId: result.state.hostRegistrationId } : {}),
-				...(result?.state?.recoveryAttemptId ? { recoveryAttemptId: result.state.recoveryAttemptId } : {}),
-				...(correlation.correlationKey ? { correlationKey: correlation.correlationKey } : {}),
-				...(correlation.idempotencyKey ? { idempotencyKey: correlation.idempotencyKey } : {}),
-			},
-		});
-		if (mutation.error) {
-			await onUpdated?.();
-			await tick();
-			throw new Error(mutation.error.message);
-		}
-
 		await onUpdated?.();
 		await tick();
-		if (hasHostedPublishEvidence(mutation) || hasHostedPublishEvidence(result)) {
-			success = 'Hosted declaration evidence reconciled from Lesser.';
-			return;
-		}
-		if (
-			hostedStateFingerprint(mutation) !== beforeFingerprint ||
-			hostedStateFingerprint(result) !== beforeFingerprint
-		) {
-			success = 'Hosted soul state refreshed from Lesser.';
-			return;
-		}
-		throw new Error(
-			'Lesser refreshed the hosted state, but did not reconcile hosted declaration evidence yet.'
-		);
+		success = 'Hosted soul state refreshed from Lesser.';
 	}
 
 	async function submitRestart() {
@@ -491,16 +466,6 @@
 		};
 	}
 
-	function freshClientCorrelation(purpose: string) {
-		if (typeof window === 'undefined') {
-			return { correlationKey: null, idempotencyKey: null };
-		}
-		return {
-			correlationKey: createClientKey(`${purpose}-correlation`),
-			idempotencyKey: createClientKey(`${purpose}-idempotency`),
-		};
-	}
-
 	function readOrCreateClientKey(
 		username: string,
 		purpose: string,
@@ -527,45 +492,9 @@
 		return `sim-hosted-${purpose}-${randomId}`;
 	}
 
-	function hasHostedPublishEvidence(
-		source: HostedSoulBootstrapResult | SoulBootstrapResult | null
-	): boolean {
-		const conversationId = source?.state?.hostConversationId?.trim() ?? null;
-		return isHostedSoulBootstrapPublishReady(source?.state ?? null, { conversationId });
-	}
-
-	function hostedStateFingerprint(
-		source: HostedSoulBootstrapResult | SoulBootstrapResult | null
-	): string {
-		const state = source?.state;
-		if (!state) return 'missing';
-		return JSON.stringify({
-			phase: state.phase,
-			state: state.state,
-			typedNextAction: state.typedNextAction,
-			recoveryCategory: state.recoveryCategory ?? null,
-			recoveryAction: state.recoveryAction ?? null,
-			recoveryAttemptId: state.recoveryAttemptId ?? null,
-			hostRegistrationId: state.hostRegistrationId ?? null,
-			hostConversationId: state.hostConversationId ?? null,
-			lastHostRequestId: state.lastHostRequestId ?? null,
-			updatedAt: state.updatedAt ?? null,
-			errorCode: state.error?.code ?? source?.error?.code ?? null,
-			errorMessage: state.error?.message ?? source?.error?.message ?? null,
-			checkpoints: arrayOrEmpty(state.signingCheckpoints).map((checkpoint) => ({
-				name: checkpoint.name,
-				status: checkpoint.status,
-				hostRequestId: checkpoint.hostRequestId ?? null,
-				completedAt: checkpoint.completedAt ?? null,
-				hasCanonicalJson: Boolean(checkpoint.canonicalJson?.trim()),
-			})),
-		});
-	}
-
 	function resolveRecoveryAttemptId(source: HostedSoulBootstrapResult | SoulBootstrapResult | null): string | null {
 		return nonEmpty(source?.state?.recoveryAttemptId) ??
-			nonEmpty((source as HostedSoulBootstrapResult | null)?.hostRequest?.recoveryAttemptId) ??
-			readOrCreateClientKey(resolveUsername(source), 'recovery-attempt');
+			nonEmpty((source as HostedSoulBootstrapResult | null)?.hostRequest?.recoveryAttemptId);
 	}
 
 	function requireUsername(source: HostedSoulBootstrapResult | SoulBootstrapResult | null): string {
@@ -619,25 +548,21 @@
 	}
 
 	function readDeclarationEvidenceSummary(
-		source: HostedSoulBootstrapResult | SoulBootstrapResult | null,
-		evidence: HostedSoulBootstrapTerminalDeclarationEvidence | null
+		_source: HostedSoulBootstrapResult | SoulBootstrapResult | null,
+		evidence: HostedSoulBootstrapTerminalDeclarationEvidenceSummary | null
 	): string | null {
-		const selfDescription = evidence?.declaration.selfDescription;
-		const summary = typeof selfDescription?.['summary'] === 'string'
-			? selfDescription['summary'].trim()
-			: '';
-		if (summary) return summary;
-		if (evidence?.canonicalDeclarationJson) return evidence.canonicalDeclarationJson;
-
-		const statement = source?.surface?.workflow?.declaration?.statement?.trim();
-		if (statement && statement !== 'Host mint conversation completed and produced declaration material.') {
-			return statement;
-		}
-		const checkpoint = arrayOrEmpty(source?.state?.signingCheckpoints).find((candidate) =>
-			candidate.name.toLowerCase().includes('conversation') &&
-			(candidate.canonicalJson?.trim() || candidate.message?.trim())
-		);
-		return checkpoint?.message?.trim() || checkpoint?.canonicalJson?.trim() || null;
+		if (!evidence) return null;
+		const preview = evidence.producedDeclarationsPreview;
+		const title = preview?.title?.trim();
+		const count = typeof preview?.declarationCount === 'number'
+			? preview.declarationCount
+			: null;
+		const parts = [
+			title || 'Terminal hosted declaration evidence',
+			count != null ? `${count} declaration${count === 1 ? '' : 's'}` : null,
+			evidence.declarationsHash,
+		].filter(Boolean);
+		return parts.join(' · ');
 	}
 
 	function nonEmpty(value?: string | null): string | null {
