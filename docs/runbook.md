@@ -31,6 +31,8 @@ The old static upload path is retired:
 ## Prereqs
 
 - AWS access for the target instance profile
+- AWS access to the live `lesser-host` profile when deploying a host-managed
+  live instance
 - `node >= 24`
 - `pnpm`
 - `curl`
@@ -44,9 +46,9 @@ Current dev-stage targets:
 
 Current principal-authorized live target:
 
-| app slug | base domain | stage URL | AWS profile | local receipt |
+| app slug | base domain | stage URL | instance AWS profile | managed receipt source |
 | --- | --- | --- | --- | --- |
-| `theory` | `theory.greater.website` | `https://theory.greater.website` | `TheoryLive` | `~/.lesser/theory/theory.greater.website/state.json` |
+| `theory` | `theory.greater.website` | `https://theory.greater.website` | `TheoryLive` | `lesser-host-live` via AWS profile `Lesser` |
 
 Stage URL rule:
 
@@ -55,8 +57,12 @@ Stage URL rule:
 - `live` -> `https://<base-domain>`; live deploys do **not** get `dev.*`
   domains
 
-If the receipt is missing, bootstrap or refresh the stage from the `lesser`
-repo before attempting a client install.
+For dev-stage targets, the local `~/.lesser/.../state.json` receipt is used.
+For Theory live, do **not** use the stale dev receipt under `~/.lesser/theory`.
+The wrapper resolves the canonical non-secret live receipt from the
+`lesser-host-live` control plane, writes it to the gitignored workspace-local
+state path `./.deploy/lesser-state/theory-live-state.json`, and passes that
+path to `lesser client install --state`.
 
 ## Obtain a current `lesser` binary
 
@@ -144,6 +150,13 @@ The wrapper runs, in order:
 5. `lesser client install --skip-build`
 6. curl verification for `/l/`, `/l/identity`, and `/auth/login`
 
+For `theory` live, step 5 uses the host-managed live receipt from
+`lesser-host-live` instead of `~/.lesser/theory/theory.greater.website/state.json`.
+The wrapper looks up the live instance in the `Lesser` AWS profile, downloads
+the current managed receipt from the host artifact bucket, validates that it
+contains only the `live` stage for `theory.greater.website`, and writes the
+local state file inside this workspace at `./.deploy/lesser-state/`.
+
 Common commands:
 
 ```bash
@@ -159,7 +172,9 @@ pnpm deploy:theory:dev
 pnpm deploy:theory:live
 ```
 
-Use `--dry-run` to print the exact commands without executing them:
+Use `--dry-run` to print the exact install commands without installing. For
+managed live deploys, dry-run still performs read-only `lesser-host` receipt
+lookup so the displayed `--state` input is grounded in the current host state:
 
 ```bash
 pnpm run deploy -- --target theory --stage live --dry-run
@@ -299,8 +314,13 @@ node scripts/render-install-manifest.mjs \
   --aws-profile TheoryLive \
   --stage live \
   --config ./facetheory.theory.lesser.json \
-  --skip-build
+  --skip-build \
+  --state ./.deploy/lesser-state/theory-live-state.json
 ```
+
+Before running the manual command, populate the managed live receipt in the
+workspace-local state path. The wrapper does this automatically; manual deploys
+should prefer the wrapper to avoid stale receipt drift.
 
 Verify the live base-domain routes:
 
