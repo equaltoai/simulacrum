@@ -151,6 +151,42 @@ test.describe('Project 49 hosted genesis workflow reset', () => {
 		await expectNoHostCredentialStorage(page);
 	});
 
+	test('failed retry same step re-invokes hosted start through Lesser without wallet or raw Host inputs', async ({ page }) => {
+		const captured = captureRequests(page);
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: createProject49HostedGenesisSurface('failed retry same step'),
+		});
+
+		await page.goto(`/l/identity/${project44SoulBootstrapIds.username}`);
+		await expect(page.getByTestId('hosted-soul-default-action')).toHaveCount(1);
+		await expect(page.getByRole('button', { name: 'Retry Hosted Step' })).toBeEnabled();
+		expect(harness.graphQLRequests().map((request) => request.operationName)).not.toContain('StartHostedSoulBootstrap');
+
+		await page.getByRole('button', { name: 'Retry Hosted Step' }).click();
+		await expect(page.getByTestId('hosted-soul-success')).toContainText('Hosted definition started through Lesser');
+
+		const startRequest = harness
+			.graphQLRequests()
+			.find((request) => request.operationName === 'StartHostedSoulBootstrap');
+		expect(startRequest, 'Retry Hosted Step must invoke StartHostedSoulBootstrap').toBeTruthy();
+		expect(startRequest?.variables).toMatchObject({
+			input: { username: project44SoulBootstrapIds.username },
+		});
+		expect(JSON.stringify(startRequest?.variables ?? {})).not.toMatch(
+			/walletAddress|principalAddress|signature|selfAttestation|hostToken|hostBaseUrl|instanceKey/i
+		);
+
+		const operations = harness.graphQLRequests().map((request) => request.operationName);
+		expect(operations).not.toContain('RestartSoulBootstrap');
+		expect(operations).not.toContain('PublishHostedSoul');
+		expect(operations).not.toContain('BeginSoulBootstrap');
+		expectSameOriginGraphQL(page, harness.graphQLRequests());
+		expectNoRawHostWorkflowReads(captured);
+		await expectNoHostCredentialPrompt(page);
+		await expectNoHostCredentialStorage(page);
+	});
+
 	test('declaration-ready review exposes exactly one evidence-gated publish action', async ({ page }) => {
 		const captured = captureRequests(page);
 		await installProject44Auth(page);
