@@ -435,6 +435,18 @@
 				'Lesser reports hosted publication is next, but declaration evidence is missing. Refresh or retry after Lesser/Host returns the generated declaration packet.'
 			);
 		}
+		if (result.state.phase === 'ERROR') {
+			// Lesser typed this hosted failure as retry-the-same-step. A restart-required
+			// error (or RESTART_BOOTSTRAP recovery action) supersedes stale hosted registration
+			// state via the restart mutation; everything else re-invokes the hosted-definition
+			// start mutation through Lesser same-origin GraphQL with the existing
+			// username/correlation/recovery fields. Both paths are wallet-free and never touch
+			// raw Host routes or Host credentials.
+			if (result.state.restartRequired === true || readRecoveryAction(result) === 'RESTART_BOOTSTRAP') {
+				return submitRestart();
+			}
+			return submitStart();
+		}
 		await onUpdated?.();
 		success = 'Hosted state refreshed before retry.';
 	}
