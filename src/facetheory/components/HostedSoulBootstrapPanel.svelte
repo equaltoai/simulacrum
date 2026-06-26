@@ -435,6 +435,18 @@
 				'Lesser reports hosted publication is next, but declaration evidence is missing. Refresh or retry after Lesser/Host returns the generated declaration packet.'
 			);
 		}
+		if (result.state.phase === 'ERROR') {
+			// Lesser typed this hosted failure as retry-the-same-step. A restart-required
+			// error (or RESTART_BOOTSTRAP recovery action) supersedes stale hosted registration
+			// state via the restart mutation; every other retry uses the same Lesser
+			// same-origin hosted-bootstrap bridge that authored the visible action. Both paths
+			// stay wallet-free and never touch raw Host routes, MicroVM routes, or Host
+			// credentials in the browser.
+			if (result.state.restartRequired === true || readRecoveryAction(result) === 'RESTART_BOOTSTRAP') {
+				return submitRestart();
+			}
+			return submitStart();
+		}
 		await onUpdated?.();
 		success = 'Hosted state refreshed before retry.';
 	}
@@ -593,6 +605,13 @@
 
 	<p class="ft-panel__message ft-panel__message--info">
 		Default next action: {actionSummary}
+	</p>
+
+	<p class="ft-panel__copy" data-testid="hosted-soul-server-action">
+		Lesser typed next action: <strong>{defaultAction}</strong>
+		{#if recoveryCategory || recoveryAction}
+			· recovery: <strong>{recoveryCategory ?? 'none'}</strong> / <strong>{recoveryAction ?? 'none'}</strong>
+		{/if}
 	</p>
 
 	<section class="ft-panel__recovery" data-testid="hosted-soul-assurance-copy">

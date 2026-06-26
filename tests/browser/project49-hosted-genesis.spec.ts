@@ -12,9 +12,13 @@ import { project44SoulBootstrapIds } from '../../src/lib/greater/adapters/fixtur
 type CapturedRequest = {
 	method: string;
 	url: string;
+	headers: Record<string, string>;
+	postData: string | null;
 };
 
-const HOST_CREDENTIAL_PROMPT_TEXT = /\bhostToken\b|\bhostBaseUrl\b|\bsoulWorkflowHost\b|browser instance key|Connect a lesser-host control-plane token|Enter Host token/i;
+const HOST_CREDENTIAL_PROMPT_TEXT = /\bhostToken\b|\bhostBaseUrl\b|\bsoulWorkflowHost\b|browser instance key|Connect a lesser-host control-plane token|Enter Host token|\bMicroVM\b|microvm token|microvm endpoint/i;
+const DISALLOWED_HOSTED_BROWSER_FIELDS =
+	/hostToken|hostBaseUrl|soulWorkflowHost|instanceKey|lesserHostToken|x-host-instance-key|x-lesser-host-token|x-instance-key|microvm|micro[-_]?vm|walletAddress|principalAddress|signature|selfAttestation|boundarySignatures/i;
 
 async function expectNoHostCredentialPrompt(page: Page) {
 	const bodyText = await page.locator('body').innerText();
@@ -70,7 +74,12 @@ function withLesserRecoveryAttempt(surface: ReturnType<typeof createProject49Hos
 function captureRequests(page: Page): CapturedRequest[] {
 	const captured: CapturedRequest[] = [];
 	page.on('request', (request) => {
-		captured.push({ method: request.method(), url: request.url() });
+		captured.push({
+			method: request.method(),
+			url: request.url(),
+			headers: request.headers(),
+			postData: request.postData(),
+		});
 	});
 	return captured;
 }
@@ -78,7 +87,9 @@ function captureRequests(page: Page): CapturedRequest[] {
 function expectNoRawHostWorkflowReads(captured: readonly CapturedRequest[]) {
 	const rawHostReads = captured.filter((request) => {
 		const url = new URL(request.url);
-		return request.method === 'GET' && url.pathname.startsWith('/api/v1/soul');
+		return url.pathname.startsWith('/api/v1/soul') ||
+			/microvm|micro[-_]?vm/i.test(url.pathname) ||
+			/microvm|micro[-_]?vm/i.test(url.hostname);
 	});
 	expect(rawHostReads).toEqual([]);
 }
@@ -89,6 +100,43 @@ function expectSameOriginGraphQL(page: Page, graphQLRequests: readonly { operati
 		const url = new URL(request.url);
 		expect(url.origin, `GraphQL operation ${request.operationName} must remain same-origin`).toBe(pageOrigin);
 		expect(url.pathname).toBe('/api/graphql');
+	}
+}
+
+function expectNoHostOrMicroVmCredentialExposure(
+	page: Page,
+	captured: readonly CapturedRequest[],
+	graphQLRequests: readonly {
+		operationName: string;
+		url: string;
+		variables: Record<string, unknown>;
+		headers: Record<string, string>;
+		postData: string | null;
+	}[]
+) {
+	const pageOrigin = new URL(page.url()).origin;
+	expectNoRawHostWorkflowReads(captured);
+	for (const request of captured) {
+		const url = new URL(request.url);
+		const headers = JSON.stringify(request.headers);
+		expect(headers, `no Host/MicroVM credential headers for ${request.method} ${url.pathname}`).not.toMatch(
+			/x-host-instance-key|x-lesser-host-token|x-instance-key|microvm|micro[-_]?vm/i
+		);
+		const authorization = request.headers.authorization ?? request.headers.Authorization;
+		if (authorization) {
+			expect(url.origin, 'bearer-bearing browser requests stay same-origin').toBe(pageOrigin);
+			expect(url.pathname, 'bearer-bearing hosted recovery requests use Lesser GraphQL only').toBe(
+				'/api/graphql'
+			);
+		}
+	}
+	for (const request of graphQLRequests) {
+		expect(JSON.stringify(request.variables), request.operationName).not.toMatch(
+			DISALLOWED_HOSTED_BROWSER_FIELDS
+		);
+		expect(request.postData ?? '', request.operationName).not.toMatch(
+			/hostToken|hostBaseUrl|soulWorkflowHost|instanceKey|lesserHostToken|x-host-instance-key|x-lesser-host-token|x-instance-key|microvm|micro[-_]?vm/i
+		);
 	}
 }
 
@@ -117,7 +165,7 @@ test.describe('Project 49 hosted genesis workflow reset', () => {
 		expect(operations).not.toContain('CompleteHostedSoulGenesis');
 		expect(operations).not.toContain('PublishHostedSoul');
 		expectSameOriginGraphQL(page, harness.graphQLRequests());
-		expectNoRawHostWorkflowReads(captured);
+		expectNoHostOrMicroVmCredentialExposure(page, captured, harness.graphQLRequests());
 		await expectNoHostCredentialPrompt(page);
 		await expectNoHostCredentialStorage(page);
 	});
@@ -147,7 +195,123 @@ test.describe('Project 49 hosted genesis workflow reset', () => {
 			/walletAddress|principalAddress|signature|selfAttestation|hostToken|hostBaseUrl|instanceKey/i
 		);
 		expectSameOriginGraphQL(page, harness.graphQLRequests());
-		expectNoRawHostWorkflowReads(captured);
+		expectNoHostOrMicroVmCredentialExposure(page, captured, harness.graphQLRequests());
+		await expectNoHostCredentialStorage(page);
+	});
+
+	test('hosted browser operations stay same-origin and do not expose Host or MicroVM credentials', async ({ page }) => {
+		const captured = captureRequests(page);
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: createProject49HostedGenesisSurface('no registration'),
+		});
+
+		await page.goto(`/l/identity/${project44SoulBootstrapIds.username}`);
+		await expect(page.getByTestId('hosted-soul-server-action')).toContainText(
+			'START_HOSTED_BOOTSTRAP'
+		);
+		await page.getByRole('button', { name: 'Start Hosted Definition' }).click();
+		await expect(page.getByTestId('hosted-soul-success')).toContainText(
+			'Hosted definition started through Lesser'
+		);
+		await expect(page.getByTestId('hosted-soul-server-action')).toContainText(
+			'SEND_HOSTED_SOUL_GENESIS_MESSAGE'
+		);
+		await page.getByRole('button', { name: 'Send Genesis Message' }).click();
+		await expect(page.getByTestId('hosted-soul-server-action')).toContainText(
+			'COMPLETE_HOSTED_SOUL_GENESIS'
+		);
+
+		const operations = harness.graphQLRequests().map((request) => request.operationName);
+		expect(operations).toContain('StartHostedSoulBootstrap');
+		expect(operations).toContain('SendHostedSoulGenesisMessage');
+		expect(operations).not.toContain('BeginSoulBootstrap');
+		expect(operations).not.toContain('VerifySoulBootstrapWallet');
+		expect(operations).not.toContain('FinalizeSoulBootstrap');
+		expectSameOriginGraphQL(page, harness.graphQLRequests());
+		expectNoHostOrMicroVmCredentialExposure(page, captured, harness.graphQLRequests());
+		await expectNoHostCredentialPrompt(page);
+		await expectNoHostCredentialStorage(page);
+	});
+
+	test('renders released server-authored hosted next actions without multiple primary controls', async ({ page }) => {
+		const actionCases = [
+			{
+				label: 'registration active, no conversation',
+				action: 'SEND_HOSTED_SOUL_GENESIS_MESSAGE',
+				control: 'Send Genesis Message',
+			},
+			{ label: 'in_progress', action: 'REFRESH_STATE', control: 'Refresh Hosted State' },
+			{
+				label: 'assistant_turn_ready',
+				action: 'COMPLETE_HOSTED_SOUL_GENESIS',
+				control: 'Review Generated Declarations',
+			},
+			{ label: 'declaration_ready', action: 'PUBLISH_HOSTED_SOUL', control: 'Publish Hosted Soul' },
+			{ label: 'failed retry same step', action: 'RETRY_SAME_STEP', control: 'Retry Hosted Step' },
+			{
+				label: 'failed restart bootstrap',
+				action: 'RESTART_SOUL_BOOTSTRAP',
+				control: 'Restart Hosted Definition',
+			},
+		] as const;
+
+		for (const row of actionCases) {
+			await installProject44Auth(page);
+			await installProject44Routes(page, {
+				initialSurface: createProject49HostedGenesisSurface(row.label),
+			});
+			await page.goto(`/l/identity/${project44SoulBootstrapIds.username}`);
+
+			const panel = page.getByTestId('hosted-soul-bootstrap-panel');
+			await expect(panel.getByTestId('hosted-soul-server-action')).toContainText(row.action);
+			await expect(page.getByTestId('hosted-soul-default-action')).toHaveCount(1);
+			await expect(page.getByRole('button', { name: row.control })).toBeVisible();
+			await expect(panel).not.toContainText(/backend logs|DynamoDB repair|MicroVM endpoint|SQS diagnosis/i);
+			await expectNoHostCredentialPrompt(page);
+			await expectNoHostCredentialStorage(page);
+			await page.unrouteAll({ behavior: 'ignoreErrors' });
+		}
+	});
+
+	test('failed retry same step re-invokes hosted start through Lesser without wallet or raw Host inputs', async ({ page }) => {
+		const captured = captureRequests(page);
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: createProject49HostedGenesisSurface('failed retry same step'),
+		});
+
+		await page.goto(`/l/identity/${project44SoulBootstrapIds.username}`);
+		await expect(page.getByTestId('hosted-soul-default-action')).toHaveCount(1);
+		await expect(page.getByTestId('hosted-soul-server-action')).toContainText('RETRY_SAME_STEP');
+		await expect(page.getByRole('button', { name: 'Retry Hosted Step' })).toBeEnabled();
+		expect(harness.graphQLRequests().map((request) => request.operationName)).not.toContain(
+			'StartHostedSoulBootstrap'
+		);
+
+		await page.getByRole('button', { name: 'Retry Hosted Step' }).click();
+		await expect(page.getByTestId('hosted-soul-success')).toContainText(
+			'Hosted definition started through Lesser'
+		);
+
+		const startRequest = harness
+			.graphQLRequests()
+			.find((request) => request.operationName === 'StartHostedSoulBootstrap');
+		expect(startRequest, 'Retry Hosted Step must invoke StartHostedSoulBootstrap').toBeTruthy();
+		expect(startRequest?.variables).toMatchObject({
+			input: { username: project44SoulBootstrapIds.username },
+		});
+		expect(JSON.stringify(startRequest?.variables ?? {})).not.toMatch(
+			/walletAddress|principalAddress|signature|selfAttestation|hostToken|hostBaseUrl|instanceKey|microvm/i
+		);
+
+		const operations = harness.graphQLRequests().map((request) => request.operationName);
+		expect(operations).not.toContain('RestartSoulBootstrap');
+		expect(operations).not.toContain('PublishHostedSoul');
+		expect(operations).not.toContain('BeginSoulBootstrap');
+		expectSameOriginGraphQL(page, harness.graphQLRequests());
+		expectNoHostOrMicroVmCredentialExposure(page, captured, harness.graphQLRequests());
+		await expectNoHostCredentialPrompt(page);
 		await expectNoHostCredentialStorage(page);
 	});
 
@@ -173,7 +337,7 @@ test.describe('Project 49 hosted genesis workflow reset', () => {
 		expect(operations).not.toContain('VerifySoulBootstrapWallet');
 		expect(operations).not.toContain('FinalizeSoulBootstrap');
 		expectSameOriginGraphQL(page, harness.graphQLRequests());
-		expectNoRawHostWorkflowReads(captured);
+		expectNoHostOrMicroVmCredentialExposure(page, captured, harness.graphQLRequests());
 		await expectNoHostCredentialStorage(page);
 	});
 });
