@@ -1,10 +1,15 @@
 # Simulacrum Client Deploy Runbook
 
 This runbook covers building and deploying the current FaceTheory app served at
-`/l/*` to Lesser dev-stage instances. Today we actively target:
+`/l/*` to Lesser-owned stages. Today the steward-validated canary targets are
+still the dev-stage instances:
 
 - `simulacrum` at `https://dev.simulacrum.greater.website/l/`
 - `theory` at `https://dev.theory.greater.website/l/`
+
+The operator-authorized Theory live stage uses the base domain
+`https://theory.greater.website/l/`, not a `dev.*` domain. Do not use this
+runbook for production-customer Lesser instances.
 
 ## Current deploy path
 
@@ -26,6 +31,8 @@ The old static upload path is retired:
 ## Prereqs
 
 - AWS access for the target instance profile
+- AWS access to the live `lesser-host` profile when deploying a host-managed
+  live instance
 - `node >= 24`
 - `pnpm`
 - `curl`
@@ -37,8 +44,25 @@ Current dev-stage targets:
 | `simulacrum` | `simulacrum.greater.website` | `https://dev.simulacrum.greater.website` | `Sim` | `~/.lesser/simulacrum/simulacrum.greater.website/state.json` |
 | `theory` | `theory.greater.website` | `https://dev.theory.greater.website` | `Theory` | `~/.lesser/theory/theory.greater.website/state.json` |
 
-If the receipt is missing, bootstrap or refresh the stage from the `lesser`
-repo before attempting a client install.
+Current principal-authorized live target:
+
+| app slug | base domain | stage URL | instance AWS profile | managed receipt source |
+| --- | --- | --- | --- | --- |
+| `theory` | `theory.greater.website` | `https://theory.greater.website` | `TheoryLive` | `lesser-host-live` via AWS profile `Lesser` |
+
+Stage URL rule:
+
+- `dev` -> `https://dev.<base-domain>`
+- `staging` -> `https://staging.<base-domain>`
+- `live` -> `https://<base-domain>`; live deploys do **not** get `dev.*`
+  domains
+
+For dev-stage targets, the local `~/.lesser/.../state.json` receipt is used.
+For Theory live, do **not** use the stale dev receipt under `~/.lesser/theory`.
+The wrapper resolves the canonical non-secret live receipt from the
+`lesser-host-live` control plane, writes it to the gitignored workspace-local
+state path `./.deploy/lesser-state/theory-live-state.json`, and passes that
+path to `lesser client install --state`.
 
 ## Obtain a current `lesser` binary
 
@@ -109,6 +133,58 @@ Expected artifacts:
 - `build/client/assets/*`
 - `facetheory.lesser.json`
 
+## Single-command operator deploy
+
+The repo provides an operator wrapper around the manual runbook steps:
+
+```bash
+pnpm run deploy -- --target <simulacrum|theory|all> --stage <dev|staging|live>
+```
+
+The wrapper runs, in order:
+
+1. `pnpm install --frozen-lockfile`
+2. `pnpm check`
+3. `pnpm build`
+4. `node scripts/render-install-manifest.mjs` for each target
+5. `lesser client install --skip-build`
+6. curl verification for `/l/`, `/l/identity`, and `/auth/login`
+
+For `theory` live, step 5 uses the host-managed live receipt from
+`lesser-host-live` instead of `~/.lesser/theory/theory.greater.website/state.json`.
+The wrapper looks up the live instance in the `Lesser` AWS profile, downloads
+the current managed receipt from the host artifact bucket, validates that it
+contains only the `live` stage for `theory.greater.website`, and writes the
+local state file inside this workspace at `./.deploy/lesser-state/`.
+
+Common commands:
+
+```bash
+# Canary both documented dev targets.
+pnpm deploy:dev
+
+# Deploy only one dev target.
+pnpm deploy:simulacrum:dev
+pnpm deploy:theory:dev
+
+# Principal-authorized Theory live-stage deploy.
+# Verifies https://theory.greater.website, never dev.theory.greater.website.
+pnpm deploy:theory:live
+```
+
+Use `--dry-run` to print the exact install commands without installing. For
+managed live deploys, dry-run still performs read-only `lesser-host` receipt
+lookup so the displayed `--state` input is grounded in the current host state:
+
+```bash
+pnpm run deploy -- --target theory --stage live --dry-run
+```
+
+The wrapper is intentionally non-interactive. It does not run from CI, does not
+merge branches, does not skip review, and does not change the upstream-first,
+strict-CSP, GraphQL-first, browser-validation, or agent-first gates. It only
+removes copy/paste drift from an operator-approved install.
+
 ## Render an instance-specific install manifest
 
 The checked-in `facetheory.lesser.json` is the default manifest for the
@@ -144,10 +220,14 @@ app root correctly. The generated `facetheory.<app>.lesser.json` files are
 gitignored. You can also use the checked-in `facetheory.lesser.json` directly
 for the `simulacrum` instance if you do not need a separate output file.
 
-## Deploy to dev
+## Manual deploy commands
 
-If you just ran `pnpm build`, use `--skip-build` so the CLI installs the
-artifacts you already validated locally:
+The single-command wrapper above is preferred for routine operator deploys. If
+you need to run the underlying commands by hand and you just ran `pnpm build`,
+use `--skip-build` so the CLI installs the artifacts you already validated
+locally.
+
+### Dev stages
 
 Simulacrum dev:
 
@@ -210,6 +290,45 @@ Expected:
 - deep routes such as `/l/identity` return `200`
 - HTML references `/l/_assets/...`
 - `/auth/login` still resolves correctly on the same domain
+
+### Theory live stage
+
+Live-stage URLs use the base domain, not a dev subdomain. The wrapper command is
+preferred:
+
+```bash
+pnpm deploy:theory:live
+```
+
+The equivalent manual install command is:
+
+```bash
+node scripts/render-install-manifest.mjs \
+  --app theory \
+  --display-name Theory \
+  --out ./facetheory.theory.lesser.json
+
+"$HOME/.local/bin/lesser" client install \
+  --app theory \
+  --base-domain theory.greater.website \
+  --aws-profile TheoryLive \
+  --stage live \
+  --config ./facetheory.theory.lesser.json \
+  --skip-build \
+  --state ./.deploy/lesser-state/theory-live-state.json
+```
+
+Before running the manual command, populate the managed live receipt in the
+workspace-local state path. The wrapper does this automatically; manual deploys
+should prefer the wrapper to avoid stale receipt drift.
+
+Verify the live base-domain routes:
+
+```bash
+curl -i -sS https://theory.greater.website/l/ | sed -n '1,40p'
+curl -i -sS https://theory.greater.website/l/identity | sed -n '1,40p'
+curl -i -sS https://theory.greater.website/auth/login | sed -n '1,40p'
+```
 
 After the deploy-level checks pass, run the public browser smoke either:
 

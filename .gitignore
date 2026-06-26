@@ -28,6 +28,7 @@ vite.config.ts.timestamp-*
 # Local tooling
 /.pai
 /.theory
+/.deploy
 
 # Playwright MCP
 /.playwright-mcp
