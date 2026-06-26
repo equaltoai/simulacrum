@@ -27,7 +27,12 @@
 		"browser:test:headed": "playwright test --headed",
 		"browser:test:live": "node scripts/browser-test-live.mjs",
 		"browser:test:ui": "playwright test --ui",
-		"test": "node --test tests/api/_harness/*.test.mjs"
+		"test": "node --test tests/api/_harness/*.test.mjs",
+		"deploy": "node scripts/deploy-client.mjs",
+		"deploy:dev": "node scripts/deploy-client.mjs --target all --stage dev",
+		"deploy:simulacrum:dev": "node scripts/deploy-client.mjs --target simulacrum --stage dev",
+		"deploy:theory:dev": "node scripts/deploy-client.mjs --target theory --stage dev",
+		"deploy:theory:live": "node scripts/deploy-client.mjs --target theory --stage live"
 	},
 	"devDependencies": {
 		"@playwright/test": "^1.59.1",
