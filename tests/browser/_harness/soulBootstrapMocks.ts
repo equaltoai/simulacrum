@@ -17,6 +17,9 @@ type GraphQLRecord = {
 	operationName: string;
 	variables: Record<string, unknown>;
 	url: string;
+	headers: Record<string, string>;
+	postData: string | null;
+	toJSON: () => { operationName: string; variables: Record<string, unknown>; url: string };
 };
 
 type HostCredentialStorageSnapshot = {
@@ -801,6 +804,15 @@ export async function installProject44Routes(
 			operationName: operationName ?? 'unknown',
 			variables,
 			url: route.request().url(),
+			headers: route.request().headers(),
+			postData: route.request().postData(),
+			toJSON() {
+				return {
+					operationName: this.operationName,
+					variables: this.variables,
+					url: this.url,
+				};
+			},
 		});
 
 		switch (operationName) {
