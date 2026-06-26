@@ -438,10 +438,11 @@
 		if (result.state.phase === 'ERROR') {
 			// Lesser typed this hosted failure as retry-the-same-step. A restart-required
 			// error (or RESTART_BOOTSTRAP recovery action) supersedes stale hosted registration
-			// state via the restart mutation; every other retry uses the same Lesser
-			// same-origin hosted-bootstrap bridge that authored the visible action. Both paths
-			// stay wallet-free and never touch raw Host routes, MicroVM routes, or Host
-			// credentials in the browser.
+			// state via the restart mutation; everything else re-invokes the hosted-definition
+			// start mutation through the same Lesser same-origin hosted-bootstrap bridge that
+			// authored the visible action, preserving username/correlation/recovery fields.
+			// Both paths stay wallet-free and never touch raw Host routes, MicroVM routes,
+			// or Host credentials in the browser.
 			if (result.state.restartRequired === true || readRecoveryAction(result) === 'RESTART_BOOTSTRAP') {
 				return submitRestart();
 			}
