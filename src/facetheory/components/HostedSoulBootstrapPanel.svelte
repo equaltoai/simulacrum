@@ -84,6 +84,41 @@
 	const recoveryAction = $derived(readRecoveryAction(result));
 	const identityHref = $derived(getPageHref('identity', resolveUsername(result)));
 
+	// Hosted genesis conversation lane. Lesser routes a hosted/off-chain body into a
+	// CONVERSATION phase with a Host-owned conversation id. When Host is still producing
+	// the conversation result asynchronously, Lesser types the next action as REFRESH_STATE
+	// (no operator turn is valid yet); the lane must read as "waiting for the Host result"
+	// rather than a bare refresh card. Everything here is projected from the same Lesser
+	// same-origin GraphQL state — no Host token, Host base URL, or control-plane endpoint.
+	const conversationStatus = $derived(result?.state?.hostConversationStatus ?? null);
+	const lastHostRequestId = $derived(
+		hosted?.hostRequest.lastHostRequestId ?? result?.state?.lastHostRequestId ?? null
+	);
+	const inHostedGenesisConversation = $derived(
+		Boolean(result?.state?.phase === 'CONVERSATION' && activeConversationId)
+	);
+	const awaitingHostConversationResult = $derived(
+		inHostedGenesisConversation && defaultAction === 'REFRESH_STATE'
+	);
+	const awaitingUserGenesisTurn = $derived(
+		inHostedGenesisConversation && defaultAction === 'SEND_HOSTED_SOUL_GENESIS_MESSAGE'
+	);
+	const reviewingGenesisDeclarations = $derived(
+		inHostedGenesisConversation && defaultAction === 'COMPLETE_HOSTED_SOUL_GENESIS'
+	);
+	const hostedGenesisStatusLabel = $derived(
+		conversationStatus ?? result?.state?.state ?? 'pending'
+	);
+	const hostedGenesisLaneTitle = $derived(
+		awaitingHostConversationResult
+			? 'Waiting for the Host genesis conversation result'
+			: awaitingUserGenesisTurn
+				? 'Your hosted genesis turn is ready'
+				: reviewingGenesisDeclarations
+					? 'Hosted genesis declarations are ready to review'
+					: 'Hosted genesis conversation'
+	);
+
 	$effect(() => {
 		const nextContext = [
 			resolveUsername(result),
@@ -614,6 +649,50 @@
 			· recovery: <strong>{recoveryCategory ?? 'none'}</strong> / <strong>{recoveryAction ?? 'none'}</strong>
 		{/if}
 	</p>
+
+	{#if inHostedGenesisConversation}
+		<section class="ft-panel__recovery" data-testid="hosted-genesis-lane">
+			<p class="ft-panel__eyebrow">Hosted genesis conversation</p>
+			<p class="ft-panel__copy">
+				<strong data-testid="hosted-genesis-lane-title">{hostedGenesisLaneTitle}</strong>
+			</p>
+			<ul class="ft-list">
+				<li>
+					Conversation id:
+					<strong data-testid="hosted-genesis-conversation-id">{activeConversationId}</strong>
+				</li>
+				<li>
+					Host conversation status:
+					<strong data-testid="hosted-genesis-status">{hostedGenesisStatusLabel}</strong>
+				</li>
+				{#if lastHostRequestId}
+					<li>
+						Last Host request id:
+						<strong data-testid="hosted-genesis-last-host-request">{lastHostRequestId}</strong>
+					</li>
+				{/if}
+			</ul>
+			{#if awaitingHostConversationResult}
+				<p class="ft-panel__message ft-panel__message--info" data-testid="hosted-genesis-waiting">
+					Simulacrum is waiting for the Host conversation result. Lesser still reports this
+					hosted/off-chain genesis conversation as <strong>{hostedGenesisStatusLabel}</strong>, and
+					its typed next action is to poll Lesser for the result, so there is no operator turn to
+					take yet. Use the <strong>{actionLabel}</strong> control below to poll Lesser same-origin
+					GraphQL for the latest hosted conversation state.
+				</p>
+			{:else if awaitingUserGenesisTurn}
+				<p class="ft-panel__message ft-panel__message--info" data-testid="hosted-genesis-your-turn">
+					Lesser is ready for your hosted genesis message. Send it below; Simulacrum relays the turn
+					through Lesser same-origin GraphQL only.
+				</p>
+			{:else if reviewingGenesisDeclarations}
+				<p class="ft-panel__message ft-panel__message--info" data-testid="hosted-genesis-review-ready">
+					Lesser reports this hosted genesis conversation produced declaration evidence. Review the
+					generated declarations below before publishing the hosted/off-chain soul.
+				</p>
+			{/if}
+		</section>
+	{/if}
 
 	<section class="ft-panel__recovery" data-testid="hosted-soul-assurance-copy">
 		<p class="ft-panel__copy">
