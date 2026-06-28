@@ -238,6 +238,39 @@ export function createProject44HostedPublishWithStaleRecoverySurface(): SoulBoot
 	} satisfies SoulBootstrapSurface;
 }
 
+export function createProject51HostedGenesisFollowupSurface(): SoulBootstrapSurface {
+	const completedConversation = project44SoulBootstrapFixtures.hostedGenesisComplete.state
+		.hostedGenesisConversation;
+	return createProject44SoulBootstrapSurface({
+		phase: 'CONVERSATION',
+		state: 'hosted_genesis_followup_message_recorded',
+		hostConversationStatus: 'assistant_turn_ready',
+		bootstrapMode: 'HOSTED',
+		authorityModel: 'INSTANCE_TRUST',
+		anchorState: 'HOSTED_OFFCHAIN',
+		assuranceState: 'HOSTED_OFFCHAIN',
+		typedNextAction: 'COMPLETE_HOSTED_SOUL_GENESIS',
+		availableActions: ['SEND_HOSTED_SOUL_GENESIS_MESSAGE', 'COMPLETE_HOSTED_SOUL_GENESIS'],
+		nextAction: 'complete_hosted_soul_genesis',
+		hostRegistrationId: project44SoulBootstrapIds.registrationId,
+		hostConversationId: project44SoulBootstrapIds.conversationId,
+		hostedGenesisConversation: completedConversation
+			? {
+					...completedConversation,
+					status: 'assistant_turn_ready',
+				}
+			: null,
+		walletAddress: null,
+		principalAddress: null,
+	} satisfies Project44SoulBootstrapSurfaceOptions);
+}
+
+function chooseHostedGenesisMessageSurface(sendCount: number): SoulBootstrapSurface {
+	return sendCount > 1
+		? createProject51HostedGenesisFollowupSurface()
+		: resolveProject44Surface('hostedGenesisMessage');
+}
+
 export function createProject49HostedGenesisSurface(label: string): SoulBootstrapSurface {
 	const fixture = project49HostedGenesisStatusFixtures.find((candidate) => candidate.label === label);
 	if (!fixture) {
@@ -785,6 +818,7 @@ export async function installProject44Routes(
 	let currentSurface: SoulBootstrapSurface = options.initialSurface
 		? resolveProject44Surface(options.initialSurface)
 		: project44SoulBootstrapFixtures.hostedNotStarted;
+	let hostedGenesisSendCount = 0;
 	const graphQLRequests: GraphQLRecord[] = [];
 
 	await page.route('**/api/v2/instance', async (route) => {
@@ -928,7 +962,8 @@ export async function installProject44Routes(
 				return;
 			}
 			case 'SendHostedSoulGenesisMessage': {
-				currentSurface = resolveProject44Surface(MUTATION_NEXT_SURFACE[operationName]);
+				hostedGenesisSendCount += 1;
+				currentSurface = chooseHostedGenesisMessageSurface(hostedGenesisSendCount);
 				await route.fulfill(jsonResponse({
 					data: {
 						[OPERATION_RESPONSE_FIELD[operationName]]: payloadForSurface(currentSurface),

@@ -6,6 +6,9 @@
 		publishHostedSoul,
 		restartSoulBootstrap,
 		sendHostedSoulGenesisMessage,
+		type HostedSoulGenesisComposerState,
+		type HostedSoulGenesisConversationMessage,
+		type HostedSoulGenesisConversationTranscript,
 		startHostedSoulBootstrap,
 		type HostedSoulBootstrapNextAction,
 		type HostedSoulBootstrapRecoveryAction,
@@ -15,6 +18,8 @@
 		type SoulBootstrapResult,
 	} from '$lib/api/soulBootstrap';
 	import {
+		getHostedSoulGenesisComposerState,
+		getHostedSoulGenesisConversation,
 		getHostedSoulBootstrapTerminalDeclarationEvidenceSummary,
 		isHostedSoulBootstrapPublishReady,
 		type HostedSoulBootstrapTerminalDeclarationEvidenceSummary,
@@ -58,8 +63,12 @@
 	let draftContext = $state<string | null>(null);
 
 	const hosted = $derived(resolveHostedState(result));
+	const hostedConversation = $derived(resolveHostedConversation(result));
+	const hostedComposer = $derived(resolveHostedComposer(result));
 	const defaultAction = $derived(resolveHostedDefaultAction(result));
-	const activeConversationId = $derived(result?.state?.hostConversationId ?? null);
+	const activeConversationId = $derived(
+		hostedComposer.conversationId ?? result?.state?.hostConversationId ?? null
+	);
 	const declarationEvidence = $derived(
 		getHostedSoulBootstrapTerminalDeclarationEvidenceSummary(result?.state ?? null, {
 			conversationId: activeConversationId,
@@ -83,6 +92,23 @@
 	const recoveryCategory = $derived(readRecoveryCategory(result));
 	const recoveryAction = $derived(readRecoveryAction(result));
 	const identityHref = $derived(getPageHref('identity', resolveUsername(result)));
+	const hasHostedUserAction = $derived(
+		hostedComposer.canSendMessage ||
+			hostedComposer.canComplete ||
+			hostedComposer.canPublish ||
+			hostedComposer.canRestart
+	);
+	const showDefaultAction = $derived(defaultAction !== 'REFRESH_STATE' || !hasHostedUserAction);
+	const showHostedConversation = $derived(
+		Boolean(hostedConversation) ||
+			Boolean(hostedComposer.conversationId) ||
+			hostedComposer.canSendMessage ||
+			hostedComposer.canComplete
+	);
+	const showFollowupSendAction = $derived(
+		hostedComposer.canSendMessage && defaultAction !== 'SEND_HOSTED_SOUL_GENESIS_MESSAGE'
+	);
+	const canSendDraft = $derived(!busy && hostedComposer.canSendMessage && Boolean(messageDraft.trim()));
 
 	$effect(() => {
 		const nextContext = [
@@ -115,6 +141,7 @@
 					assuranceState: source.state.assuranceState ?? null,
 					hostConversationStatus: source.state.hostConversationStatus ?? null,
 					typedNextAction: source.state.typedNextAction,
+					availableActions: getHostedSoulGenesisComposerState(source.state).availableActions,
 					nextAction: source.nextAction ?? null,
 					recoveryCategory: source.surface?.recoveryCategory ?? source.state.recoveryCategory ?? null,
 					recoveryAction: source.surface?.recoveryAction ?? source.state.recoveryAction ?? null,
@@ -130,6 +157,8 @@
 					publicationEvidence: source.state.publicationEvidence ?? source.state.publication ?? null,
 					terminalDeclarationEvidence: source.state.terminalDeclarationEvidence ?? null,
 					publishGate: source.state.publishGate ?? null,
+					hostedGenesisConversation: getHostedSoulGenesisConversation(source.state),
+					composer: getHostedSoulGenesisComposerState(source.state),
 					hostRequest: {
 						hostRequestId: source.state.error?.hostRequestId ?? source.state.lastHostRequestId ?? null,
 						lastHostRequestId: source.state.lastHostRequestId ?? null,
@@ -210,6 +239,9 @@
 				if (source.state.phase === 'CONVERSATION') return source.state.hostConversationId ? 'review' : 'genesis';
 				return 'start';
 			case 'REFRESH_STATE':
+				if (source.state.phase === 'CONVERSATION') return 'genesis';
+				if (source.state.phase === 'FINALIZE') return 'publish';
+				return 'start';
 			case 'OPERATOR_ACTION_REQUIRED':
 			default:
 				return source.state.phase === 'ERROR' ? 'start' : 'body';
@@ -223,7 +255,7 @@
 			case 'SEND_HOSTED_SOUL_GENESIS_MESSAGE':
 				return 'Send Genesis Message';
 			case 'COMPLETE_HOSTED_SOUL_GENESIS':
-				return 'Review Generated Declarations';
+				return 'Generate Hosted Declarations';
 			case 'PUBLISH_HOSTED_SOUL':
 				return 'Publish Hosted Soul';
 			case 'RESTART_SOUL_BOOTSTRAP':
@@ -251,7 +283,7 @@
 			case 'SEND_HOSTED_SOUL_GENESIS_MESSAGE':
 				return 'Run the hosted genesis conversation so Lesser/Host can shape declaration evidence for this local body.';
 			case 'COMPLETE_HOSTED_SOUL_GENESIS':
-				return 'Review the generated declaration evidence from the hosted genesis conversation, then advance to publication.';
+				return 'Explicitly complete the hosted genesis conversation and ask Lesser/Host to generate declaration evidence for review.';
 			case 'PUBLISH_HOSTED_SOUL':
 				return 'Publish the hosted/off-chain soul under instance trust authority. Immutable/on-chain assurance remains optional later.';
 			case 'RESTART_SOUL_BOOTSTRAP':
@@ -288,7 +320,7 @@
 	}
 
 	async function runDefaultAction() {
-		if (busy || !canRunDefaultAction || defaultAction === 'COMPLETE') return;
+		if (busy || !showDefaultAction || !canRunDefaultAction || defaultAction === 'COMPLETE') return;
 		busy = true;
 		error = null;
 		success = null;
@@ -323,6 +355,20 @@
 			}
 		} catch (actionFailure) {
 			error = actionFailure instanceof Error ? actionFailure.message : 'Hosted soul action failed.';
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function runFollowupMessage() {
+		if (!canSendDraft) return;
+		busy = true;
+		error = null;
+		success = null;
+		try {
+			await submitGenesisMessage();
+		} catch (actionFailure) {
+			error = actionFailure instanceof Error ? actionFailure.message : 'Hosted genesis follow-up failed.';
 		} finally {
 			busy = false;
 		}
@@ -510,6 +556,22 @@
 			nonEmpty((source as HostedSoulBootstrapResult | null)?.hostRequest?.recoveryAttemptId);
 	}
 
+	function resolveHostedConversation(
+		source: HostedSoulBootstrapResult | SoulBootstrapResult | null
+	): HostedSoulGenesisConversationTranscript | null {
+		return (source as HostedSoulBootstrapResult | null)?.hostedGenesisConversation ??
+			(source as HostedSoulBootstrapResult | null)?.hosted?.hostedGenesisConversation ??
+			getHostedSoulGenesisConversation(source?.state ?? null);
+	}
+
+	function resolveHostedComposer(
+		source: HostedSoulBootstrapResult | SoulBootstrapResult | null
+	): HostedSoulGenesisComposerState {
+		return (source as HostedSoulBootstrapResult | null)?.composer ??
+			(source as HostedSoulBootstrapResult | null)?.hosted?.composer ??
+			getHostedSoulGenesisComposerState(source?.state ?? null);
+	}
+
 	function requireUsername(source: HostedSoulBootstrapResult | SoulBootstrapResult | null): string {
 		const username = resolveUsername(source);
 		if (!username || username === 'unknown') throw new Error('Lesser did not return a username for hosted soul definition.');
@@ -557,7 +619,12 @@
 
 	function defaultGenesisMessage(source: HostedSoulBootstrapResult | SoulBootstrapResult | null): string {
 		const username = resolveUsername(source);
+		if (resolveHostedConversation(source)?.messageCount) return '';
 		return `Prepare the hosted/off-chain genesis declaration for @${username}. Preserve body continuity, runtime boundaries, and operator accountability.`;
+	}
+
+	function hostedMessageRoleLabel(message: HostedSoulGenesisConversationMessage): string {
+		return message.role === 'ASSISTANT' ? 'Assistant' : 'You';
 	}
 
 	function readDeclarationEvidenceSummary(
@@ -610,6 +677,10 @@
 
 	<p class="ft-panel__copy" data-testid="hosted-soul-server-action">
 		Lesser typed next action: <strong>{defaultAction}</strong>
+		{#if hostedComposer.availableActions.length}
+			· available actions:
+			<strong data-testid="hosted-soul-available-actions">{hostedComposer.availableActions.join(', ')}</strong>
+		{/if}
 		{#if recoveryCategory || recoveryAction}
 			· recovery: <strong>{recoveryCategory ?? 'none'}</strong> / <strong>{recoveryAction ?? 'none'}</strong>
 		{/if}
@@ -641,20 +712,76 @@
 		</section>
 	{/if}
 
-	{#if defaultAction === 'SEND_HOSTED_SOUL_GENESIS_MESSAGE'}
-		<label class="ft-field">
-			<span>Genesis message</span>
-			<textarea
-				bind:value={messageDraft}
-				data-testid="hosted-soul-genesis-message"
-				disabled={busy}
-				rows="4"
-			></textarea>
-		</label>
-	{:else if defaultAction === 'COMPLETE_HOSTED_SOUL_GENESIS'}
+	{#if showHostedConversation}
+		<section class="ft-panel__recovery" data-testid="hosted-soul-genesis-conversation">
+			<p class="ft-panel__eyebrow">Hosted genesis conversation</p>
+			<p class="ft-panel__copy" data-testid="hosted-soul-genesis-composer-state">
+				Conversation: <strong>{hostedComposer.conversationId ?? 'pending'}</strong>
+				· status: <strong>{hostedComposer.status ?? 'pending'}</strong>
+				· messages: <strong>{hostedComposer.messageCount}</strong>
+			</p>
+
+			{#if hostedConversation}
+				<ol class="ft-list" data-testid="hosted-soul-genesis-transcript">
+					{#each hostedConversation.messages as message (message.id)}
+						<li
+							class={`ft-panel__message ft-panel__message--${message.role === 'ASSISTANT' ? 'info' : 'success'}`}
+							data-testid="hosted-soul-genesis-transcript-message"
+							data-message-role={message.role}
+						>
+							<strong>{hostedMessageRoleLabel(message)}:</strong> {message.content}
+							{#if message.truncated}
+								<small> · truncated by Lesser projection</small>
+							{/if}
+						</li>
+					{/each}
+				</ol>
+				{#if hostedConversation.messagesTruncated}
+					<p class="ft-panel__message ft-panel__message--warning">
+						Lesser truncated the hosted transcript projection; refresh before publication if more context is needed.
+					</p>
+				{/if}
+			{:else}
+				<p class="ft-panel__copy" data-testid="hosted-soul-genesis-transcript-empty">
+					Lesser has opened the hosted conversation, but no transcript messages are projected yet.
+				</p>
+			{/if}
+
+			{#if hostedComposer.canSendMessage}
+				<label class="ft-field">
+					<span>{hostedConversation ? 'Follow-up message' : 'Genesis message'}</span>
+					<textarea
+						bind:value={messageDraft}
+						data-testid="hosted-soul-genesis-message"
+						disabled={busy}
+						rows="4"
+					></textarea>
+				</label>
+				{#if showFollowupSendAction}
+					<button
+						class="ft-button ft-button--secondary"
+						data-testid="hosted-soul-send-followup"
+						disabled={!canSendDraft}
+						onclick={runFollowupMessage}
+						type="button"
+					>
+						{busy ? 'Sending…' : 'Send Follow-up Message'}
+					</button>
+				{/if}
+			{/if}
+
+			{#if hostedComposer.canComplete}
+				<p class="ft-panel__message ft-panel__message--info" data-testid="hosted-soul-complete-ready">
+					Lesser reports this conversation can now be completed to generate hosted declaration evidence.
+				</p>
+			{/if}
+		</section>
+	{/if}
+
+	{#if defaultAction === 'COMPLETE_HOSTED_SOUL_GENESIS'}
 		<p class="ft-panel__copy">
-			Conversation {result?.state?.hostConversationId} is ready to complete. Lesser must
-			return generated declaration evidence before Simulacrum will allow publication.
+			Conversation {hostedComposer.conversationId ?? result?.state?.hostConversationId} is ready to complete.
+			Lesser must return generated declaration evidence before Simulacrum will allow publication.
 		</p>
 		{#if declarationEvidenceSummary}
 			<p class="ft-panel__message ft-panel__message--info" data-testid="hosted-soul-evidence">
@@ -691,27 +818,33 @@
 		</p>
 	{/if}
 
-	<div class="ft-panel__actions">
-		{#if defaultAction === 'COMPLETE'}
-			<a
-				class="ft-button ft-button--primary"
-				data-testid="hosted-soul-default-action"
-				href={identityHref}
-			>
-				{actionLabel}
-			</a>
-		{:else}
-			<button
-				class="ft-button ft-button--primary"
-				data-testid="hosted-soul-default-action"
-				disabled={!canRunDefaultAction}
-				onclick={runDefaultAction}
-				type="button"
-			>
-				{busy ? 'Working…' : actionLabel}
-			</button>
-		{/if}
-	</div>
+	{#if showDefaultAction}
+		<div class="ft-panel__actions">
+			{#if defaultAction === 'COMPLETE'}
+				<a
+					class="ft-button ft-button--primary"
+					data-testid="hosted-soul-default-action"
+					href={identityHref}
+				>
+					{actionLabel}
+				</a>
+			{:else}
+				<button
+					class="ft-button ft-button--primary"
+					data-testid="hosted-soul-default-action"
+					disabled={!canRunDefaultAction}
+					onclick={runDefaultAction}
+					type="button"
+				>
+					{busy ? 'Working…' : actionLabel}
+				</button>
+			{/if}
+		</div>
+	{:else}
+		<p class="ft-panel__copy" data-testid="hosted-soul-refresh-suppressed">
+			Refresh is hidden while Lesser exposes a valid hosted conversation user action.
+		</p>
+	{/if}
 
 	{#if error}
 		<p class="ft-panel__message ft-panel__message--error" data-testid="hosted-soul-error">

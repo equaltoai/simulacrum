@@ -86,11 +86,32 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 		await expect(page.getByRole('button', { name: 'Send Genesis Message' })).toBeEnabled();
 		await page.getByRole('button', { name: 'Send Genesis Message' }).click();
 		await expect(lane).toContainText('Review hosted genesis declarations');
+		await expect(page.getByTestId('hosted-soul-genesis-conversation')).toBeVisible();
+		await expect(page.getByTestId('hosted-soul-genesis-transcript-message')).toHaveCount(2);
+		await expect(page.getByTestId('hosted-soul-genesis-transcript')).toContainText(
+			'Describe the managed Lesser agent you are becoming.'
+		);
+		await expect(page.getByTestId('hosted-soul-genesis-transcript')).toContainText(
+			'I am a hosted Greater-compatible soul bootstrap relayed through Lesser same-origin GraphQL.'
+		);
+		await expect(page.getByTestId('hosted-soul-genesis-composer-state')).toContainText('assistant_turn_ready');
+		await expect(page.getByTestId('hosted-soul-available-actions')).toContainText(
+			'SEND_HOSTED_SOUL_GENESIS_MESSAGE'
+		);
 		await expect(page.getByTestId('hosted-soul-default-action')).toHaveCount(1);
-		await expect(page.getByRole('button', { name: 'Review Generated Declarations' })).toBeEnabled();
-		await page.getByRole('button', { name: 'Review Generated Declarations' }).click();
+		await expect(page.getByRole('button', { name: 'Generate Hosted Declarations' })).toBeEnabled();
+		await expect(page.getByRole('button', { name: 'Send Follow-up Message' })).toBeDisabled();
+		await page.getByTestId('hosted-soul-genesis-message').fill('Add one more boundary.');
+		await expect(page.getByRole('button', { name: 'Send Follow-up Message' })).toBeEnabled();
+		await page.getByRole('button', { name: 'Send Follow-up Message' }).click();
+		await expect(page.getByTestId('hosted-soul-success')).toContainText('Genesis conversation message recorded through Lesser');
+		await expect(page.getByTestId('hosted-soul-genesis-transcript-message')).toHaveCount(4);
+		await expect(page.getByTestId('hosted-soul-genesis-transcript')).toContainText('Boundary added; hosted genesis declaration is ready.');
+		await expect(page.getByRole('button', { name: 'Generate Hosted Declarations' })).toBeEnabled();
+		await page.getByRole('button', { name: 'Generate Hosted Declarations' }).click();
 		await expect(page.getByTestId('soul-bootstrap-lane')).toContainText('Publish hosted/off-chain soul');
 		await expect(page.getByTestId('hosted-soul-evidence')).toContainText('Hosted genesis declaration');
+		await expect(page.getByTestId('hosted-soul-genesis-transcript-message')).toHaveCount(4);
 		await expect(page.getByTestId('hosted-soul-default-action')).toHaveCount(1);
 		await expect(page.getByRole('button', { name: 'Publish Hosted Soul' })).toBeEnabled();
 		await page.getByRole('button', { name: 'Publish Hosted Soul' }).click();
@@ -107,7 +128,7 @@ test.describe('Project 44 soul-bootstrap browser guards', () => {
 		const graphQLOperations = harness.graphQLRequests().map((request) => request.operationName);
 		expect(graphQLOperations).toContain('SoulBootstrap');
 		expect(graphQLOperations).toContain('StartHostedSoulBootstrap');
-		expect(graphQLOperations).toContain('SendHostedSoulGenesisMessage');
+		expect(graphQLOperations.filter((operation) => operation === 'SendHostedSoulGenesisMessage')).toHaveLength(2);
 		expect(graphQLOperations).toContain('CompleteHostedSoulGenesis');
 		expect(graphQLOperations).toContain('PublishHostedSoul');
 		expect(graphQLOperations).not.toContain('BeginSoulBootstrap');

@@ -245,7 +245,7 @@ test.describe('Project 49 hosted genesis workflow reset', () => {
 			{
 				label: 'assistant_turn_ready',
 				action: 'COMPLETE_HOSTED_SOUL_GENESIS',
-				control: 'Review Generated Declarations',
+				control: 'Generate Hosted Declarations',
 			},
 			{ label: 'declaration_ready', action: 'PUBLISH_HOSTED_SOUL', control: 'Publish Hosted Soul' },
 			{ label: 'failed retry same step', action: 'RETRY_SAME_STEP', control: 'Retry Hosted Step' },
