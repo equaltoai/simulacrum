@@ -90,6 +90,48 @@ test('genesis conversation mock accepts follow-up messages on existing conversat
 	]);
 });
 
+test('genesis conversation mock lists stored conversations newest first', async () => {
+	let now = Date.parse('2026-06-29T13:30:00.000Z');
+	const api = createGenesisConversationMockApi({
+		storage: createMemoryGenesisConversationStorage(),
+		now: () => now,
+		responseDelayMs: 10,
+	});
+
+	let first = await api.startConversation({
+		activeDroneUsername: 'first-drone',
+	});
+	first = await api.sendMessage({
+		conversationId: first.id,
+		content: 'First saved conversation should be resumable.',
+	});
+	now += 10;
+	first = await api.pollConversation(first.id);
+
+	now += 1_000;
+	const second = await api.startConversation({
+		activeDroneUsername: 'second-drone',
+	});
+
+	let list = await api.listConversations();
+	assert.equal(list.length, 2);
+	assert.equal(list[0].id, second.id);
+	assert.equal(list[0].activeDroneUsername, 'second-drone');
+	assert.equal(list[0].messageCount, 1);
+	assert.equal(list[1].id, first.id);
+	assert.equal(list[1].activeDroneUsername, 'first-drone');
+	assert.equal(list[1].messageCount, first.messages.length);
+	assert.match(list[1].title, /First saved conversation/);
+
+	const loaded = await api.loadConversation(first.id);
+	assert.equal(loaded.id, first.id);
+	const active = await api.loadActiveConversation();
+	assert.equal(active.id, first.id);
+
+	list = await api.listConversations();
+	assert.equal(list[0].id, second.id, 'loading a conversation should not rewrite updatedAt order');
+});
+
 test('genesis conversation mock recovers a stuck assistant turn without losing transcript', async () => {
 	let now = Date.parse('2026-06-29T14:00:00.000Z');
 	const api = createGenesisConversationMockApi({

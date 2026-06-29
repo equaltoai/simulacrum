@@ -49,6 +49,15 @@ export interface GenesisConversationRecord {
 	lastPolledAt: string | null;
 }
 
+export interface GenesisConversationSummary {
+	id: string;
+	title: string;
+	turnStatus: GenesisConversationTurnStatus;
+	messageCount: number;
+	updatedAt: string;
+	activeDroneUsername: string | null;
+}
+
 export interface StartGenesisConversationInput {
 	activeBodyId?: string | null;
 	activeDroneUsername?: string | null;
@@ -62,6 +71,7 @@ export interface SendGenesisConversationMessageInput {
 
 export interface GenesisConversationApi {
 	startConversation(input?: StartGenesisConversationInput): Promise<GenesisConversationRecord>;
+	listConversations(): Promise<GenesisConversationSummary[]>;
 	loadActiveConversation(): Promise<GenesisConversationRecord | null>;
 	loadConversation(conversationId: string): Promise<GenesisConversationRecord | null>;
 	sendMessage(input: SendGenesisConversationMessageInput): Promise<GenesisConversationRecord>;
@@ -133,6 +143,43 @@ function cloneConversation(conversation: StoredGenesisConversation): GenesisConv
 		updatedAt: conversation.updatedAt,
 		lastPolledAt: conversation.lastPolledAt,
 	};
+}
+
+function conversationListTitle(conversation: StoredGenesisConversation): string {
+	const title = conversation.title.trim();
+	if (title && title !== 'Genesis conversation') return title;
+
+	const firstUserMessage = conversation.messages.find(
+		(message) => message.role === 'user' && message.content.trim()
+	);
+	if (firstUserMessage) return excerpt(firstUserMessage.content);
+
+	return title || 'New genesis conversation';
+}
+
+function cloneConversationSummary(
+	conversation: StoredGenesisConversation
+): GenesisConversationSummary {
+	return {
+		id: conversation.id,
+		title: conversationListTitle(conversation),
+		turnStatus: conversation.turnStatus,
+		messageCount: conversation.messages.length,
+		updatedAt: conversation.updatedAt,
+		activeDroneUsername: conversation.activeDroneUsername,
+	};
+}
+
+function sortConversationsByUpdatedAt(
+	conversations: readonly GenesisConversationSummary[]
+): GenesisConversationSummary[] {
+	return [...conversations].sort((left, right) => {
+		const leftTime = Date.parse(left.updatedAt);
+		const rightTime = Date.parse(right.updatedAt);
+		const leftSort = Number.isFinite(leftTime) ? leftTime : 0;
+		const rightSort = Number.isFinite(rightTime) ? rightTime : 0;
+		return rightSort - leftSort || right.id.localeCompare(left.id);
+	});
 }
 
 function createVolatileStorage(): GenesisConversationStorage {
@@ -336,6 +383,18 @@ export function createGenesisConversationMockApi({
 			return cloneConversation(conversation);
 		},
 
+		async listConversations() {
+			const state = read();
+			const nowMs = now();
+			for (const stored of Object.values(state.conversations)) {
+				completePendingTurn(stored, nowMs);
+			}
+			write(state);
+			return sortConversationsByUpdatedAt(
+				Object.values(state.conversations).map(cloneConversationSummary)
+			);
+		},
+
 		async loadActiveConversation() {
 			const state = read();
 			const id = state.activeConversationId;
@@ -345,6 +404,9 @@ export function createGenesisConversationMockApi({
 
 		async loadConversation(conversationId: string) {
 			const state = read();
+			if (state.conversations[conversationId]) {
+				state.activeConversationId = conversationId;
+			}
 			return pollExisting(state, conversationId);
 		},
 
