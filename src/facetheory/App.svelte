@@ -2,7 +2,6 @@
 	import { onMount, untrack } from 'svelte';
 
 	import {
-		AgentGenesisWorkspace,
 		GraduationApprovalThread,
 		IdentityNexus,
 		NexusDashboard,
@@ -24,6 +23,7 @@
 	} from '$lib/auth/session';
 
 	import DronesPage from './components/DronesPage.svelte';
+	import GenesisConversationPage from './components/GenesisConversationPage.svelte';
 	import HostedSoulBootstrapPanel from './components/HostedSoulBootstrapPanel.svelte';
 	import HostedBoundSoulActivationPanel from './components/HostedBoundSoulActivationPanel.svelte';
 	import IdentityQuarantinePanel from './components/IdentityQuarantinePanel.svelte';
@@ -130,6 +130,18 @@
 		soulCount: appState.soulCount,
 		currentUserName: appState.currentUserName,
 	} satisfies AgentFaceBaseData & { agentCount: number; soulCount: number; currentUserName?: string });
+
+	const genesisConversationData = $derived({
+		...appState.faces.genesis,
+		hero: {
+			eyebrow: currentPage.eyebrow,
+			title: currentPage.title,
+			summary: currentPage.summary,
+		},
+		activeBodyId: appState.actionContext.activeAgentId,
+		activeDroneUsername: appState.actionContext.activeUsername,
+		currentUserName: appState.currentUserName,
+	});
 
 	$effect(() => {
 		if (!isAuthenticated) {
@@ -291,7 +303,7 @@
 				{:else if currentPage.key === 'souls'}
 					<SoulRequestCenter data={appState.faces.souls} />
 				{:else if currentPage.key === 'genesis'}
-					<AgentGenesisWorkspace data={appState.faces.genesis} />
+					<GenesisConversationPage data={genesisConversationData} />
 				{:else if currentPage.key === 'approvals'}
 					<GraduationApprovalThread data={appState.faces.approvals} />
 				{:else if currentPage.key === 'identity'}
@@ -317,7 +329,7 @@
 
 			<section class="ft-shell__panels">
 				{#if isAuthenticated}
-					{#if currentPage.key === 'identity' || currentPage.key === 'genesis' || currentPage.key === 'approvals'}
+					{#if currentPage.key === 'identity' || currentPage.key === 'approvals'}
 						<section class="ft-panel" data-testid="soul-bootstrap-lane">
 							<header class="ft-panel__header">
 								<div>
