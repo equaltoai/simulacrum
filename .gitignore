@@ -29,6 +29,7 @@ vite.config.ts.timestamp-*
 /.pai
 /.theory
 /.deploy
+opencode.json
 
 # Playwright MCP
 /.playwright-mcp
