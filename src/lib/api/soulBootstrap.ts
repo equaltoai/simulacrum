@@ -22,8 +22,22 @@ import {
 	type VerifySoulBootstrapPrincipalDeclarationInput,
 	type VerifySoulBootstrapWalletInput,
 } from '$lib/greater/adapters/soul';
+import type {
+	HostedGenesisConversationSummary,
+	RecoverHostedSoulGenesisTurnInput,
+} from '$lib/greater/adapters/graphql/generated/types';
 
 import { getAccessToken } from './auth';
+
+/**
+ * Re-export the new GraphQL types that Greater v0.11.7 brought via generated
+ * types but did not re-export through the soul adapter index. These are
+ * additive types from Lesser v1.5.12.
+ */
+export type {
+	HostedGenesisConversationSummary,
+	RecoverHostedSoulGenesisTurnInput,
+};
 
 export const SOUL_BOOTSTRAP_AUTH_NOTE =
 	'Hosted/off-chain soul definition uses Lesser same-origin GraphQL. Lesser performs server-side Host instance-trust calls, so Simulacrum never asks the browser for wallets, signing prompts, lesser-host control-plane tokens, or Host instance keys on the default path.';
@@ -211,6 +225,332 @@ export function isSoulBootstrapError(error: unknown): error is SoulBootstrapClie
 }
 
 export { SoulBootstrapClientError, normalizeSoulBootstrapError };
+
+// ---------------------------------------------------------------------------
+// Project 51 — recoverHostedSoulGenesisTurn + listHostedGenesisConversations
+// ---------------------------------------------------------------------------
+//
+// Greater v0.11.7 brought the generated GraphQL types for these operations
+// but not pre-built documents or adapter client methods. These sim-owned
+// wrappers construct the GraphQL operations and send them through the same
+// Lesser same-origin /api/graphql endpoint + auth path as the existing
+// HostedSoulBootstrapClient.
+
+const RECOVER_HOSTED_SOUL_GENESIS_TURN_MUTATION = `mutation RecoverHostedSoulGenesisTurn($input: RecoverHostedSoulGenesisTurnInput!) {
+  recoverHostedSoulGenesisTurn(input: $input) {
+    executable
+    error {
+      code
+      message
+      source
+      statusCode
+      detailsJson
+      hostRequestId
+      recoveryCategory
+      recoveryAction
+      retryable
+      restartRequired
+      at
+    }
+    bootstrap {
+      username
+      executable
+      existingSoulAgentId
+      hostBridgeAvailable
+      nextAction
+      typedNextAction
+      availableActions
+      recoveryCategory
+      recoveryAction
+      retryable
+      restartAvailable
+      soulBindingState
+      body {
+        bodyId
+        username
+        displayName
+        owner {
+          id
+          name
+          role
+          handle
+          avatarLabel
+          statusLabel
+        }
+      }
+      state {
+        bodyId
+        username
+        state
+        phase
+        walletAddress
+        principalAddress
+        hostRegistrationId
+        hostConversationId
+        hostSoulAgentId
+        bootstrapMode
+        authorityModel
+        anchorState
+        assuranceState
+        hostConversationStatus
+        updatedAt
+        typedNextAction
+        availableActions
+        recoveryCategory
+        recoveryAction
+        retryable
+        restartRequired
+        restartAvailable
+        recoveryAttemptId
+        restartIdempotencyKey
+        lastHostRequestId
+        restartedAt
+        hostedGenesisConversation {
+          registrationId
+          conversationId
+          status
+          latestTurnId
+          messageCount
+          messagesTruncated
+          requestId
+          updatedAt
+          messages {
+            id
+            role
+            content
+            order
+            createdAt
+            truncated
+          }
+        }
+        signingCheckpoints {
+          name
+          status
+          message
+          messageEncoding
+          messageHex
+          canonicalJson
+          digestHex
+          boundaryRequirementsJson
+          registrationPreviewJson
+          finalizeRequestTemplateJson
+          signingMethod
+          signerAddress
+          principalAddress
+          version
+          expectedVersion
+          nextVersion
+          issuedAt
+          declaredAt
+          completedAt
+          hostRequestId
+        }
+        terminalDeclarationEvidence {
+          conversationId
+          hostStatus
+          hostRequestId
+          declarationsHash
+          producedDeclarationsPreview {
+            title
+            declarationCount
+          }
+        }
+        publication {
+          agentId
+          authorityModel
+          anchorState
+          publishedAt
+          publishedVersion
+          registrationS3Key
+          registrationUri
+          versionedRegistrationS3Key
+          versionedRegistrationUri
+        }
+        publicationEvidence {
+          agentId
+          authorityModel
+          anchorState
+          publishedAt
+          publishedVersion
+          registrationS3Key
+          registrationUri
+          versionedRegistrationS3Key
+          versionedRegistrationUri
+        }
+        publishGate {
+          canPublishHostedSoul
+          reason
+          requiresActiveConversationTerminalDeclarationEvidence
+        }
+        error {
+          code
+          message
+          source
+          statusCode
+          detailsJson
+          hostRequestId
+          recoveryCategory
+          recoveryAction
+          retryable
+          restartRequired
+          at
+        }
+        correlation {
+          correlationKey
+          beginIdempotencyKey
+          walletVerificationIdempotencyKey
+          principalDeclarationIdempotencyKey
+          conversationIdempotencyKey
+          finalizeIdempotencyKey
+          restartIdempotencyKey
+          recoveryAttemptId
+          supersededHostRegistrationId
+          supersededHostConversationId
+          lastHostRequestId
+        }
+      }
+      error {
+        code
+        message
+        source
+        statusCode
+        detailsJson
+        hostRequestId
+        recoveryCategory
+        recoveryAction
+        retryable
+        restartRequired
+        at
+      }
+      workflow {
+        username
+        currentPhase
+        currentState
+      }
+    }
+  }
+}`;
+
+const LIST_HOSTED_GENESIS_CONVERSATIONS_QUERY = `query ListHostedGenesisConversations($username: String!) {
+  listHostedGenesisConversations(username: $username) {
+    conversationId
+    registrationId
+    status
+    messageCount
+    latestTurnId
+    createdAt
+    updatedAt
+  }
+}`;
+
+export async function recoverHostedSoulGenesisTurn({
+	input,
+	...options
+}: SoulBootstrapRequestOptions & {
+	input: RecoverHostedSoulGenesisTurnInput;
+}): Promise<HostedSoulBootstrapResult> {
+	const token = requireAccessToken(options.token);
+	const endpoint = options.endpoint ?? '/api/graphql';
+	const fetchLike = options.fetch ?? fetch;
+	const signal = options.signal;
+
+	// Send the recoverHostedSoulGenesisTurn mutation through the same
+	// Lesser same-origin /api/graphql endpoint. This calls Host's POST
+	// /recover without adding a user message to the transcript.
+	const response = await fetchLike(endpoint, {
+		method: 'POST',
+		headers: {
+			accept: 'application/json',
+			'content-type': 'application/json',
+			authorization: `Bearer ${token}`,
+		},
+		body: JSON.stringify({
+			operationName: 'RecoverHostedSoulGenesisTurn',
+			query: RECOVER_HOSTED_SOUL_GENESIS_TURN_MUTATION,
+			variables: { input },
+			signal,
+		}),
+	});
+
+	if (!response.ok) {
+		throw new SoulBootstrapClientError({
+			category: response.status === 401 || response.status === 403 ? 'unauthorized' : 'unknown',
+			message: `Recover hosted soul genesis turn failed with HTTP ${response.status}`,
+			statusCode: response.status,
+		});
+	}
+
+	const body = (await response.json()) as {
+		data?: { recoverHostedSoulGenesisTurn?: unknown };
+		errors?: readonly { message: string }[];
+	};
+
+	if (body.errors?.length) {
+		throw new SoulBootstrapClientError({
+			category: 'graphql_error',
+			message: body.errors[0].message,
+		});
+	}
+
+	if (!body.data?.recoverHostedSoulGenesisTurn) {
+		throw new SoulBootstrapClientError({
+			category: 'graphql_error',
+			message: 'Recover hosted soul genesis turn response did not include data',
+		});
+	}
+
+	// The mutation succeeded. Re-fetch the bootstrap surface through the
+	// client's current() to get the properly mapped HostedSoulBootstrapResult.
+	// Lesser's soulBootstrap query read-repairs from Host, so this returns
+	// the fresh post-recovery state with the updated transcript.
+	const client = createProject44HostedSoulBootstrapClient(options);
+	return client.current(input.username);
+}
+
+export async function listHostedGenesisConversations({
+	username,
+	...options
+}: SoulBootstrapCurrentOptions): Promise<HostedGenesisConversationSummary[]> {
+	const token = requireAccessToken(options.token);
+	const endpoint = options.endpoint ?? '/api/graphql';
+	const fetchLike = options.fetch ?? fetch;
+	const response = await fetchLike(endpoint, {
+		method: 'POST',
+		headers: {
+			accept: 'application/json',
+			'content-type': 'application/json',
+			authorization: `Bearer ${token}`,
+		},
+		body: JSON.stringify({
+			operationName: 'ListHostedGenesisConversations',
+			query: LIST_HOSTED_GENESIS_CONVERSATIONS_QUERY,
+			variables: { username },
+			signal: options.signal,
+		}),
+	});
+
+	if (!response.ok) {
+		throw new SoulBootstrapClientError({
+			category: response.status === 401 || response.status === 403 ? 'unauthorized' : 'unknown',
+			message: `List hosted genesis conversations failed with HTTP ${response.status}`,
+			statusCode: response.status,
+		});
+	}
+
+	const body = (await response.json()) as {
+		data?: { listHostedGenesisConversations?: HostedGenesisConversationSummary[] };
+		errors?: readonly { message: string }[];
+	};
+
+	if (body.errors?.length) {
+		throw new SoulBootstrapClientError({
+			category: 'graphql_error',
+			message: body.errors[0].message,
+		});
+	}
+
+	return body.data?.listHostedGenesisConversations ?? [];
+}
 export type {
 	BeginSoulBootstrapInput,
 	CompleteHostedSoulGenesisInput,

@@ -232,15 +232,46 @@ test.describe('Project 51 genesis conversation GraphQL API', () => {
 			initialSurface: 'hostedGenesisMessage',
 		});
 
+		// Add a handler for the new listHostedGenesisConversations query
+		// that the sidebar now sends (Lesser v1.5.12 + Greater v0.11.7).
+		// The existing installProject44Routes harness doesn't know about
+		// this operation yet, so we add a fallback route.
+		await page.route('**/api/graphql', async (route) => {
+			const body = route.request().postDataJSON() as { operationName?: string } | null;
+			if (body?.operationName === 'ListHostedGenesisConversations') {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						data: {
+							listHostedGenesisConversations: [
+								{
+									conversationId: 'conv-project-51-genesis',
+									registrationId: 'reg-project-51',
+									status: 'assistant_turn_ready',
+									messageCount: 2,
+									latestTurnId: 'turn-2',
+									createdAt: '2026-06-28T13:00:00Z',
+									updatedAt: '2026-06-28T13:01:00Z',
+								},
+							],
+						},
+					}),
+				});
+				return;
+			}
+			// Let the existing handler process all other operations.
+			await route.fallback();
+		});
+
 		await page.goto('/l/souls/genesis');
 		await expect(page.getByTestId('genesis-conversation-page')).toBeVisible();
 
-		// The sidebar list is hidden for the real GraphQL API (GAP-2).
-		await expect(page.getByTestId('genesis-conversation-list')).toHaveCount(0);
+		// The sidebar list is now visible for the real GraphQL API
+		// (Lesser v1.5.12 exposes listHostedGenesisConversations).
+		await expect(page.getByTestId('genesis-conversation-list')).toBeVisible();
 
 		// The existing conversation from the GraphQL fixture loads automatically.
-		// The hostedGenesisMessage fixture includes a user message and an assistant
-		// response in the hostedGenesisConversation transcript.
 		const transcript = page.getByTestId('genesis-conversation-transcript');
 		await expect(transcript).toContainText(
 			'I am a hosted Greater-compatible soul bootstrap relayed through Lesser same-origin GraphQL.'

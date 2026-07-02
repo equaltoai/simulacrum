@@ -55,17 +55,16 @@
 	let conversations = $state<GenesisConversationSummary[]>([]);
 	let draft = $state('');
 	let loading = $state(true);
-	let loadingList = $state(USE_MOCK_API);
+	let loadingList = $state(true);
 	let sending = $state(false);
 	let polling = $state(false);
 	let error = $state<string | null>(null);
 	let notice = $state<string | null>(null);
 	let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
-	// The mock supports a conversation list sidebar; the real GraphQL API does
-	// not (GAP-2: Lesser lacks listHostedGenesisConversations). The sidebar is
-	// hidden when using the real API.
-	const listSupported = USE_MOCK_API;
+	// The mock and the real GraphQL API both support a conversation list
+	// sidebar (Lesser v1.5.12 exposes listHostedGenesisConversations).
+	const listSupported = true;
 
 	const chatMessages = $derived((conversation?.messages ?? []).map(toChatMessage));
 	const activeConversationId = $derived(conversation?.id ?? null);
