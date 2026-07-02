@@ -5,6 +5,9 @@ import {
 	createGenesisConversationMockApi,
 	createMemoryGenesisConversationStorage,
 	GENESIS_CONVERSATION_STORAGE_KEY,
+	mapHostedGenesisMessage,
+	deriveTurnStatusFromHostedResult,
+	mapHostedResultToGenesisRecord,
 } from '../../../src/lib/api/genesisConversation.ts';
 
 test('genesis conversation mock starts, sends, polls, and resumes locally', async () => {
@@ -162,4 +165,197 @@ test('genesis conversation mock recovers a stuck assistant turn without losing t
 	assert.equal(conversation.turnStatus, 'ready');
 	assert.match(conversation.messages.at(-1).content, /recovered the turn/i);
 	assert.match(conversation.messages.map((message) => message.content).join('\n'), /stuck turn/);
+});
+
+// ---------------------------------------------------------------------------
+// GraphQL mapping logic tests (Project 51 — wire mock to real API)
+// ---------------------------------------------------------------------------
+
+function buildMockMessage(role, content, order, createdAt = '2026-06-28T13:00:00Z') {
+	return {
+		id: `msg_${String(order).padStart(6, '0')}`,
+		role,
+		content,
+		order,
+		createdAt,
+		truncated: false,
+	};
+}
+
+function buildMockConversation(messages, status, updatedAt = '2026-06-28T13:01:00Z') {
+	return {
+		registrationId: 'reg-test-001',
+		conversationId: 'conv-test-001',
+		status,
+		latestTurnId: `turn-${messages.length}`,
+		messageCount: messages.length,
+		messages,
+		messagesTruncated: false,
+		requestId: 'host-req-test-001',
+		updatedAt,
+	};
+}
+
+function buildMockResult(conversation, options = {}) {
+	const status = conversation?.status ?? null;
+	const availableActions = options.availableActions ?? ['SEND_HOSTED_SOUL_GENESIS_MESSAGE'];
+	return {
+		surface: null,
+		state: {
+			bodyId: 'body-test-001',
+			username: 'test-user',
+			state: options.state ?? 'hosted_genesis_started',
+			phase: 'CONVERSATION',
+			bootstrapMode: 'HOSTED',
+			hostRegistrationId: 'reg-test-001',
+			hostConversationId: conversation?.conversationId ?? 'conv-test-001',
+			hostConversationStatus: status,
+			typedNextAction: options.typedNextAction ?? availableActions[0],
+			availableActions,
+			hostedGenesisConversation: conversation,
+		},
+		hostedGenesisConversation: conversation,
+		availableActions,
+		typedNextAction: options.typedNextAction ?? availableActions[0],
+		error: options.error ?? null,
+	};
+}
+
+test('mapHostedGenesisMessage converts USER and ASSISTANT roles to lowercase', () => {
+	const userMessage = buildMockMessage('USER', 'Hello genesis', 1);
+	const mapped = mapHostedGenesisMessage(userMessage);
+	assert.equal(mapped.role, 'user');
+	assert.equal(mapped.content, 'Hello genesis');
+	assert.equal(mapped.status, 'complete');
+	assert.equal(mapped.createdAt, '2026-06-28T13:00:00Z');
+
+	const assistantMessage = buildMockMessage('ASSISTANT', 'I heard you', 2);
+	const mappedAssistant = mapHostedGenesisMessage(assistantMessage);
+	assert.equal(mappedAssistant.role, 'assistant');
+	assert.equal(mappedAssistant.content, 'I heard you');
+});
+
+test('mapHostedGenesisMessage falls back to epoch when createdAt is null', () => {
+	const message = buildMockMessage('USER', 'test', 1, null);
+	const mapped = mapHostedGenesisMessage(message);
+	assert.equal(mapped.createdAt, new Date(0).toISOString());
+});
+
+test('deriveTurnStatusFromHostedResult returns ready when SEND is available', () => {
+	const conversation = buildMockConversation([], 'assistant_turn_ready');
+	const result = buildMockResult(conversation, {
+		availableActions: ['SEND_HOSTED_SOUL_GENESIS_MESSAGE', 'COMPLETE_HOSTED_SOUL_GENESIS'],
+	});
+	const status = deriveTurnStatusFromHostedResult(result, Date.now());
+	assert.equal(status, 'ready');
+});
+
+test('deriveTurnStatusFromHostedResult returns waiting for in_progress', () => {
+	const conversation = buildMockConversation(
+		[buildMockMessage('USER', 'test', 1)],
+		'in_progress',
+		new Date().toISOString()
+	);
+	const result = buildMockResult(conversation, {
+		availableActions: [],
+		typedNextAction: 'REFRESH_STATE',
+	});
+	const status = deriveTurnStatusFromHostedResult(result, Date.now());
+	assert.equal(status, 'waiting');
+});
+
+test('deriveTurnStatusFromHostedResult returns stuck when in_progress exceeds timeout', () => {
+	const staleUpdatedAt = new Date(Date.now() - 120_000).toISOString(); // 2 minutes ago
+	const conversation = buildMockConversation(
+		[buildMockMessage('USER', 'stuck turn', 1)],
+		'in_progress',
+		staleUpdatedAt
+	);
+	const result = buildMockResult(conversation, {
+		availableActions: [],
+		typedNextAction: 'REFRESH_STATE',
+	});
+	const status = deriveTurnStatusFromHostedResult(result, Date.now(), 60_000);
+	assert.equal(status, 'stuck');
+});
+
+test('deriveTurnStatusFromHostedResult returns error for failed status', () => {
+	const conversation = buildMockConversation([], 'failed');
+	const result = buildMockResult(conversation, { availableActions: [] });
+	const status = deriveTurnStatusFromHostedResult(result, Date.now());
+	assert.equal(status, 'error');
+});
+
+test('mapHostedResultToGenesisRecord returns null when no conversation', () => {
+	const result = buildMockResult(null);
+	const record = mapHostedResultToGenesisRecord(result);
+	assert.equal(record, null);
+});
+
+test('mapHostedResultToGenesisRecord maps conversation with messages', () => {
+	const messages = [
+		buildMockMessage('USER', 'Describe the purpose.', 1),
+		buildMockMessage('ASSISTANT', 'The purpose is research.', 2),
+	];
+	const conversation = buildMockConversation(messages, 'assistant_turn_ready');
+	const result = buildMockResult(conversation, {
+		availableActions: ['SEND_HOSTED_SOUL_GENESIS_MESSAGE'],
+	});
+
+	const record = mapHostedResultToGenesisRecord(result);
+	assert.ok(record);
+	assert.equal(record.id, 'conv-test-001');
+	assert.equal(record.activeBodyId, 'body-test-001');
+	assert.equal(record.activeDroneUsername, 'test-user');
+	assert.equal(record.turnStatus, 'ready');
+	assert.equal(record.messages.length, 2);
+	assert.equal(record.messages[0].role, 'user');
+	assert.equal(record.messages[1].role, 'assistant');
+	assert.equal(record.pendingAssistantMessageId, null);
+});
+
+test('mapHostedResultToGenesisRecord adds synthetic assistant message when waiting', () => {
+	const messages = [buildMockMessage('USER', 'First message', 1)];
+	const conversation = buildMockConversation(messages, 'in_progress', new Date().toISOString());
+	const result = buildMockResult(conversation, {
+		availableActions: [],
+		typedNextAction: 'REFRESH_STATE',
+	});
+
+	const record = mapHostedResultToGenesisRecord(result);
+	assert.ok(record);
+	assert.equal(record.turnStatus, 'waiting');
+	assert.equal(record.messages.length, 2); // user + synthetic assistant
+	assert.equal(record.messages[1].role, 'assistant');
+	assert.equal(record.messages[1].status, 'streaming');
+	assert.ok(record.pendingAssistantMessageId);
+});
+
+test('mapHostedResultToGenesisRecord marks synthetic message as error when stuck', () => {
+	const staleUpdatedAt = new Date(Date.now() - 120_000).toISOString();
+	const messages = [buildMockMessage('USER', 'stuck', 1)];
+	const conversation = buildMockConversation(messages, 'in_progress', staleUpdatedAt);
+	const result = buildMockResult(conversation, {
+		availableActions: [],
+		typedNextAction: 'REFRESH_STATE',
+	});
+
+	const record = mapHostedResultToGenesisRecord(result, { stuckTimeoutMs: 60_000 });
+	assert.ok(record);
+	assert.equal(record.turnStatus, 'stuck');
+	assert.equal(record.messages[1].status, 'error');
+	assert.ok(record.messages[1].error);
+});
+
+test('mapHostedResultToGenesisRecord derives title from first user message', () => {
+	const messages = [
+		buildMockMessage('USER', 'Help me write a soul declaration for a research drone.', 1),
+		buildMockMessage('ASSISTANT', 'I can help with that.', 2),
+	];
+	const conversation = buildMockConversation(messages, 'assistant_turn_ready');
+	const result = buildMockResult(conversation);
+
+	const record = mapHostedResultToGenesisRecord(result);
+	assert.ok(record);
+	assert.match(record.title, /Help me write a soul declaration/);
 });

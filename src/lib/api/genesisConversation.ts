@@ -499,3 +499,370 @@ export function createGenesisConversationMockApi({
 		},
 	};
 }
+
+// ---------------------------------------------------------------------------
+// GraphQL API implementation (Project 51 — wire mock to real Lesser GraphQL)
+// ---------------------------------------------------------------------------
+//
+// The mock above stays for browser tests. The implementation below calls the
+// real Lesser same-origin GraphQL surface through the existing
+// HostedSoulBootstrapClient. All calls go to /api/graphql; no direct Host or
+// AWS calls ever leave the browser.
+
+import type {
+	HostedSoulBootstrapAvailableAction,
+	HostedSoulBootstrapClient,
+	HostedSoulBootstrapResult,
+	HostedSoulGenesisConversationMessage,
+	HostedSoulGenesisConversationTranscript,
+	SendHostedSoulGenesisMessageInput,
+	StartHostedSoulBootstrapInput,
+} from './soulBootstrap';
+
+/** Marker message sent via sendHostedSoulGenesisMessage to re-trigger a stuck
+ * assistant turn. Lesser POSTs to Host which re-runs the assistant. This is a
+ * workaround — Lesser needs a dedicated `recoverHostedSoulGenesisTurn` GraphQL
+ * mutation that calls Host's POST /recover endpoint without adding a user
+ * message to the transcript. See GAP-1 below. */
+const RECOVERY_MARKER_MESSAGE = '[recover]';
+
+/** Heuristic: if the conversation has been in_progress this long without an
+ * assistant response, treat the turn as stuck so the UI can offer recovery. */
+const DEFAULT_STUCK_TIMEOUT_MS = 60_000;
+
+export interface GenesisConversationGraphQLApiOptions {
+	username: string;
+	endpoint?: string;
+	token?: string | null;
+	signal?: AbortSignal;
+	fetch?: typeof fetch;
+	now?: () => number;
+	stuckTimeoutMs?: number;
+}
+
+/**
+ * Map a hosted-genesis GraphQL message to the GenesisConversationMessage shape
+ * the UI expects. Exported for unit testing.
+ */
+export function mapHostedGenesisMessage(
+	message: HostedSoulGenesisConversationMessage
+): GenesisConversationMessage {
+	const role = message.role === 'USER' ? 'user' : 'assistant';
+	return {
+		id: message.id,
+		role,
+		content: message.content,
+		createdAt: message.createdAt ?? new Date(0).toISOString(),
+		status: 'complete',
+	};
+}
+
+/**
+ * Derive the UI turn status from a HostedSoulBootstrapResult. Exported for
+ * unit testing.
+ *
+ * The mapping uses availableActions as the primary signal: if Lesser
+ * advertises SEND_HOSTED_SOUL_GENESIS_MESSAGE the user can send → 'ready'.
+ * Otherwise the conversation status determines waiting vs. stuck vs. error.
+ */
+export function deriveTurnStatusFromHostedResult(
+	result: HostedSoulBootstrapResult,
+	nowMs: number,
+	stuckTimeoutMs: number = DEFAULT_STUCK_TIMEOUT_MS
+): GenesisConversationTurnStatus {
+	const conversation = result.hostedGenesisConversation;
+	const status = conversation?.status ?? null;
+
+	if (status === 'failed') return 'error';
+
+	const canSend = result.availableActions.includes('SEND_HOSTED_SOUL_GENESIS_MESSAGE');
+	if (canSend) return 'ready';
+
+	if (status === 'in_progress' || status === 'created') {
+		const updatedAtMs = conversation?.updatedAt
+			? Date.parse(conversation.updatedAt)
+			: Number.NaN;
+		if (Number.isFinite(updatedAtMs) && nowMs - updatedAtMs > stuckTimeoutMs) {
+			return 'stuck';
+		}
+		return 'waiting';
+	}
+
+	if (
+		status === 'declaration_extraction_pending' ||
+		status === 'registration_active_no_conversation'
+	) {
+		return 'waiting';
+	}
+
+	// assistant_turn_ready, declaration_ready, published_bound, no_registration,
+	// and any unknown status default to ready.
+	return 'ready';
+}
+
+/**
+ * Map a HostedSoulBootstrapResult to a GenesisConversationRecord. Returns null
+ * when there is no active hosted genesis conversation. Exported for unit
+ * testing.
+ *
+ * When the conversation is in_progress and the last transcript message is from
+ * the user, a synthetic streaming assistant message is appended so the UI can
+ * show a "thinking" indicator and disable the compose input.
+ */
+export function mapHostedResultToGenesisRecord(
+	result: HostedSoulBootstrapResult,
+	options: { now?: () => number; stuckTimeoutMs?: number; lastPolledAt?: string | null } = {}
+): GenesisConversationRecord | null {
+	const conversation = result.hostedGenesisConversation;
+	const state = result.state;
+	if (!conversation || !state) return null;
+
+	const nowMs = options.now?.() ?? Date.now();
+	const stuckTimeoutMs = options.stuckTimeoutMs ?? DEFAULT_STUCK_TIMEOUT_MS;
+
+	const baseMessages = conversation.messages
+		.slice()
+		.sort((a, b) => a.order - b.order)
+		.map(mapHostedGenesisMessage);
+
+	const turnStatus = deriveTurnStatusFromHostedResult(result, nowMs, stuckTimeoutMs);
+
+	let messages = baseMessages;
+	let pendingAssistantMessageId: string | null = null;
+
+	// Add a synthetic streaming assistant message when the assistant is
+	// processing and no assistant response has appeared in the transcript yet.
+	const lastMessage = baseMessages.at(-1);
+	const isWaitingTurn = turnStatus === 'waiting' || turnStatus === 'stuck';
+	if (isWaitingTurn && (!lastMessage || lastMessage.role === 'user')) {
+		const syntheticId = `synthetic-assistant-${conversation.conversationId}`;
+		const syntheticMessage: GenesisConversationMessage = {
+			id: syntheticId,
+			role: 'assistant',
+			content: 'Thinking through the soul declaration…',
+			createdAt: new Date(nowMs).toISOString(),
+			status: turnStatus === 'stuck' ? 'error' : 'streaming',
+			error: turnStatus === 'stuck' ? 'Assistant turn timed out.' : undefined,
+		};
+		messages = [...baseMessages, syntheticMessage];
+		pendingAssistantMessageId = syntheticId;
+	}
+
+	const title = deriveConversationTitle(baseMessages, conversation.conversationId);
+	const timestamp = conversation.updatedAt ?? new Date(nowMs).toISOString();
+
+	return {
+		id: conversation.conversationId,
+		activeBodyId: state.bodyId ?? null,
+		activeDroneUsername: state.username ?? null,
+		title,
+		messages,
+		turnStatus,
+		pendingAssistantMessageId,
+		createdAt: timestamp,
+		updatedAt: timestamp,
+		lastPolledAt: options.lastPolledAt ?? null,
+	};
+}
+
+function deriveConversationTitle(
+	messages: readonly GenesisConversationMessage[],
+	conversationId: string
+): string {
+	const firstUserMessage = messages.find(
+		(message) => message.role === 'user' && message.content.trim()
+	);
+	if (firstUserMessage) return excerpt(firstUserMessage.content);
+	return `Genesis conversation ${conversationId.slice(0, 8)}`;
+}
+
+function toSummary(record: GenesisConversationRecord): GenesisConversationSummary {
+	return {
+		id: record.id,
+		title: record.title,
+		turnStatus: record.turnStatus,
+		messageCount: record.messages.length,
+		updatedAt: record.updatedAt,
+		activeDroneUsername: record.activeDroneUsername,
+	};
+}
+
+/**
+ * Create a GenesisConversationApi backed by real Lesser same-origin GraphQL.
+ *
+ * All calls route through the HostedSoulBootstrapClient to /api/graphql. The
+ * browser never contacts Host, AWS, or any third-party origin directly.
+ *
+ * Known gaps (flagged for upstream):
+ *   GAP-1: No dedicated recoverHostedSoulGenesisTurn GraphQL mutation. Recovery
+ *          uses sendHostedSoulGenesisMessage with a [recover] marker, which
+ *          adds a user message to the transcript. Lesser needs a mutation that
+ *          calls Host's POST /recover endpoint without side effects.
+ *   GAP-2: No listHostedGenesisConversations GraphQL field. The sidebar list
+ *          is mock-only; the real API returns at most the single active
+ *          conversation per user.
+ */
+export function createGenesisConversationGraphQLApi(
+	options: GenesisConversationGraphQLApiOptions
+): GenesisConversationApi {
+	const {
+		username,
+		endpoint,
+		token,
+		signal,
+		fetch: fetchLike,
+		now = () => Date.now(),
+		stuckTimeoutMs = DEFAULT_STUCK_TIMEOUT_MS,
+	} = options;
+
+	if (!username.trim()) {
+		throw new Error('GenesisConversationGraphQLApi requires a username.');
+	}
+
+	// Dynamic import keeps the mapping helpers testable in Node without
+	// resolving the full $lib/greater/adapters/soul import chain. The module
+	// is cached after the first load.
+	async function createClient(): Promise<HostedSoulBootstrapClient> {
+		const { createProject44HostedSoulBootstrapClient } = await import('./soulBootstrap');
+		return createProject44HostedSoulBootstrapClient({
+			endpoint,
+			token,
+			signal,
+			fetch: fetchLike,
+		});
+	}
+
+	// Track the last known registration/conversation IDs so sendMessage and
+	// recoverStuckTurn can pass them to Lesser without an extra round-trip.
+	let lastRegistrationId: string | null = null;
+	let lastConversationId: string | null = null;
+
+	function updateTrackedIds(result: HostedSoulBootstrapResult): void {
+		const conversation = result.hostedGenesisConversation;
+		if (conversation) {
+			lastConversationId = conversation.conversationId;
+			lastRegistrationId = conversation.registrationId ?? lastRegistrationId;
+		}
+		if (result.state) {
+			lastRegistrationId = result.state.hostRegistrationId ?? lastRegistrationId;
+			lastConversationId = result.state.hostConversationId ?? lastConversationId;
+		}
+	}
+
+	function mapResult(
+		result: HostedSoulBootstrapResult,
+		lastPolledAt: string | null = null
+	): GenesisConversationRecord | null {
+		updateTrackedIds(result);
+		return mapHostedResultToGenesisRecord(result, { now, stuckTimeoutMs, lastPolledAt });
+	}
+
+	function checkBackendError(result: HostedSoulBootstrapResult): void {
+		if (result.error) {
+			throw new Error(result.error.message || 'Genesis conversation request failed.');
+		}
+	}
+
+	return {
+		async startConversation(input: StartGenesisConversationInput = {}) {
+			const client = await createClient();
+			const startInput: StartHostedSoulBootstrapInput = {
+				username,
+				capabilities: input.activeDroneUsername
+					? [`drone:${input.activeDroneUsername}`]
+					: undefined,
+			};
+			const mutationResult = await client.startHostedSoulBootstrap(startInput);
+			checkBackendError(mutationResult);
+			const record = mapResult(mutationResult);
+			if (!record) {
+				throw new Error('Hosted soul bootstrap started but no genesis conversation was returned.');
+			}
+			return record;
+		},
+
+		async listConversations() {
+			// GAP-2: Lesser does not expose a listHostedGenesisConversations
+			// field. The soulBootstrap query returns one active conversation per
+			// user. This method returns at most one summary so the UI can show
+			// the active conversation; the sidebar list is mock-only.
+			const client = await createClient();
+			const result = await client.current({ username });
+			checkBackendError(result);
+			const record = mapResult(result);
+			if (!record) return [];
+			return [toSummary(record)];
+		},
+
+		async loadActiveConversation() {
+			const client = await createClient();
+			const result = await client.current({ username });
+			checkBackendError(result);
+			return mapResult(result);
+		},
+
+		async loadConversation(conversationId: string) {
+			// Lesser's soulBootstrap query is per-user, not per-conversationId.
+			// The conversationId is informational; Lesser returns the active
+			// conversation. We verify it matches to avoid showing stale state.
+			const client = await createClient();
+			const result = await client.current({ username });
+			checkBackendError(result);
+			const record = mapResult(result);
+			if (!record) return null;
+			if (record.id !== conversationId) return null;
+			return record;
+		},
+
+		async sendMessage({ conversationId, content }: SendGenesisConversationMessageInput) {
+			const draft = content.trim();
+			if (!draft) {
+				throw new Error('Message content is required.');
+			}
+
+			const client = await createClient();
+			const sendInput: SendHostedSoulGenesisMessageInput = {
+				username,
+				message: draft,
+				conversationId: conversationId || lastConversationId || undefined,
+				registrationId: lastRegistrationId ?? undefined,
+			};
+			const mutationResult = await client.sendHostedSoulGenesisMessage(sendInput);
+			checkBackendError(mutationResult);
+			const record = mapResult(mutationResult);
+			if (!record) {
+				throw new Error('Message was sent but no genesis conversation was returned.');
+			}
+			return record;
+		},
+
+		async pollConversation(conversationId: string) {
+			const client = await createClient();
+			const result = await client.current({ username });
+			checkBackendError(result);
+			const record = mapResult(result, new Date(now()).toISOString());
+			if (!record) return null;
+			if (record.id !== conversationId) return null;
+			return record;
+		},
+
+		async recoverStuckTurn(conversationId: string) {
+			// GAP-1: Lesser does not yet expose a recoverHostedSoulGenesisTurn
+			// mutation. As a workaround we send a [recover] marker message via
+			// sendHostedSoulGenesisMessage. Lesser POSTs to Host which re-triggers
+			// the assistant turn. This adds a user message to the transcript,
+			// which is not ideal. When Lesser adds the dedicated recovery
+			// mutation, replace this implementation.
+			const client = await createClient();
+			const sendInput: SendHostedSoulGenesisMessageInput = {
+				username,
+				message: RECOVERY_MARKER_MESSAGE,
+				conversationId: conversationId || lastConversationId || undefined,
+				registrationId: lastRegistrationId ?? undefined,
+			};
+			const mutationResult = await client.sendHostedSoulGenesisMessage(sendInput);
+			checkBackendError(mutationResult);
+			return mapResult(mutationResult, new Date(now()).toISOString());
+		},
+	};
+}

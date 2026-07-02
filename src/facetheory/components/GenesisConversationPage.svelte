@@ -8,6 +8,7 @@
 		ChatMessageWorkflowMetadata,
 	} from '$lib/components/chat';
 	import {
+		createGenesisConversationGraphQLApi,
 		createGenesisConversationMockApi,
 		type GenesisConversationApi,
 		type GenesisConversationMessage,
@@ -36,6 +37,17 @@
 		'Name one boundary this soul should never cross.',
 	];
 
+	/**
+	 * When true the page uses the local mock API (browser tests set this via
+	 * window.__SIM_USE_GENESIS_MOCK). When false the page uses the real Lesser
+	 * same-origin GraphQL API through HostedSoulBootstrapClient.
+	 */
+	const USE_MOCK_API =
+		typeof window !== 'undefined' &&
+		(window as unknown as { __SIM_USE_GENESIS_MOCK?: boolean }).__SIM_USE_GENESIS_MOCK === true;
+
+	const POLL_DELAY_MS = USE_MOCK_API ? 80 : 2_500;
+
 	let { data, class: className = '' }: Props = $props();
 
 	let api: GenesisConversationApi | null = null;
@@ -43,12 +55,17 @@
 	let conversations = $state<GenesisConversationSummary[]>([]);
 	let draft = $state('');
 	let loading = $state(true);
-	let loadingList = $state(true);
+	let loadingList = $state(USE_MOCK_API);
 	let sending = $state(false);
 	let polling = $state(false);
 	let error = $state<string | null>(null);
 	let notice = $state<string | null>(null);
 	let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+	// The mock supports a conversation list sidebar; the real GraphQL API does
+	// not (GAP-2: Lesser lacks listHostedGenesisConversations). The sidebar is
+	// hidden when using the real API.
+	const listSupported = USE_MOCK_API;
 
 	const chatMessages = $derived((conversation?.messages ?? []).map(toChatMessage));
 	const activeConversationId = $derived(conversation?.id ?? null);
@@ -71,15 +88,36 @@
 	const canRecover = $derived(Boolean(conversation && conversation.turnStatus === 'stuck'));
 	const canPoll = $derived(Boolean(conversation && (hasPendingAssistant || polling)));
 	const subtitle = $derived(
-		conversation?.activeDroneUsername
-			? `Local mock for @${conversation.activeDroneUsername}`
-			: data.activeDroneUsername
-				? `Local mock for @${data.activeDroneUsername}`
-				: 'Local mock conversation contract'
+		USE_MOCK_API
+			? conversation?.activeDroneUsername
+				? `Local mock for @${conversation.activeDroneUsername}`
+				: data.activeDroneUsername
+					? `Local mock for @${data.activeDroneUsername}`
+					: 'Local mock conversation contract'
+			: conversation?.activeDroneUsername
+				? `Genesis conversation for @${conversation.activeDroneUsername}`
+				: data.activeDroneUsername
+					? `Genesis conversation for @${data.activeDroneUsername}`
+					: 'Hosted genesis conversation'
 	);
 
 	onMount(() => {
-		api = createGenesisConversationMockApi();
+		if (USE_MOCK_API) {
+			api = createGenesisConversationMockApi();
+			void loadInitialConversations();
+		}
+	});
+
+	// For the real GraphQL API, defer creation until the username is available.
+	// The viewer/agent data loads asynchronously after mount; creating the API
+	// with an empty username would throw. The effect re-runs when
+	// data.currentUserName or data.activeDroneUsername become available.
+	$effect(() => {
+		if (USE_MOCK_API) return;
+		if (api) return;
+		const username = data.currentUserName ?? data.activeDroneUsername ?? '';
+		if (!username) return;
+		api = createGenesisConversationGraphQLApi({ username });
 		void loadInitialConversations();
 	});
 
@@ -191,7 +229,7 @@
 		pollTimer = null;
 	}
 
-	function schedulePoll(delayMs = 80) {
+	function schedulePoll(delayMs = POLL_DELAY_MS) {
 		clearPollTimer();
 		pollTimer = setTimeout(() => {
 			void pollForResponse();
@@ -199,7 +237,7 @@
 	}
 
 	async function refreshConversationList() {
-		if (!api) return [];
+		if (!api || !listSupported) return [];
 		loadingList = true;
 		try {
 			const next = await api.listConversations();
@@ -237,7 +275,9 @@
 			activeDroneUsername: data.activeDroneUsername,
 		});
 		conversation = next;
-		notice = 'Started a new local genesis conversation.';
+		notice = USE_MOCK_API
+			? 'Started a new local genesis conversation.'
+			: 'Started a new hosted genesis conversation.';
 		await refreshConversationList();
 		return next;
 	}
@@ -324,7 +364,7 @@
 				}
 			}
 		} catch (caught) {
-			error = caught instanceof Error ? caught.message : 'Failed to poll the local conversation.';
+			error = caught instanceof Error ? caught.message : 'Failed to poll the genesis conversation.';
 		} finally {
 			polling = false;
 		}
@@ -339,7 +379,9 @@
 			const next = await api.recoverStuckTurn(conversation.id);
 			if (next) {
 				conversation = next;
-				notice = 'Recovered the stuck turn from the local transcript.';
+				notice = USE_MOCK_API
+					? 'Recovered the stuck turn from the local transcript.'
+					: 'Recovering the stuck turn via Lesser GraphQL…';
 				await refreshConversationList();
 				schedulePoll();
 			}
@@ -362,8 +404,9 @@
 	heroTestId="genesis-conversation-hero"
 >
 	{#snippet children()}
-		<div class="genesis-conversation" data-testid="genesis-conversation-page">
-			<div class="genesis-conversation__layout">
+	<div class="genesis-conversation" data-testid="genesis-conversation-page">
+		<div class="genesis-conversation__layout" class:genesis-conversation__layout--no-sidebar={!listSupported}>
+			{#if listSupported}
 				<Card variant="elevated" padding="none" class="genesis-conversation__sidebar-card">
 					<aside class="genesis-conversation__sidebar" aria-label="Genesis conversations">
 						<div class="genesis-conversation__sidebar-header">
@@ -424,8 +467,9 @@
 						{/if}
 					</aside>
 				</Card>
+			{/if}
 
-				<Card variant="elevated" padding="none" class="genesis-conversation__card">
+			<Card variant="elevated" padding="none" class="genesis-conversation__card">
 					<Chat.Container
 						messages={chatMessages}
 						streaming={hasPendingAssistant}
@@ -461,11 +505,18 @@
 							{/snippet}
 						</Chat.Header>
 
-						<div class="genesis-conversation__context" data-testid="genesis-conversation-contract">
+					<div class="genesis-conversation__context" data-testid="genesis-conversation-contract">
+						{#if USE_MOCK_API}
 							<p>
 								Local mock contract: start, send, poll, resume, follow up, and recover without
 								Lesser, Host, AWS, raw endpoint, token, or credential calls.
 							</p>
+						{:else}
+							<p>
+								Hosted genesis conversation through Lesser same-origin GraphQL. Simulacrum never
+								calls Host, AWS, or third-party endpoints from the browser.
+							</p>
+						{/if}
 							{#if conversation}
 								<p>
 									Conversation <strong>{conversation.id}</strong>
@@ -495,24 +546,31 @@
 							data-testid="genesis-conversation-transcript"
 						>
 							{#if conversation}
-								<Chat.Messages
-									welcomeTitle="Start the soul declaration"
-									welcomeMessage="Describe purpose, boundaries, and continuity. The local mock keeps the transcript resumable."
-									suggestions={STARTER_PROMPTS}
-									onSuggestionClick={handleSuggestion}
-								/>
+							<Chat.Messages
+								welcomeTitle="Start the soul declaration"
+								welcomeMessage={USE_MOCK_API
+									? 'Describe purpose, boundaries, and continuity. The local mock keeps the transcript resumable.'
+									: 'Describe purpose, boundaries, and continuity. The hosted genesis conversation runs through Lesser GraphQL.'}
+								suggestions={STARTER_PROMPTS}
+								onSuggestionClick={handleSuggestion}
+							/>
 							{:else if loading}
 								<div class="genesis-conversation__start-prompt" data-testid="genesis-conversation-loading">
 									<p>Loading genesis conversations…</p>
 								</div>
 							{:else}
-								<div class="genesis-conversation__start-prompt" data-testid="genesis-conversation-start-prompt">
-									<p class="genesis-conversation__eyebrow">Local mock ready</p>
-									<h2>Start or resume a genesis conversation</h2>
-									<p>
+							<div class="genesis-conversation__start-prompt" data-testid="genesis-conversation-start-prompt">
+								<p class="genesis-conversation__eyebrow">{USE_MOCK_API ? 'Local mock ready' : 'Hosted genesis ready'}</p>
+								<h2>Start or resume a genesis conversation</h2>
+								<p>
+									{#if USE_MOCK_API}
 										Use the conversation list to resume a stored transcript, or start a new local
 										mock thread to shape purpose, boundaries, and continuity.
-									</p>
+									{:else}
+										Start a new hosted genesis conversation to shape purpose, boundaries, and
+										continuity through Lesser's same-origin GraphQL surface.
+									{/if}
+								</p>
 									<Button variant="solid" onclick={handleNewConversation} data-testid="genesis-conversation-start-new">
 										Start new conversation
 									</Button>
@@ -572,6 +630,10 @@
 		grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr);
 		gap: var(--gr-spacing-scale-5, 1.25rem);
 		align-items: stretch;
+	}
+
+	.genesis-conversation__layout--no-sidebar {
+		grid-template-columns: minmax(0, 1fr);
 	}
 
 	:global(.genesis-conversation__sidebar-card.gr-card),
