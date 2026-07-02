@@ -2,6 +2,10 @@ import { expect, type Page } from '@playwright/test';
 
 import { GENESIS_CONVERSATION_STORAGE_KEY } from '../../src/lib/api/genesisConversation.ts';
 import { test } from './_harness/fixtures';
+import {
+	installProject44Auth,
+	installProject44Routes,
+} from './_harness/soulBootstrapMocks';
 
 type CapturedRequest = {
 	method: string;
@@ -32,6 +36,9 @@ function expectLocalMockOnly(captured: readonly CapturedRequest[]) {
 
 async function openGenesis(page: Page) {
 	await page.addInitScript((storageKey) => {
+		// Existing mock-based tests set this flag so the page uses
+		// createGenesisConversationMockApi instead of the real GraphQL API.
+		(window as unknown as { __SIM_USE_GENESIS_MOCK?: boolean }).__SIM_USE_GENESIS_MOCK = true;
 		const resetFlag = `${storageKey}:reset-once`;
 		if (window.sessionStorage.getItem(resetFlag)) return;
 		window.localStorage.removeItem(storageKey);
@@ -206,5 +213,44 @@ test.describe('Project 51 genesis conversation v2', () => {
 			'Ready for next turn'
 		);
 		expectLocalMockOnly(captured);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// GraphQL API tests — the page uses createGenesisConversationGraphQLApi (no
+// mock flag set). GraphQL requests to /api/graphql are intercepted with the
+// existing installProject44Routes harness which returns deterministic fixture
+// surfaces including hostedGenesisConversation with transcript messages.
+// ---------------------------------------------------------------------------
+
+test.describe('Project 51 genesis conversation GraphQL API', () => {
+	test('loads an existing conversation from Lesser GraphQL and shows the transcript', async ({
+		page,
+	}) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: 'hostedGenesisMessage',
+		});
+
+		await page.goto('/l/souls/genesis');
+		await expect(page.getByTestId('genesis-conversation-page')).toBeVisible();
+
+		// The sidebar list is hidden for the real GraphQL API (GAP-2).
+		await expect(page.getByTestId('genesis-conversation-list')).toHaveCount(0);
+
+		// The existing conversation from the GraphQL fixture loads automatically.
+		// The hostedGenesisMessage fixture includes a user message and an assistant
+		// response in the hostedGenesisConversation transcript.
+		const transcript = page.getByTestId('genesis-conversation-transcript');
+		await expect(transcript).toContainText(
+			'I am a hosted Greater-compatible soul bootstrap relayed through Lesser same-origin GraphQL.'
+		);
+
+		// Verify all GraphQL requests went to same-origin /api/graphql.
+		const graphQLOperations = harness.graphQLRequests().map((request) => request.operationName);
+		expect(graphQLOperations).toContain('SoulBootstrap');
+		for (const request of harness.graphQLRequests()) {
+			expect(new URL(request.url).pathname).toBe('/api/graphql');
+		}
 	});
 });
