@@ -510,21 +510,16 @@ export function createGenesisConversationMockApi({
 // AWS calls ever leave the browser.
 
 import type {
+	HostedGenesisConversationSummary,
 	HostedSoulBootstrapAvailableAction,
 	HostedSoulBootstrapClient,
 	HostedSoulBootstrapResult,
 	HostedSoulGenesisConversationMessage,
 	HostedSoulGenesisConversationTranscript,
+	RecoverHostedSoulGenesisTurnInput,
 	SendHostedSoulGenesisMessageInput,
 	StartHostedSoulBootstrapInput,
 } from './soulBootstrap';
-
-/** Marker message sent via sendHostedSoulGenesisMessage to re-trigger a stuck
- * assistant turn. Lesser POSTs to Host which re-runs the assistant. This is a
- * workaround — Lesser needs a dedicated `recoverHostedSoulGenesisTurn` GraphQL
- * mutation that calls Host's POST /recover endpoint without adding a user
- * message to the transcript. See GAP-1 below. */
-const RECOVERY_MARKER_MESSAGE = '[recover]';
 
 /** Heuristic: if the conversation has been in_progress this long without an
  * assistant response, treat the turn as stuck so the UI can offer recovery. */
@@ -687,20 +682,36 @@ function toSummary(record: GenesisConversationRecord): GenesisConversationSummar
 	};
 }
 
+function deriveTurnStatusFromSummaryStatus(status: string): GenesisConversationTurnStatus {
+	switch (status) {
+		case 'failed':
+			return 'error';
+		case 'in_progress':
+		case 'created':
+		case 'declaration_extraction_pending':
+		case 'registration_active_no_conversation':
+			return 'waiting';
+		case 'assistant_turn_ready':
+		case 'declaration_ready':
+		case 'published_bound':
+		case 'no_registration':
+		default:
+			return 'ready';
+	}
+}
+
 /**
  * Create a GenesisConversationApi backed by real Lesser same-origin GraphQL.
  *
  * All calls route through the HostedSoulBootstrapClient to /api/graphql. The
  * browser never contacts Host, AWS, or any third-party origin directly.
  *
- * Known gaps (flagged for upstream):
- *   GAP-1: No dedicated recoverHostedSoulGenesisTurn GraphQL mutation. Recovery
- *          uses sendHostedSoulGenesisMessage with a [recover] marker, which
- *          adds a user message to the transcript. Lesser needs a mutation that
- *          calls Host's POST /recover endpoint without side effects.
- *   GAP-2: No listHostedGenesisConversations GraphQL field. The sidebar list
- *          is mock-only; the real API returns at most the single active
- *          conversation per user.
+ * Recovery uses the dedicated recoverHostedSoulGenesisTurn GraphQL mutation
+ * (Lesser v1.5.12) which calls Host's POST /recover endpoint without adding
+ * a user message to the transcript.
+ *
+ * The conversation list uses the listHostedGenesisConversations GraphQL query
+ * (Lesser v1.5.12) which returns bounded conversation summaries from Host.
  */
 export function createGenesisConversationGraphQLApi(
 	options: GenesisConversationGraphQLApiOptions
@@ -782,16 +793,25 @@ export function createGenesisConversationGraphQLApi(
 		},
 
 		async listConversations() {
-			// GAP-2: Lesser does not expose a listHostedGenesisConversations
-			// field. The soulBootstrap query returns one active conversation per
-			// user. This method returns at most one summary so the UI can show
-			// the active conversation; the sidebar list is mock-only.
-			const client = await createClient();
-			const result = await client.current({ username });
-			checkBackendError(result);
-			const record = mapResult(result);
-			if (!record) return [];
-			return [toSummary(record)];
+			// Lesser v1.5.12 exposes listHostedGenesisConversations which calls
+			// Host's GET /mint-conversations list endpoint. Returns bounded
+			// conversation summaries sorted by updated_at descending.
+			const { listHostedGenesisConversations } = await import('./soulBootstrap');
+			const summaries = await listHostedGenesisConversations({
+				username,
+				endpoint,
+				token,
+				signal,
+				fetch: fetchLike,
+			});
+			return summaries.map((summary) => ({
+				id: summary.conversationId,
+				title: `Genesis conversation ${summary.conversationId.slice(0, 8)}`,
+				turnStatus: deriveTurnStatusFromSummaryStatus(summary.status),
+				messageCount: summary.messageCount,
+				updatedAt: summary.updatedAt ?? new Date(0).toISOString(),
+				activeDroneUsername: username,
+			}));
 		},
 
 		async loadActiveConversation() {
@@ -847,22 +867,25 @@ export function createGenesisConversationGraphQLApi(
 		},
 
 		async recoverStuckTurn(conversationId: string) {
-			// GAP-1: Lesser does not yet expose a recoverHostedSoulGenesisTurn
-			// mutation. As a workaround we send a [recover] marker message via
-			// sendHostedSoulGenesisMessage. Lesser POSTs to Host which re-triggers
-			// the assistant turn. This adds a user message to the transcript,
-			// which is not ideal. When Lesser adds the dedicated recovery
-			// mutation, replace this implementation.
-			const client = await createClient();
-			const sendInput: SendHostedSoulGenesisMessageInput = {
+			// Lesser v1.5.12 exposes recoverHostedSoulGenesisTurn which calls
+			// Host's POST /recover endpoint without adding a user message to
+			// the transcript. The mutation returns the updated bootstrap
+			// surface; we re-fetch via current() for proper mapping.
+			const { recoverHostedSoulGenesisTurn } = await import('./soulBootstrap');
+			const recoverInput: RecoverHostedSoulGenesisTurnInput = {
 				username,
-				message: RECOVERY_MARKER_MESSAGE,
-				conversationId: conversationId || lastConversationId || undefined,
+				conversationId: conversationId || lastConversationId || '',
 				registrationId: lastRegistrationId ?? undefined,
 			};
-			const mutationResult = await client.sendHostedSoulGenesisMessage(sendInput);
-			checkBackendError(mutationResult);
-			return mapResult(mutationResult, new Date(now()).toISOString());
+			const result = await recoverHostedSoulGenesisTurn({
+				input: recoverInput,
+				endpoint,
+				token,
+				signal,
+				fetch: fetchLike,
+			});
+			checkBackendError(result);
+			return mapResult(result, new Date(now()).toISOString());
 		},
 	};
 }
