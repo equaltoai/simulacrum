@@ -20,10 +20,16 @@
 	import type { AgentFaceBaseData } from '$lib/greater/faces/agent';
 	import AgentFaceFrame from '$lib/greater/faces/agent/internal/AgentFaceFrame.svelte';
 
+	interface GenesisAgentOption {
+		username: string;
+		displayName: string;
+	}
+
 	interface GenesisConversationPageData extends AgentFaceBaseData {
 		activeBodyId?: string | null;
 		activeDroneUsername?: string | null;
 		currentUserName?: string | null;
+		agentRoster?: readonly GenesisAgentOption[];
 	}
 
 	interface Props {
@@ -61,6 +67,12 @@
 	let error = $state<string | null>(null);
 	let notice = $state<string | null>(null);
 	let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+	// True when the real GraphQL API is active but no drone agent username is
+	// available. The page shows an agent chooser or "create a drone body" prompt.
+	const agentRoster = $derived(data.agentRoster ?? []);
+	let selectedAgentUsername = $state<string | null>(data.activeDroneUsername ?? null);
+	const noDroneAgent = $derived(!USE_MOCK_API && agentRoster.length === 0);
 
 	// The mock and the real GraphQL API both support a conversation list
 	// sidebar (Lesser v1.5.12 exposes listHostedGenesisConversations).
@@ -107,14 +119,14 @@
 		}
 	});
 
-	// For the real GraphQL API, defer creation until the username is available.
-	// The viewer/agent data loads asynchronously after mount; creating the API
-	// with an empty username would throw. The effect re-runs when
-	// data.currentUserName or data.activeDroneUsername become available.
+	// For the real GraphQL API, defer creation until a drone agent is selected.
+	// The soulBootstrap query and hosted bootstrap mutations require the drone
+	// agent's username (not the viewer's name). The roster loads asynchronously
+	// after mount; the effect re-runs when selectedAgentUsername becomes available.
 	$effect(() => {
 		if (USE_MOCK_API) return;
 		if (api) return;
-		const username = data.currentUserName ?? data.activeDroneUsername ?? '';
+		const username = selectedAgentUsername ?? '';
 		if (!username) return;
 		api = createGenesisConversationGraphQLApi({ username });
 		void loadInitialConversations();
@@ -235,6 +247,19 @@
 		}, delayMs);
 	}
 
+	function handleSelectAgent(username: string) {
+		if (username === selectedAgentUsername) return;
+		clearPollTimer();
+		api = null;
+		conversation = null;
+		conversations = [];
+		error = null;
+		notice = null;
+		selectedAgentUsername = username;
+		// The $effect above will fire when selectedAgentUsername changes,
+		// creating the API and calling loadInitialConversations.
+	}
+
 	async function refreshConversationList() {
 		if (!api || !listSupported) return [];
 		loadingList = true;
@@ -271,7 +296,7 @@
 		clearPollTimer();
 		const next = await api.startConversation({
 			activeBodyId: data.activeBodyId,
-			activeDroneUsername: data.activeDroneUsername,
+			activeDroneUsername: selectedAgentUsername ?? data.activeDroneUsername,
 		});
 		conversation = next;
 		notice = USE_MOCK_API
@@ -505,6 +530,21 @@
 						</Chat.Header>
 
 					<div class="genesis-conversation__context" data-testid="genesis-conversation-contract">
+						{#if !USE_MOCK_API && agentRoster.length > 0}
+							<div class="genesis-conversation__agent-chooser" data-testid="genesis-conversation-agent-chooser">
+								<label for="genesis-agent-select">Drone body</label>
+								<select
+									id="genesis-agent-select"
+									value={selectedAgentUsername ?? ''}
+									onchange={(e) => handleSelectAgent(e.currentTarget.value)}
+									disabled={loading || sending || polling}
+								>
+									{#each agentRoster as agent (agent.username)}
+										<option value={agent.username}>{agent.displayName} (@{agent.username})</option>
+									{/each}
+								</select>
+							</div>
+						{/if}
 						{#if USE_MOCK_API}
 							<p>
 								Local mock contract: start, send, poll, resume, follow up, and recover without
@@ -553,6 +593,28 @@
 								suggestions={STARTER_PROMPTS}
 								onSuggestionClick={handleSuggestion}
 							/>
+							{:else if noDroneAgent}
+								<div class="genesis-conversation__start-prompt" data-testid="genesis-conversation-no-agent">
+									<p class="genesis-conversation__eyebrow">No drone body</p>
+									<h2>Create a drone body first</h2>
+									<p>
+										A hosted genesis conversation requires a drone agent. Create a drone body
+										on the Drones page, then return here to start the soul declaration
+										conversation.
+									</p>
+									<Button variant="solid" onclick={() => window.location.assign('/l/drones')} data-testid="genesis-conversation-go-to-drones">
+										Go to Drones
+									</Button>
+								</div>
+							{:else if !USE_MOCK_API && !selectedAgentUsername && agentRoster.length > 0}
+								<div class="genesis-conversation__start-prompt" data-testid="genesis-conversation-select-agent">
+									<p class="genesis-conversation__eyebrow">Select a drone body</p>
+									<h2>Choose a drone for genesis</h2>
+									<p>
+										Select which drone body should run the hosted genesis conversation from the
+										dropdown above.
+									</p>
+								</div>
 							{:else if loading}
 								<div class="genesis-conversation__start-prompt" data-testid="genesis-conversation-loading">
 									<p>Loading genesis conversations…</p>
@@ -794,6 +856,30 @@
 
 	.genesis-conversation__context p {
 		margin: 0;
+	}
+
+	.genesis-conversation__agent-chooser {
+		display: flex;
+		align-items: center;
+		gap: var(--gr-spacing-scale-2, 0.5rem);
+	}
+
+	.genesis-conversation__agent-chooser label {
+		font-size: var(--gr-typography-fontSize-xs, 0.75rem);
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--gr-color-primary-700, #4338ca);
+	}
+
+	.genesis-conversation__agent-chooser select {
+		padding: var(--gr-spacing-scale-1, 0.25rem) var(--gr-spacing-scale-2, 0.5rem);
+		font-size: var(--gr-typography-fontSize-sm, 0.875rem);
+		border: 1px solid var(--gr-semantic-border-default);
+		border-radius: var(--gr-radii-sm, 0.375rem);
+		background: var(--gr-semantic-background-primary);
+		color: var(--gr-semantic-foreground-primary);
+		cursor: pointer;
 	}
 
 	.genesis-conversation__status-badge {
