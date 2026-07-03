@@ -189,13 +189,13 @@
 
 	// Set up global keyboard listener
 	onMount(() => {
-		if (enableKeyboardShortcuts) {
+		if (enableKeyboardShortcuts && typeof window !== 'undefined') {
 			window.addEventListener('keydown', handleKeydown);
 		}
 	});
 
 	onDestroy(() => {
-		if (enableKeyboardShortcuts) {
+		if (enableKeyboardShortcuts && typeof window !== 'undefined') {
 			window.removeEventListener('keydown', handleKeydown);
 		}
 	});
