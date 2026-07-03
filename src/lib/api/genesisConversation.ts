@@ -796,15 +796,9 @@ export function createGenesisConversationGraphQLApi(
 			// Lesser v1.5.12 exposes listHostedGenesisConversations which calls
 			// Host's GET /mint-conversations list endpoint. Returns bounded
 			// conversation summaries sorted by updated_at descending.
-			const { listHostedGenesisConversations } = await import('./soulBootstrap');
-			const summaries = await listHostedGenesisConversations({
-				username,
-				endpoint,
-				token,
-				signal,
-				fetch: fetchLike,
-			});
-			return summaries.map((summary) => ({
+			const client = await createClient();
+			const result = await client.listHostedGenesisConversations({ username });
+			return result.conversations.map((summary) => ({
 				id: summary.conversationId,
 				title: `Genesis conversation ${summary.conversationId.slice(0, 8)}`,
 				turnStatus: deriveTurnStatusFromSummaryStatus(summary.status),
@@ -869,23 +863,17 @@ export function createGenesisConversationGraphQLApi(
 		async recoverStuckTurn(conversationId: string) {
 			// Lesser v1.5.12 exposes recoverHostedSoulGenesisTurn which calls
 			// Host's POST /recover endpoint without adding a user message to
-			// the transcript. The mutation returns the updated bootstrap
-			// surface; we re-fetch via current() for proper mapping.
-			const { recoverHostedSoulGenesisTurn } = await import('./soulBootstrap');
+			// the transcript. The mutation returns HostedSoulBootstrapMutationResult
+			// with the updated bootstrap surface directly.
+			const client = await createClient();
 			const recoverInput: RecoverHostedSoulGenesisTurnInput = {
 				username,
 				conversationId: conversationId || lastConversationId || '',
 				registrationId: lastRegistrationId ?? undefined,
 			};
-			const result = await recoverHostedSoulGenesisTurn({
-				input: recoverInput,
-				endpoint,
-				token,
-				signal,
-				fetch: fetchLike,
-			});
-			checkBackendError(result);
-			return mapResult(result, new Date(now()).toISOString());
+			const mutationResult = await client.recoverHostedSoulGenesisTurn(recoverInput);
+			checkBackendError(mutationResult);
+			return mapResult(mutationResult, new Date(now()).toISOString());
 		},
 	};
 }
