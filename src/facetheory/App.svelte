@@ -141,6 +141,10 @@
 		activeBodyId: appState.actionContext.activeAgentId,
 		activeDroneUsername: appState.actionContext.activeUsername,
 		currentUserName: appState.currentUserName,
+		agentRoster: (appState.faces.dashboard.roster ?? []).map((entry) => ({
+			username: entry.handle?.replace(/^@/, '') ?? entry.name,
+			displayName: entry.name,
+		})),
 	});
 
 	$effect(() => {
