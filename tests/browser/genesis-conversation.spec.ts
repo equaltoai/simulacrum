@@ -4,6 +4,8 @@ import { GENESIS_CONVERSATION_STORAGE_KEY } from '../../src/lib/api/genesisConve
 import { project44SoulBootstrapIds } from '../../src/lib/greater/adapters/fixtures/soul-bootstrap.ts';
 import { test } from './_harness/fixtures';
 import {
+	createProject51HostedRegistrationActiveSurface,
+	createProject51PendingHostedGenesisSurface,
 	createProject51StuckHostedGenesisSurface,
 	createProject51TruncatedHostedGenesisSurface,
 	installProject44Auth,
@@ -338,18 +340,66 @@ test.describe('Project 51 genesis conversation GraphQL API', () => {
 	test('starts genesis for the selected drone without fabricating capabilities', async ({ page }) => {
 		await installProject44Auth(page);
 		const harness = await installProject44Routes(page, {
-			genesisStartReturnsConversation: true,
+			genesisStartSurface: createProject51HostedRegistrationActiveSurface(),
 		});
 
 		await page.goto('/l/souls/genesis');
 		await expect(page.getByTestId('genesis-conversation-start-prompt')).toBeVisible();
 		await page.getByTestId('genesis-conversation-start-new').click();
+		await expect(page.getByTestId('genesis-conversation-registration-ready')).toContainText(
+			project44SoulBootstrapIds.registrationId
+		);
+		await expect(page.getByLabel('Message input')).toBeEnabled();
+
+		const firstMessage = 'Define the purpose and boundaries for this hosted soul.';
+		await sendGenesisMessage(page, firstMessage);
 
 		await expect
 			.poll(() => harness.graphQLRequests()
 				.find((request) => request.operationName === 'StartHostedSoulBootstrap')
 				?.variables.input)
-			.toEqual({ username: project44SoulBootstrapIds.username });
+			.toMatchObject({ username: project44SoulBootstrapIds.username });
+		const startInput = harness.graphQLRequests()
+			.find((request) => request.operationName === 'StartHostedSoulBootstrap')
+			?.variables.input as Record<string, unknown>;
+		expect(startInput).not.toHaveProperty('capabilities');
+		expect(startInput.idempotencyKey).toEqual(expect.stringMatching(/^sim-genesis-start-/));
+
+		await expect
+			.poll(() => harness.graphQLRequests()
+				.find((request) => request.operationName === 'SendHostedSoulGenesisMessage')
+				?.variables.input)
+			.toMatchObject({
+				username: project44SoulBootstrapIds.username,
+				registrationId: project44SoulBootstrapIds.registrationId,
+				message: firstMessage,
+			});
+		const sendInput = harness.graphQLRequests()
+			.find((request) => request.operationName === 'SendHostedSoulGenesisMessage')
+			?.variables.input as Record<string, unknown>;
+		expect(sendInput).not.toHaveProperty('conversationId');
+		expect(sendInput.idempotencyKey).toEqual(expect.stringMatching(/^sim-genesis-send-/));
+	});
+
+	test('does not issue another hosted begin when an active conversation already exists', async ({
+		page,
+	}) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: 'hostedGenesisMessage',
+		});
+
+		await page.goto('/l/souls/genesis');
+		await expect(page.getByTestId('genesis-conversation-transcript')).toContainText(
+			'I am a hosted Greater-compatible soul bootstrap relayed through Lesser same-origin GraphQL.'
+		);
+		const startOrResume = page.getByTestId('genesis-conversation-new');
+		await expect(startOrResume).toBeDisabled();
+		await startOrResume.click({ force: true });
+		expect(
+			harness.graphQLRequests()
+				.filter((request) => request.operationName === 'StartHostedSoulBootstrap')
+		).toEqual([]);
 	});
 
 	test('recovers a stuck hosted assistant turn through Lesser GraphQL', async ({ page }) => {
@@ -390,6 +440,197 @@ test.describe('Project 51 genesis conversation GraphQL API', () => {
 		await page.goto('/l/souls/genesis');
 		await expect(page.getByTestId('genesis-conversation-transcript')).toBeVisible();
 		await expect(page.getByLabel('Message input')).toBeDisabled();
+	});
+
+	test('keeps an in-progress assistant turn pending when send is only an alternative action', async ({
+		page,
+	}) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: createProject51PendingHostedGenesisSurface(),
+		});
+
+		await page.goto('/l/souls/genesis');
+		await expect(page.getByTestId('genesis-conversation-status')).toContainText(
+			'Assistant responding'
+		);
+		await expect(page.getByTestId('genesis-conversation-transcript')).toContainText(
+			'Thinking through the soul declaration'
+		);
+		await expect(page.getByLabel('Message input')).toBeDisabled();
+		expect(
+			harness.graphQLRequests()
+				.filter((request) => request.operationName === 'SendHostedSoulGenesisMessage')
+		).toEqual([]);
+	});
+
+	test('keeps active conversation mutations authoritative when history listing fails', async ({
+		page,
+	}) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: 'hostedGenesisMessage',
+			rejectGenesisConversationList: true,
+		});
+
+		await page.goto('/l/souls/genesis');
+		const transcript = page.getByTestId('genesis-conversation-transcript');
+		await expect(transcript).toContainText(
+			'I am a hosted Greater-compatible soul bootstrap relayed through Lesser same-origin GraphQL.'
+		);
+		await expect(page.getByTestId('genesis-conversation-history-error')).toContainText(
+			'History is temporarily unavailable'
+		);
+
+		const listAttemptsBeforeSend = harness.graphQLRequests()
+			.filter((request) => request.operationName === 'ListHostedGenesisConversations').length;
+		const message = 'Continue even though history is unavailable.';
+		await sendGenesisMessage(page, message);
+		await expect
+			.poll(() => harness.graphQLRequests()
+				.filter((request) => request.operationName === 'ListHostedGenesisConversations').length)
+			.toBeGreaterThan(listAttemptsBeforeSend);
+		expect(
+			harness.graphQLRequests()
+				.filter((request) => request.operationName === 'SendHostedSoulGenesisMessage')
+		).toHaveLength(1);
+		const sendInput = harness.graphQLRequests()
+			.find((request) => request.operationName === 'SendHostedSoulGenesisMessage')
+			?.variables.input;
+		expect(sendInput).toMatchObject({
+			username: project44SoulBootstrapIds.username,
+			conversationId: project44SoulBootstrapIds.conversationId,
+			registrationId: project44SoulBootstrapIds.registrationId,
+			message,
+		});
+		await expect(page.getByLabel('Message input')).toHaveValue('');
+		await expect(transcript).toContainText(
+			'I am a hosted Greater-compatible soul bootstrap relayed through Lesser same-origin GraphQL.'
+		);
+		await expect(page.getByTestId('genesis-conversation-status')).toContainText(
+			'Ready for next turn'
+		);
+		await expect(page.getByRole('alert')).toHaveCount(0);
+	});
+
+	test('fails closed and reconciles through Lesser after an ambiguous send failure', async ({
+		page,
+	}) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: 'hostedGenesisMessage',
+			rejectFirstHostedGenesisSend: true,
+		});
+
+		await page.goto('/l/souls/genesis');
+		const input = page.getByLabel('Message input');
+		const message = 'Retry this exact genesis turn without duplicating it.';
+		await input.fill(message);
+		await page.getByRole('button', { name: 'Send message' }).click();
+		await expect(input).toHaveValue('');
+		await expect(page.getByTestId('genesis-conversation-send-reconciliation')).toContainText(
+			'do not resend the turn'
+		);
+		await expect(page.getByTestId('genesis-conversation-status')).toContainText(
+			'Assistant responding'
+		);
+		await expect(page.getByLabel('Message input')).toBeDisabled();
+		await expect(page.getByTestId('genesis-conversation-transcript')).toContainText(message);
+		await expect(page.getByRole('alert')).toHaveCount(0);
+		const sends = harness.graphQLRequests()
+			.filter((request) => request.operationName === 'SendHostedSoulGenesisMessage');
+		expect(sends).toHaveLength(1);
+		expect((sends[0]?.variables.input as Record<string, unknown>).idempotencyKey)
+			.toEqual(expect.stringMatching(/^sim-genesis-send-/));
+		expect(
+			harness.graphQLRequests()
+				.filter((request) => request.operationName === 'SoulBootstrap').length
+		).toBeGreaterThan(1);
+
+		await page.reload();
+		await expect(page.getByTestId('genesis-conversation-send-reconciliation')).toContainText(
+			'do not resend the turn'
+		);
+		await expect(page.getByLabel('Message input')).toBeDisabled();
+		expect(
+			harness.graphQLRequests()
+				.filter((request) => request.operationName === 'SendHostedSoulGenesisMessage')
+		).toHaveLength(1);
+	});
+
+	test('clears a persisted send journal when reload state already proves progress', async ({
+		page,
+	}) => {
+		await installProject44Auth(page);
+		const storageKey = `simulacrum:genesis-operation:${encodeURIComponent(project44SoulBootstrapIds.username)}:send`;
+		await page.addInitScript(
+			({ key, registrationId }) => {
+				window.sessionStorage.setItem(key, JSON.stringify({
+					key: 'sim-genesis-send-persisted-reload',
+					fingerprint: 'persisted-reload-fixture',
+					baseline: {
+						remoteConversationId: null,
+						registrationId,
+						messageEvidence: '',
+					},
+				}));
+			},
+			{ key: storageKey, registrationId: project44SoulBootstrapIds.registrationId }
+		);
+		const harness = await installProject44Routes(page, {
+			initialSurface: 'hostedGenesisMessage',
+		});
+
+		await page.goto('/l/souls/genesis');
+		await expect(page.getByTestId('genesis-conversation-transcript')).toContainText(
+			'I am a hosted Greater-compatible soul bootstrap relayed through Lesser same-origin GraphQL.'
+		);
+		await expect(page.getByTestId('genesis-conversation-send-reconciliation')).toHaveCount(0);
+		await expect(page.getByLabel('Message input')).toBeEnabled();
+		expect(await page.evaluate((key) => window.sessionStorage.getItem(key), storageKey)).toBeNull();
+		expect(
+			harness.graphQLRequests()
+				.filter((request) => request.operationName === 'SendHostedSoulGenesisMessage')
+		).toEqual([]);
+	});
+
+	test('consumes Lesser REFRESH_STATE payload errors instead of retrying the hosted turn', async ({
+		page,
+	}) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			genesisStartSurface: createProject51HostedRegistrationActiveSurface(),
+			hostedGenesisSendReturnsRefreshError: true,
+		});
+
+		await page.goto('/l/souls/genesis');
+		await page.getByTestId('genesis-conversation-start-new').click();
+		const message = 'Begin the first hosted genesis turn once.';
+		await sendGenesisMessage(page, message);
+
+		await expect(page.getByTestId('genesis-conversation-send-reconciliation')).toContainText(
+			'do not resend the turn'
+		);
+		await expect(page.getByTestId('genesis-conversation-status')).toContainText(
+			'Assistant responding'
+		);
+		await expect(page.getByLabel('Message input')).toBeDisabled();
+		await expect(page.getByTestId('genesis-conversation-transcript')).toContainText(message);
+		await expect(page.getByRole('alert')).toHaveCount(0);
+		expect(
+			harness.graphQLRequests()
+				.filter((request) => request.operationName === 'SendHostedSoulGenesisMessage')
+		).toHaveLength(1);
+
+		await page.reload();
+		await expect(page.getByTestId('genesis-conversation-send-reconciliation')).toContainText(
+			'do not resend the turn'
+		);
+		await expect(page.getByLabel('Message input')).toBeDisabled();
+		expect(
+			harness.graphQLRequests()
+				.filter((request) => request.operationName === 'SendHostedSoulGenesisMessage')
+		).toHaveLength(1);
 	});
 
 	test('warns when Lesser returns a bounded or truncated transcript', async ({ page }) => {

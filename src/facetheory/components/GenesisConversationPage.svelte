@@ -67,6 +67,7 @@
 	let sending = $state(false);
 	let polling = $state(false);
 	let error = $state<string | null>(null);
+	let listError = $state<string | null>(null);
 	let notice = $state<string | null>(null);
 	let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -87,7 +88,9 @@
 	const conversationSelectionSupported = USE_MOCK_API;
 
 	const chatMessages = $derived((conversation?.messages ?? []).map(toChatMessage));
-	const activeConversationId = $derived(conversation?.id ?? null);
+	const activeConversationId = $derived(
+		conversation?.remoteConversationId ?? conversation?.id ?? null
+	);
 	const hasPendingAssistant = $derived(
 		(conversation?.messages ?? []).some(
 			(message) =>
@@ -107,7 +110,9 @@
 	const canRecover = $derived(Boolean(conversation && conversation.turnStatus === 'stuck'));
 	const canPoll = $derived(Boolean(conversation && (hasPendingAssistant || polling)));
 	const canSendMessage = $derived(Boolean(conversation?.canSendMessage));
-	const canStartConversation = $derived(Boolean(api && liveStateReady));
+	const canStartConversation = $derived(
+		Boolean(api && liveStateReady && (USE_MOCK_API || !conversation))
+	);
 	const transcriptTruncated = $derived(Boolean(
 		conversation?.messagesTruncated || conversation?.messages.some((message) => message.truncated)
 	));
@@ -299,6 +304,7 @@
 		sending = false;
 		polling = false;
 		error = null;
+		listError = null;
 		notice = null;
 		loading = false;
 		loadingList = false;
@@ -334,7 +340,13 @@
 			const next = await client.listConversations();
 			if (!isCurrentApi(client, generation)) return [];
 			conversations = next;
+			listError = null;
 			return next;
+		} catch (caught) {
+			if (!isCurrentApi(client, generation)) return [];
+			const detail = caught instanceof Error ? caught.message : 'Unknown history error.';
+			listError = `History is temporarily unavailable. ${detail}`;
+			return [];
 		} finally {
 			if (isCurrentApi(client, generation)) loadingList = false;
 		}
@@ -348,7 +360,6 @@
 		error = null;
 		notice = null;
 		try {
-			await refreshConversationList(client, generation);
 			const next = await client.loadActiveConversation();
 			if (!isCurrentApi(client, generation)) return;
 			conversation = next;
@@ -442,7 +453,7 @@
 		try {
 			if (!conversation) throw new Error('Start or choose a genesis conversation first.');
 			const next = await client.sendMessage({
-				conversationId: conversation.id,
+				conversationId: conversation.remoteConversationId,
 				content: trimmed,
 			});
 			if (!isCurrentApi(client, generation)) return;
@@ -466,7 +477,7 @@
 	async function pollForResponse() {
 		const client = api;
 		const generation = apiGeneration;
-		const conversationId = conversation?.id;
+		const conversationId = conversation?.remoteConversationId ?? conversation?.id;
 		if (!client || !conversationId) return;
 		polling = true;
 		error = null;
@@ -491,7 +502,7 @@
 	async function recoverStuckTurn() {
 		const client = api;
 		const generation = apiGeneration;
-		const conversationId = conversation?.id;
+		const conversationId = conversation?.remoteConversationId;
 		if (!client || !conversationId) return;
 		polling = true;
 		error = null;
@@ -553,6 +564,14 @@
 
 						{#if loadingList && conversations.length === 0}
 							<p class="genesis-conversation__list-empty">Loading saved conversations…</p>
+						{:else if listError}
+							<p
+								class="genesis-conversation__list-empty"
+								role="status"
+								data-testid="genesis-conversation-history-error"
+							>
+								{listError} The active conversation remains available.
+							</p>
 						{:else if conversations.length === 0}
 							<div class="genesis-conversation__list-empty" data-testid="genesis-conversation-list-empty">
 								<p>No saved genesis conversations yet.</p>
@@ -674,12 +693,17 @@
 								calls Host, AWS, or third-party endpoints from the browser.
 							</p>
 						{/if}
-							{#if conversation}
+							{#if conversation?.remoteConversationId}
 								<p>
-									Conversation <strong>{conversation.id}</strong>
+									Conversation <strong>{conversation.remoteConversationId}</strong>
 									{#if conversation.activeBodyId}
 										<span> · body {conversation.activeBodyId}</span>
 									{/if}
+								</p>
+							{:else if conversation?.registrationId}
+								<p data-testid="genesis-conversation-registration-ready">
+									Hosted registration <strong>{conversation.registrationId}</strong> is ready for the
+									first message.
 								</p>
 							{:else}
 								<p>Choose an existing conversation or start a new one.</p>
@@ -711,6 +735,16 @@
 								suggestions={STARTER_PROMPTS}
 								onSuggestionClick={handleSuggestion}
 							/>
+							{#if conversation.reconciliationPending}
+								<div
+									class="genesis-conversation__alert genesis-conversation__alert--warning"
+									role="status"
+									data-testid="genesis-conversation-send-reconciliation"
+								>
+									The last send outcome is ambiguous. Simulacrum is polling Lesser before it will
+									allow another message; do not resend the turn.
+								</div>
+							{/if}
 							{#if transcriptTruncated}
 								<div
 									class="genesis-conversation__alert genesis-conversation__alert--warning"

@@ -207,8 +207,12 @@ function buildMockResult(conversation, options = {}) {
 			state: options.state ?? 'hosted_genesis_started',
 			phase: 'CONVERSATION',
 			bootstrapMode: 'HOSTED',
-			hostRegistrationId: 'reg-test-001',
-			hostConversationId: conversation?.conversationId ?? 'conv-test-001',
+			hostRegistrationId: options.hostRegistrationId === undefined
+				? 'reg-test-001'
+				: options.hostRegistrationId,
+			hostConversationId: options.hostConversationId === undefined
+				? (conversation?.conversationId ?? 'conv-test-001')
+				: options.hostConversationId,
 			hostConversationStatus: status,
 			typedNextAction: options.typedNextAction ?? availableActions[0],
 			availableActions,
@@ -266,7 +270,7 @@ test('deriveTurnStatusFromHostedResult returns waiting for in_progress', () => {
 		new Date().toISOString()
 	);
 	const result = buildMockResult(conversation, {
-		availableActions: [],
+		availableActions: ['REFRESH_STATE', 'SEND_HOSTED_SOUL_GENESIS_MESSAGE'],
 		typedNextAction: 'REFRESH_STATE',
 	});
 	const status = deriveTurnStatusFromHostedResult(result, Date.now());
@@ -295,10 +299,46 @@ test('deriveTurnStatusFromHostedResult returns error for failed status', () => {
 	assert.equal(status, 'error');
 });
 
-test('mapHostedResultToGenesisRecord returns null when no conversation', () => {
-	const result = buildMockResult(null);
+test('mapHostedResultToGenesisRecord creates a first-message draft from hosted registration state', () => {
+	const result = buildMockResult(null, {
+		state: 'conversation.registration_active',
+		hostConversationId: null,
+	});
 	const record = mapHostedResultToGenesisRecord(result);
-	assert.equal(record, null);
+	assert.ok(record);
+	assert.equal(record.remoteConversationId, null);
+	assert.equal(record.registrationId, 'reg-test-001');
+	assert.equal(record.messages.length, 0);
+	assert.equal(record.turnStatus, 'ready');
+	assert.equal(record.canSendMessage, true);
+});
+
+test('mapHostedResultToGenesisRecord keeps a no-id REFRESH_STATE send outcome pending', () => {
+	const result = buildMockResult(null, {
+		state: 'error.host_unavailable',
+		hostConversationId: null,
+		availableActions: ['REFRESH_STATE'],
+		typedNextAction: 'REFRESH_STATE',
+		error: { message: 'Host may have accepted the turn.' },
+	});
+	const record = mapHostedResultToGenesisRecord(result);
+	assert.ok(record);
+	assert.equal(record.remoteConversationId, null);
+	assert.equal(record.turnStatus, 'waiting');
+	assert.equal(record.canSendMessage, false);
+	assert.equal(record.reconciliationPending, true);
+	assert.equal(record.messages.at(-1).status, 'streaming');
+});
+
+test('mapHostedResultToGenesisRecord returns null without a hosted registration or transcript', () => {
+	const result = buildMockResult(null, {
+		state: 'not_started',
+		hostRegistrationId: null,
+		hostConversationId: null,
+		availableActions: ['START_HOSTED_BOOTSTRAP'],
+		typedNextAction: 'START_HOSTED_BOOTSTRAP',
+	});
+	assert.equal(mapHostedResultToGenesisRecord(result), null);
 });
 
 test('mapHostedResultToGenesisRecord maps conversation with messages', () => {
@@ -314,6 +354,8 @@ test('mapHostedResultToGenesisRecord maps conversation with messages', () => {
 	const record = mapHostedResultToGenesisRecord(result);
 	assert.ok(record);
 	assert.equal(record.id, 'conv-test-001');
+	assert.equal(record.remoteConversationId, 'conv-test-001');
+	assert.equal(record.registrationId, 'reg-test-001');
 	assert.equal(record.activeBodyId, 'body-test-001');
 	assert.equal(record.activeDroneUsername, 'test-user');
 	assert.equal(record.turnStatus, 'ready');
