@@ -1,8 +1,11 @@
 import { expect, type Page } from '@playwright/test';
 
 import { GENESIS_CONVERSATION_STORAGE_KEY } from '../../src/lib/api/genesisConversation.ts';
+import { project44SoulBootstrapIds } from '../../src/lib/greater/adapters/fixtures/soul-bootstrap.ts';
 import { test } from './_harness/fixtures';
 import {
+	createProject51StuckHostedGenesisSurface,
+	createProject51TruncatedHostedGenesisSurface,
 	installProject44Auth,
 	installProject44Routes,
 } from './_harness/soulBootstrapMocks';
@@ -232,44 +235,16 @@ test.describe('Project 51 genesis conversation GraphQL API', () => {
 			initialSurface: 'hostedGenesisMessage',
 		});
 
-		// Add a handler for the new listHostedGenesisConversations query
-		// that the sidebar now sends (Lesser v1.5.12 + Greater v0.11.7).
-		// The existing installProject44Routes harness doesn't know about
-		// this operation yet, so we add a fallback route.
-		await page.route('**/api/graphql', async (route) => {
-			const body = route.request().postDataJSON() as { operationName?: string } | null;
-			if (body?.operationName === 'ListHostedGenesisConversations') {
-				await route.fulfill({
-					status: 200,
-					contentType: 'application/json',
-					body: JSON.stringify({
-						data: {
-							listHostedGenesisConversations: [
-								{
-									conversationId: 'conv-project-51-genesis',
-									registrationId: 'reg-project-51',
-									status: 'assistant_turn_ready',
-									messageCount: 2,
-									latestTurnId: 'turn-2',
-									createdAt: '2026-06-28T13:00:00Z',
-									updatedAt: '2026-06-28T13:01:00Z',
-								},
-							],
-						},
-					}),
-				});
-				return;
-			}
-			// Let the existing handler process all other operations.
-			await route.fallback();
-		});
-
 		await page.goto('/l/souls/genesis');
 		await expect(page.getByTestId('genesis-conversation-page')).toBeVisible();
 
 		// The sidebar list is now visible for the real GraphQL API
 		// (Lesser v1.5.12 exposes listHostedGenesisConversations).
 		await expect(page.getByTestId('genesis-conversation-list')).toBeVisible();
+		await expect(page.getByTestId('genesis-conversation-history-readonly')).toContainText(
+			'not load-by-id yet'
+		);
+		await expect(page.getByTestId('genesis-conversation-list-item')).toBeDisabled();
 
 		// The existing conversation from the GraphQL fixture loads automatically.
 		const transcript = page.getByTestId('genesis-conversation-transcript');
@@ -277,11 +252,179 @@ test.describe('Project 51 genesis conversation GraphQL API', () => {
 			'I am a hosted Greater-compatible soul bootstrap relayed through Lesser same-origin GraphQL.'
 		);
 
+		const longMessage = buildLongGenesisMessage();
+		await sendGenesisMessage(page, longMessage);
+		await expect
+			.poll(() => {
+				const request = harness
+					.graphQLRequests()
+					.find((candidate) => candidate.operationName === 'SendHostedSoulGenesisMessage');
+				const input = request?.variables.input;
+				return input && typeof input === 'object' && 'message' in input
+					? (input as { message?: unknown }).message
+					: null;
+			})
+			.toBe(longMessage);
+
 		// Verify all GraphQL requests went to same-origin /api/graphql.
 		const graphQLOperations = harness.graphQLRequests().map((request) => request.operationName);
 		expect(graphQLOperations).toContain('SoulBootstrap');
 		for (const request of harness.graphQLRequests()) {
 			expect(new URL(request.url).pathname).toBe('/api/graphql');
 		}
+	});
+
+	test('uses the selected drone username for hosted genesis GraphQL operations', async ({
+		page,
+	}) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: 'hostedGenesisMessage',
+			myAgents: 'multiple',
+		});
+
+		await page.goto('/l/souls/genesis');
+		const chooser = page.getByLabel('Drone body');
+		await expect(chooser).toBeVisible();
+		await chooser.selectOption('second-drone');
+		await expect(chooser).toHaveValue('second-drone');
+
+		await expect
+			.poll(() => harness.graphQLRequests()
+				.filter((request) => request.operationName === 'ListHostedGenesisConversations')
+				.at(-1)?.variables.username)
+			.toBe('second-drone');
+		await expect
+			.poll(() => harness.graphQLRequests()
+				.filter((request) => request.operationName === 'SoulBootstrap')
+				.at(-1)?.variables.username)
+			.toBe('second-drone');
+
+		await sendGenesisMessage(page, 'Use the selected drone for this genesis turn.');
+		await expect
+			.poll(() => {
+				const request = harness.graphQLRequests()
+					.filter((candidate) => candidate.operationName === 'SendHostedSoulGenesisMessage')
+					.at(-1);
+				const input = request?.variables.input;
+				return input && typeof input === 'object' && 'username' in input
+					? (input as { username?: unknown }).username
+					: null;
+			})
+			.toBe('second-drone');
+	});
+
+	test('requires a drone body before starting a hosted genesis conversation', async ({ page }) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, { myAgents: 'none' });
+
+		await page.goto('/l/souls/genesis');
+		await expect(page.getByTestId('genesis-conversation-no-agent')).toBeVisible();
+		await expect(page.getByTestId('genesis-conversation-go-to-drones')).toBeVisible();
+
+		const hostedGenesisOperations = new Set([
+			'ListHostedGenesisConversations',
+			'SoulBootstrap',
+			'StartHostedSoulBootstrap',
+			'SendHostedSoulGenesisMessage',
+			'RecoverHostedSoulGenesisTurn',
+		]);
+		expect(
+			harness.graphQLRequests()
+				.filter((request) => hostedGenesisOperations.has(request.operationName))
+		).toEqual([]);
+	});
+
+	test('starts genesis for the selected drone without fabricating capabilities', async ({ page }) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			genesisStartReturnsConversation: true,
+		});
+
+		await page.goto('/l/souls/genesis');
+		await expect(page.getByTestId('genesis-conversation-start-prompt')).toBeVisible();
+		await page.getByTestId('genesis-conversation-start-new').click();
+
+		await expect
+			.poll(() => harness.graphQLRequests()
+				.find((request) => request.operationName === 'StartHostedSoulBootstrap')
+				?.variables.input)
+			.toEqual({ username: project44SoulBootstrapIds.username });
+	});
+
+	test('recovers a stuck hosted assistant turn through Lesser GraphQL', async ({ page }) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: createProject51StuckHostedGenesisSurface(),
+		});
+
+		await page.goto('/l/souls/genesis');
+		await expect(page.getByTestId('genesis-conversation-recover')).toBeVisible();
+		await page.getByTestId('genesis-conversation-recover').click();
+
+		await expect
+			.poll(() => {
+				const request = harness.graphQLRequests()
+					.find((candidate) => candidate.operationName === 'RecoverHostedSoulGenesisTurn');
+				return request?.variables.input ?? null;
+			})
+			.toMatchObject({
+				username: project44SoulBootstrapIds.username,
+				conversationId: project44SoulBootstrapIds.conversationId,
+				registrationId: project44SoulBootstrapIds.registrationId,
+			});
+		const operationNames = harness.graphQLRequests().map((request) => request.operationName);
+		expect(operationNames).toContain('RecoverHostedSoulGenesisTurn');
+		expect(operationNames).not.toContain('SendHostedSoulGenesisMessage');
+		await expect(page.getByTestId('genesis-conversation-status')).toContainText(
+			'Ready for next turn'
+		);
+	});
+
+	test('disables compose when Lesser does not advertise a send action', async ({ page }) => {
+		await installProject44Auth(page);
+		await installProject44Routes(page, {
+			initialSurface: 'hostedGenesisComplete',
+		});
+
+		await page.goto('/l/souls/genesis');
+		await expect(page.getByTestId('genesis-conversation-transcript')).toBeVisible();
+		await expect(page.getByLabel('Message input')).toBeDisabled();
+	});
+
+	test('warns when Lesser returns a bounded or truncated transcript', async ({ page }) => {
+		await installProject44Auth(page);
+		await installProject44Routes(page, {
+			initialSurface: createProject51TruncatedHostedGenesisSurface(),
+		});
+
+		await page.goto('/l/souls/genesis');
+		await expect(page.getByTestId('genesis-conversation-transcript-truncated')).toContainText(
+			'bounded or truncated transcript'
+		);
+	});
+
+	test('clears the hosted transcript and agent API when the session signs out', async ({ page }) => {
+		await installProject44Auth(page);
+		const harness = await installProject44Routes(page, {
+			initialSurface: 'hostedGenesisMessage',
+		});
+
+		await page.goto('/l/souls/genesis');
+		const transcript = page.getByTestId('genesis-conversation-transcript');
+		const hostedMessage =
+			'I am a hosted Greater-compatible soul bootstrap relayed through Lesser same-origin GraphQL.';
+		await expect(transcript).toContainText(hostedMessage);
+		const requestCountBeforeLogout = harness.graphQLRequests().length;
+
+		await page.getByRole('button', { name: 'Sign out' }).click();
+		await expect(page.getByText('Agent-first shell is rendered without live auth')).toBeVisible();
+		await expect(transcript).not.toContainText(hostedMessage);
+		await expect(page.getByTestId('genesis-conversation-agent-chooser')).toHaveCount(0);
+		await expect(page.getByTestId('genesis-conversation-loading')).toContainText(
+			'Loading live drone state'
+		);
+		await page.waitForTimeout(100);
+		expect(harness.graphQLRequests()).toHaveLength(requestCountBeforeLogout);
 	});
 });

@@ -61,6 +61,7 @@ const OPERATION_RESPONSE_FIELD = {
 	FinalizeSoulBootstrap: 'finalizeSoulBootstrap',
 	StartHostedSoulBootstrap: 'startHostedSoulBootstrap',
 	SendHostedSoulGenesisMessage: 'sendHostedSoulGenesisMessage',
+	RecoverHostedSoulGenesisTurn: 'recoverHostedSoulGenesisTurn',
 	CompleteHostedSoulGenesis: 'completeHostedSoulGenesis',
 	PublishHostedSoul: 'publishHostedSoul',
 	RestartSoulBootstrap: 'restartSoulBootstrap',
@@ -77,6 +78,7 @@ const MUTATION_NEXT_SURFACE = {
 	FinalizeSoulBootstrap: 'finalizedHosted',
 	StartHostedSoulBootstrap: 'hostedStarted',
 	SendHostedSoulGenesisMessage: 'hostedGenesisMessage',
+	RecoverHostedSoulGenesisTurn: 'hostedGenesisMessage',
 	CompleteHostedSoulGenesis: 'hostedGenesisComplete',
 	PublishHostedSoul: 'hostedPublished',
 	RestartSoulBootstrap: 'hostedRestarted',
@@ -277,6 +279,77 @@ export function createProject49HostedGenesisSurface(label: string): SoulBootstra
 		throw new Error(`Unknown Project 49 hosted genesis fixture: ${label}`);
 	}
 	return fixture.surface;
+}
+
+export function createProject51StuckHostedGenesisSurface(): SoulBootstrapSurface {
+	const conversation = project44SoulBootstrapFixtures.hostedGenesisMessage.state
+		.hostedGenesisConversation;
+	if (!conversation) {
+		throw new Error('Project 51 stuck-genesis fixture requires a hosted conversation.');
+	}
+
+	const userMessages = conversation.messages
+		.filter((message) => message.role === 'USER')
+		.slice(0, 1);
+
+	return createProject44SoulBootstrapSurface({
+		phase: 'CONVERSATION',
+		state: 'conversation.in_progress',
+		hostConversationStatus: 'in_progress',
+		bootstrapMode: 'HOSTED',
+		authorityModel: 'INSTANCE_TRUST',
+		anchorState: 'HOSTED_OFFCHAIN',
+		assuranceState: 'HOSTED_OFFCHAIN',
+		typedNextAction: 'REFRESH_STATE',
+		availableActions: ['REFRESH_STATE'],
+		nextAction: 'refresh_state',
+		recoveryCategory: 'REFRESH_STATE',
+		recoveryAction: 'REFRESH_STATE',
+		hostRegistrationId: project44SoulBootstrapIds.registrationId,
+		hostConversationId: project44SoulBootstrapIds.conversationId,
+		hostedGenesisConversation: {
+			...conversation,
+			status: 'in_progress',
+			latestTurnId: userMessages.at(-1)?.id ?? null,
+			messageCount: userMessages.length,
+			messages: userMessages,
+			updatedAt: '2026-06-28T13:00:00Z',
+		},
+		walletAddress: null,
+		principalAddress: null,
+	});
+}
+
+export function createProject51TruncatedHostedGenesisSurface(): SoulBootstrapSurface {
+	const conversation = project44SoulBootstrapFixtures.hostedGenesisMessage.state
+		.hostedGenesisConversation;
+	if (!conversation) {
+		throw new Error('Project 51 truncated-genesis fixture requires a hosted conversation.');
+	}
+
+	return createProject44SoulBootstrapSurface({
+		phase: 'CONVERSATION',
+		state: 'hosted_genesis_message_recorded',
+		hostConversationStatus: 'assistant_turn_ready',
+		bootstrapMode: 'HOSTED',
+		authorityModel: 'INSTANCE_TRUST',
+		anchorState: 'HOSTED_OFFCHAIN',
+		assuranceState: 'HOSTED_OFFCHAIN',
+		typedNextAction: 'COMPLETE_HOSTED_SOUL_GENESIS',
+		availableActions: ['SEND_HOSTED_SOUL_GENESIS_MESSAGE', 'COMPLETE_HOSTED_SOUL_GENESIS'],
+		nextAction: 'complete_hosted_soul_genesis',
+		hostRegistrationId: project44SoulBootstrapIds.registrationId,
+		hostConversationId: project44SoulBootstrapIds.conversationId,
+		hostedGenesisConversation: {
+			...conversation,
+			messagesTruncated: true,
+			messages: conversation.messages.map((message, index) => (
+				index === 0 ? { ...message, truncated: true } : message
+			)),
+		},
+		walletAddress: null,
+		principalAddress: null,
+	});
 }
 
 export function createProject44HostedRefreshStateSurface({
@@ -810,6 +883,7 @@ export async function installProject44Routes(
 		initialSurface?: SoulBootstrapFixtureKey | SoulBootstrapSurface;
 		droneWorkflow?: 'none' | 'nullable-arrays';
 		myAgents?: 'fixture' | 'multiple' | 'none';
+		genesisStartReturnsConversation?: boolean;
 		rejectConversationMessageWithMissingRegistration?: boolean;
 		rejectHostedGenesisComplete?: boolean;
 		rejectPrincipalVerification?: boolean;
@@ -902,6 +976,25 @@ export async function installProject44Routes(
 					},
 				}));
 				return;
+			case 'ListHostedGenesisConversations': {
+				const conversation = currentSurface.state.hostedGenesisConversation;
+				await route.fulfill(jsonResponse({
+					data: {
+						listHostedGenesisConversations: conversation
+							? [{
+								conversationId: conversation.conversationId,
+								registrationId: conversation.registrationId,
+								status: conversation.status,
+								messageCount: conversation.messageCount,
+								latestTurnId: conversation.latestTurnId,
+								createdAt: conversation.messages.at(0)?.createdAt ?? conversation.updatedAt,
+								updatedAt: conversation.updatedAt,
+							}]
+							: [],
+					},
+				}));
+				return;
+			}
 			case 'SoulBootstrap':
 				await route.fulfill(jsonResponse({ data: { soulBootstrap: currentSurface } }));
 				return;
@@ -919,13 +1012,24 @@ export async function installProject44Routes(
 			case 'CompleteSoulBootstrapConversation':
 			case 'PrepareSoulBootstrapFinalize':
 			case 'FinalizeSoulBootstrap':
-			case 'StartHostedSoulBootstrap':
+			case 'RecoverHostedSoulGenesisTurn':
 			case 'PublishHostedSoul':
 			case 'RestartSoulBootstrap': {
 				currentSurface = resolveProject44Surface(MUTATION_NEXT_SURFACE[operationName]);
 				await route.fulfill(jsonResponse({
 					data: {
 						[OPERATION_RESPONSE_FIELD[operationName]]: payloadForSurface(currentSurface),
+					},
+				}));
+				return;
+			}
+			case 'StartHostedSoulBootstrap': {
+				currentSurface = resolveProject44Surface(
+					options.genesisStartReturnsConversation ? 'hostedGenesisMessage' : 'hostedStarted'
+				);
+				await route.fulfill(jsonResponse({
+					data: {
+						startHostedSoulBootstrap: payloadForSurface(currentSurface),
 					},
 				}));
 				return;

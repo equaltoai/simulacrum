@@ -241,6 +241,15 @@ test('mapHostedGenesisMessage falls back to epoch when createdAt is null', () =>
 	assert.equal(mapped.createdAt, new Date(0).toISOString());
 });
 
+test('mapHostedGenesisMessage preserves Lesser truncation evidence', () => {
+	const message = {
+		...buildMockMessage('ASSISTANT', 'Bounded response', 1),
+		truncated: true,
+	};
+	const mapped = mapHostedGenesisMessage(message);
+	assert.equal(mapped.truncated, true);
+});
+
 test('deriveTurnStatusFromHostedResult returns ready when SEND is available', () => {
 	const conversation = buildMockConversation([], 'assistant_turn_ready');
 	const result = buildMockResult(conversation, {
@@ -312,6 +321,29 @@ test('mapHostedResultToGenesisRecord maps conversation with messages', () => {
 	assert.equal(record.messages[0].role, 'user');
 	assert.equal(record.messages[1].role, 'assistant');
 	assert.equal(record.pendingAssistantMessageId, null);
+	assert.equal(record.canSendMessage, true);
+	assert.equal(record.messagesTruncated, false);
+});
+
+test('mapHostedResultToGenesisRecord preserves transcript bounds and typed send permission', () => {
+	const messages = [{
+		...buildMockMessage('ASSISTANT', 'Truncated declaration context', 1),
+		truncated: true,
+	}];
+	const conversation = {
+		...buildMockConversation(messages, 'declaration_ready'),
+		messagesTruncated: true,
+	};
+	const result = buildMockResult(conversation, {
+		availableActions: ['PUBLISH_HOSTED_SOUL'],
+		typedNextAction: 'PUBLISH_HOSTED_SOUL',
+	});
+
+	const record = mapHostedResultToGenesisRecord(result);
+	assert.ok(record);
+	assert.equal(record.messagesTruncated, true);
+	assert.equal(record.messages[0].truncated, true);
+	assert.equal(record.canSendMessage, false);
 });
 
 test('mapHostedResultToGenesisRecord adds synthetic assistant message when waiting', () => {

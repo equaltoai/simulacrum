@@ -31,6 +31,7 @@ export interface GenesisConversationMessage {
 	content: string;
 	createdAt: string;
 	status: GenesisConversationMessageStatus;
+	truncated?: boolean;
 	error?: string;
 	moments?: readonly GenesisConversationMessageMoment[];
 	workflowMetadata?: readonly GenesisConversationWorkflowMetadata[];
@@ -42,7 +43,9 @@ export interface GenesisConversationRecord {
 	activeDroneUsername: string | null;
 	title: string;
 	messages: readonly GenesisConversationMessage[];
+	messagesTruncated: boolean;
 	turnStatus: GenesisConversationTurnStatus;
+	canSendMessage: boolean;
 	pendingAssistantMessageId: string | null;
 	createdAt: string;
 	updatedAt: string;
@@ -137,7 +140,9 @@ function cloneConversation(conversation: StoredGenesisConversation): GenesisConv
 				? message.workflowMetadata.map((metadata) => ({ ...metadata }))
 				: undefined,
 		})),
+		messagesTruncated: conversation.messagesTruncated ?? false,
 		turnStatus: conversation.turnStatus,
+		canSendMessage: conversation.canSendMessage ?? conversation.turnStatus === 'ready',
 		pendingAssistantMessageId: conversation.pendingAssistantMessageId,
 		createdAt: conversation.createdAt,
 		updatedAt: conversation.updatedAt,
@@ -307,6 +312,7 @@ function completePendingTurn(conversation: StoredGenesisConversation, nowMs: num
 	const assistant = conversation.messages.find((message) => message.id === pending.assistantMessageId);
 	if (!assistant) {
 		conversation.turnStatus = 'error';
+		conversation.canSendMessage = false;
 		conversation.pendingAssistantMessageId = null;
 		conversation.pendingTurn = null;
 		conversation.updatedAt = iso(nowMs);
@@ -318,6 +324,7 @@ function completePendingTurn(conversation: StoredGenesisConversation, nowMs: num
 	assistant.moments = assistantMomentsFor(pending);
 	assistant.workflowMetadata = assistantMetadataFor(pending);
 	conversation.turnStatus = 'ready';
+	conversation.canSendMessage = true;
 	conversation.pendingAssistantMessageId = null;
 	conversation.pendingTurn = null;
 	conversation.updatedAt = iso(nowMs);
@@ -370,7 +377,9 @@ export function createGenesisConversationMockApi({
 						status: 'complete',
 					},
 				],
+				messagesTruncated: false,
 				turnStatus: 'ready',
+				canSendMessage: true,
 				pendingAssistantMessageId: null,
 				pendingTurn: null,
 				createdAt,
@@ -462,6 +471,7 @@ export function createGenesisConversationMockApi({
 			};
 			conversation.pendingAssistantMessageId = assistantMessageId;
 			conversation.turnStatus = shouldStick ? 'stuck' : 'waiting';
+			conversation.canSendMessage = false;
 			conversation.updatedAt = createdAt;
 			state.activeConversationId = conversation.id;
 			write(state);
@@ -493,6 +503,7 @@ export function createGenesisConversationMockApi({
 				assistant.status = 'streaming';
 			}
 			conversation.turnStatus = 'waiting';
+			conversation.canSendMessage = false;
 			conversation.updatedAt = iso(nowMs);
 			write(state);
 			return cloneConversation(conversation);
@@ -549,6 +560,7 @@ export function mapHostedGenesisMessage(
 		content: message.content,
 		createdAt: message.createdAt ?? new Date(0).toISOString(),
 		status: 'complete',
+		truncated: message.truncated,
 	};
 }
 
@@ -652,7 +664,9 @@ export function mapHostedResultToGenesisRecord(
 		activeDroneUsername: state.username ?? null,
 		title,
 		messages,
+		messagesTruncated: conversation.messagesTruncated,
 		turnStatus,
+		canSendMessage: result.availableActions.includes('SEND_HOSTED_SOUL_GENESIS_MESSAGE'),
 		pendingAssistantMessageId,
 		createdAt: timestamp,
 		updatedAt: timestamp,
@@ -775,13 +789,10 @@ export function createGenesisConversationGraphQLApi(
 	}
 
 	return {
-		async startConversation(input: StartGenesisConversationInput = {}) {
+		async startConversation() {
 			const client = await createClient();
 			const startInput: StartHostedSoulBootstrapInput = {
 				username,
-				capabilities: input.activeDroneUsername
-					? [`drone:${input.activeDroneUsername}`]
-					: undefined,
 			};
 			const mutationResult = await client.startHostedSoulBootstrap(startInput);
 			checkBackendError(mutationResult);

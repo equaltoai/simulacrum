@@ -127,25 +127,35 @@ test.describe('Project 51 hosted genesis conversation lane', () => {
 		await expectNoHostCredentialStorage(page);
 	});
 
-	test('Open Genesis Lane route /l/souls/genesis is not a dead route and renders the hosted lane', async ({
+	test('Open Genesis Lane route /l/souls/genesis renders the canonical GraphQL conversation page', async ({
 		page,
 	}) => {
 		const captured = captureRequests(page);
 		await installProject44Auth(page);
-		await installProject44Routes(page, {
-			initialSurface: createProject49HostedGenesisSurface('in_progress'),
+		const harness = await installProject44Routes(page, {
+			initialSurface: 'hostedGenesisMessage',
 		});
 
 		await page.goto('/l/souls/genesis');
 
-		// The advertised /souls/genesis surface exists (not the not-found surface) and renders the
-		// hosted genesis lane with the active conversation visible.
+		// The advertised route exists and renders the dedicated conversation workspace. The older
+		// embedded identity-panel lane remains covered above, but is not the canonical route surface.
 		await expect(page.getByRole('heading', { name: 'Surface Not Found' })).toHaveCount(0);
-		await expect(page.getByTestId('hosted-genesis-lane')).toBeVisible();
-		await expect(page.getByTestId('hosted-genesis-conversation-id')).toContainText(
-			project44SoulBootstrapIds.conversationId
+		await expect(page.getByTestId('genesis-conversation-page')).toBeVisible();
+		await expect(page.getByTestId('genesis-conversation-contract')).toContainText(
+			'Hosted genesis conversation through Lesser same-origin GraphQL'
 		);
-		await expect(page.getByTestId('hosted-genesis-waiting')).toBeVisible();
+		await expect(page.getByTestId('genesis-conversation-transcript')).toContainText(
+			'I am a hosted Greater-compatible soul bootstrap relayed through Lesser same-origin GraphQL.'
+		);
+		await expect(page.getByTestId('hosted-genesis-lane')).toHaveCount(0);
+
+		const operations = harness.graphQLRequests().map((request) => request.operationName);
+		expect(operations).toContain('ListHostedGenesisConversations');
+		expect(operations).toContain('SoulBootstrap');
+		for (const request of harness.graphQLRequests()) {
+			expect(new URL(request.url).pathname).toBe('/api/graphql');
+		}
 
 		expectNoRawHostRequests(captured);
 		await expectNoHostCredentialPrompt(page);
