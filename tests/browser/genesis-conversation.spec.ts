@@ -656,6 +656,10 @@ test.describe('Project 51 genesis conversation GraphQL API', () => {
 		const hostedMessage =
 			'I am a hosted Greater-compatible soul bootstrap relayed through Lesser same-origin GraphQL.';
 		await expect(transcript).toContainText(hostedMessage);
+		await expect
+			.poll(() => harness.graphQLRequests()
+				.filter((request) => request.operationName === 'ListHostedGenesisConversations').length)
+			.toBeGreaterThan(0);
 		const requestCountBeforeLogout = harness.graphQLRequests().length;
 
 		await page.getByRole('button', { name: 'Sign out' }).click();
