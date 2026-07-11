@@ -9,7 +9,7 @@ on:
       targets:
         description: Comma-separated live base URLs to smoke
         required: false
-        default: https://dev.simulacrum.greater.website,https://dev.theory.greater.website
+        default: https://dev.simulacrum.greater.website,https://dev.pan.greater.website,https://dev.theory.greater.website
       live_status_id:
         description: Optional fixed status id for the live status route scenario
         required: false

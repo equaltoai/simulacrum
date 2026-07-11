@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 
 const DEFAULT_TARGETS = [
 	'https://dev.simulacrum.greater.website',
+	'https://dev.pan.greater.website',
 	'https://dev.theory.greater.website',
 ];
 const MAX_RETRIES = 1;

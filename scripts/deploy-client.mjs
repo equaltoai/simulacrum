@@ -14,6 +14,14 @@ const TARGETS = {
 			staging: 'Sim',
 		},
 	},
+	pan: {
+		app: 'pan',
+		baseDomain: 'pan.greater.website',
+		displayName: 'Pan',
+		profiles: {
+			dev: 'Pan',
+		},
+	},
 	theory: {
 		app: 'theory',
 		baseDomain: 'theory.greater.website',
@@ -23,37 +31,51 @@ const TARGETS = {
 			staging: 'Theory',
 			live: 'TheoryLive',
 		},
-		managedState: {
-			live: {
-				hostProfile: 'Lesser',
-				hostRegion: 'us-east-1',
-				hostStack: 'lesser-host-live',
-				localStatePath: './.deploy/lesser-state/theory-live-state.json',
-			},
-		},
 	},
 };
 
 const VALID_STAGES = new Set(['dev', 'staging', 'live']);
 const VERIFY_PATHS = ['/l/', '/l/identity', '/auth/login'];
 
+const DEFAULT_MANAGED_HOST_RECEIPTS = {
+	dev: {
+		hostProfile: 'Lesser',
+		hostRegion: 'us-east-1',
+		hostStack: 'lesser-host-lab',
+	},
+	staging: {
+		hostProfile: 'Lesser',
+		hostRegion: 'us-east-1',
+		hostStack: 'lesser-host-lab',
+	},
+	live: {
+		hostProfile: 'Lesser',
+		hostRegion: 'us-east-1',
+		hostStack: 'lesser-host-live',
+	},
+};
+
 function usage() {
 	return [
 		'Usage:',
-		'  pnpm run deploy -- --target <simulacrum|theory|all> --stage <dev|staging|live> [options]',
+		'  pnpm run deploy -- --target <simulacrum|pan|theory|all> --stage <dev|staging|live> [options]',
 		'',
 		'Common commands:',
 		'  pnpm deploy:dev',
-		'  pnpm run deploy -- --target theory --stage dev',
+		'  pnpm run deploy -- --target pan --stage dev',
 		'  pnpm deploy:theory:live',
 		'',
 		'Options:',
-		'  --target <name>       Install target. Defaults to all for dev/staging.',
+		'  --target <name>       Install target. Defaults to all configured targets for dev/staging.',
 		'  --stage <stage>       Install stage. Defaults to dev.',
 		'  --aws-profile <name>  Override AWS profile for a single target.',
 		'  --state <path>        Override Lesser deployment receipt path for a single target.',
 		'  --managed-host-profile <name>',
-		'                        Override lesser-host AWS profile for managed live receipt lookup.',
+		'                        Override Lesser Host AWS profile for managed receipt lookup.',
+		'  --managed-host-region <region>',
+		'                        Override Lesser Host AWS region for managed receipt lookup.',
+		'  --managed-host-stack <name>',
+		'                        Override Lesser Host stack name for managed receipt lookup.',
 		'  --lesser <path>       Lesser binary path. Defaults to ~/.local/bin/lesser, then PATH.',
 		'  --dry-run             Print commands without installing; managed receipt lookup is read-only.',
 		'  --skip-install        Skip pnpm install --frozen-lockfile.',
@@ -103,7 +125,7 @@ function resolveTargets(targetName, stage) {
 		if (stage === 'live') {
 			throw new Error('Live deploys require an explicit single --target; refusing --target all.');
 		}
-		return Object.values(TARGETS);
+		return Object.values(TARGETS).filter((target) => target.profiles[stage]);
 	}
 	const target = TARGETS[targetName];
 	if (!target) {
@@ -125,6 +147,30 @@ async function defaultLesserBinary() {
 	const local = path.join(process.env.HOME ?? '', '.local/bin/lesser');
 	if (process.env.HOME && (await existsExecutable(local))) return local;
 	return 'lesser';
+}
+
+async function existsReadable(file) {
+	try {
+		await access(file, constants.R_OK);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function displayPath(file) {
+	const home = process.env.HOME;
+	if (home && file.startsWith(`${home}/`)) return `~/${file.slice(home.length + 1)}`;
+	return file;
+}
+
+function defaultLesserStatePath(target) {
+	if (!process.env.HOME) return null;
+	return path.join(process.env.HOME, '.lesser', target.app, target.baseDomain, 'state.json');
+}
+
+function managedReceiptLocalStatePath(target, stage) {
+	return `./.deploy/lesser-state/${target.app}-${stage}-state.json`;
 }
 
 function run(command, args, { dryRun = false } = {}) {
@@ -260,16 +306,30 @@ function validateManagedReceipt(receipt, target, stage) {
 }
 
 async function resolveManagedStatePath(target, stage, options) {
-	const managed = target.managedState?.[stage];
-	if (!managed) return null;
+	const defaults = DEFAULT_MANAGED_HOST_RECEIPTS[stage];
+	if (!defaults) return null;
 
-	const hostProfile = options.managedHostProfileOverride ?? managed.hostProfile;
-	const hostRegion = managed.hostRegion;
-	const hostStack = managed.hostStack;
-	const localStatePath = managed.localStatePath;
+	const managed = target.managedState?.[stage] ?? {};
+	const hostProfile =
+		options.managedHostProfileOverride ??
+		managed.hostProfile ??
+		process.env.SIM_LESSER_HOST_PROFILE ??
+		defaults.hostProfile;
+	const hostRegion =
+		options.managedHostRegionOverride ??
+		managed.hostRegion ??
+		process.env.SIM_LESSER_HOST_REGION ??
+		defaults.hostRegion;
+	const hostStack =
+		options.managedHostStackOverride ??
+		managed.hostStack ??
+		process.env[`SIM_LESSER_HOST_STACK_${stage.toUpperCase()}`] ??
+		process.env.SIM_LESSER_HOST_STACK ??
+		defaults.hostStack;
+	const localStatePath = managed.localStatePath ?? managedReceiptLocalStatePath(target, stage);
 
 	console.log(
-		`deploy-client: ${target.app} ${stage} uses lesser-host managed receipt state from ${hostStack} (${hostProfile})`,
+		`deploy-client: ${target.app} ${stage} uses Lesser Host managed receipt state from ${hostStack} (${hostProfile})`,
 	);
 
 	const stackJSON = await runCapture(
@@ -365,6 +425,31 @@ async function resolveManagedStatePath(target, stage, options) {
 	return localStatePath;
 }
 
+async function resolveDeploymentStatePath(target, stage, options) {
+	if (options.statePathOverride) return options.statePathOverride;
+
+	const localStatePath = defaultLesserStatePath(target);
+	if (stage !== 'live' && localStatePath && (await existsReadable(localStatePath))) {
+		console.log(`deploy-client: using local Lesser receipt ${displayPath(localStatePath)}`);
+		return localStatePath;
+	}
+
+	if (localStatePath && stage !== 'live') {
+		console.log(
+			`deploy-client: local Lesser receipt ${displayPath(localStatePath)} not found; resolving managed receipt from Lesser Host`,
+		);
+	} else if (stage === 'live') {
+		console.log('deploy-client: live deploys resolve managed receipt state from Lesser Host by default.');
+	}
+
+	const managedStatePath = await resolveManagedStatePath(target, stage, options);
+	if (managedStatePath) return managedStatePath;
+
+	throw new Error(
+		`No deployment receipt available for ${target.app} ${stage}: local state was missing and no managed Lesser Host receipt mapping exists.`,
+	);
+}
+
 async function assertBuildArtifacts({ dryRun }) {
 	const required = [
 		'build/server/handler.mjs',
@@ -402,9 +487,8 @@ async function main() {
 		throw new Error('--state override is only allowed with a single --target.');
 	}
 	const managedHostProfileOverride = readArgValue(args, '--managed-host-profile');
-	if (managedHostProfileOverride && targets.length !== 1) {
-		throw new Error('--managed-host-profile override is only allowed with a single --target.');
-	}
+	const managedHostRegionOverride = readArgValue(args, '--managed-host-region');
+	const managedHostStackOverride = readArgValue(args, '--managed-host-stack');
 
 	const dryRun = hasFlag(args, '--dry-run');
 	const skipInstall = hasFlag(args, '--skip-install');
@@ -433,12 +517,13 @@ async function main() {
 
 		const manifest = `./facetheory.${target.app}.lesser.json`;
 		const origin = stageOrigin(stage, target.baseDomain);
-		const statePath =
-			statePathOverride ??
-			(await resolveManagedStatePath(target, stage, {
-				dryRun,
-				managedHostProfileOverride,
-			}));
+		const statePath = await resolveDeploymentStatePath(target, stage, {
+			statePathOverride,
+			dryRun,
+			managedHostProfileOverride,
+			managedHostRegionOverride,
+			managedHostStackOverride,
+		});
 		if (stage === 'live' && origin.includes('://dev.')) {
 			throw new Error(`Refusing live verification against dev domain: ${origin}`);
 		}

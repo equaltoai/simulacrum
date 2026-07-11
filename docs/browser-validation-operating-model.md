@@ -60,7 +60,7 @@ Commands:
 
 ```bash
 pnpm browser:test:live
-pnpm browser:test:live https://dev.simulacrum.greater.website https://dev.theory.greater.website
+pnpm browser:test:live https://dev.simulacrum.greater.website https://dev.pan.greater.website https://dev.theory.greater.website
 ```
 
 Live smoke is intentionally coarse. It should prove:

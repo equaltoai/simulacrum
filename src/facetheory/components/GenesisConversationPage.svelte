@@ -669,7 +669,6 @@
 							bind:value={draft}
 							onSend={handleSend}
 							disabled={loading || sending || hasPendingAssistant || !conversation}
-							maxLength={1200}
 							placeholder="Type a genesis message…"
 						/>
 					</Chat.Container>

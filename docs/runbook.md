@@ -1,10 +1,10 @@
 # Simulacrum Client Deploy Runbook
 
 This runbook covers building and deploying the current FaceTheory app served at
-`/l/*` to Lesser-owned stages. Today the steward-validated canary targets are
-still the dev-stage instances:
+`/l/*` to Lesser-owned stages. Today the documented dev-stage targets are:
 
 - `simulacrum` at `https://dev.simulacrum.greater.website/l/`
+- `pan` at `https://dev.pan.greater.website/l/`
 - `theory` at `https://dev.theory.greater.website/l/`
 
 The operator-authorized Theory live stage uses the base domain
@@ -30,19 +30,21 @@ The old static upload path is retired:
 
 ## Prereqs
 
-- AWS access for the target instance profile
-- AWS access to the live `lesser-host` profile when deploying a host-managed
-  live instance
+- AWS access to the Lesser instance profile for the target stage
+- AWS access to the `Lesser` profile for Lesser Host managed receipt lookup
+  when the local Lesser receipt is absent or when deploying a host-managed live
+  instance
 - `node >= 24`
 - `pnpm`
 - `curl`
 
 Current dev-stage targets:
 
-| app slug | base domain | stage URL | AWS profile | local receipt |
+| app slug | base domain | stage URL | AWS profile | receipt source |
 | --- | --- | --- | --- | --- |
-| `simulacrum` | `simulacrum.greater.website` | `https://dev.simulacrum.greater.website` | `Sim` | `~/.lesser/simulacrum/simulacrum.greater.website/state.json` |
-| `theory` | `theory.greater.website` | `https://dev.theory.greater.website` | `Theory` | `~/.lesser/theory/theory.greater.website/state.json` |
+| `simulacrum` | `simulacrum.greater.website` | `https://dev.simulacrum.greater.website` | `Sim` | local `~/.lesser/.../state.json` if present; otherwise `lesser-host-lab` via `Lesser` |
+| `pan` | `pan.greater.website` | `https://dev.pan.greater.website` | `Pan` | local `~/.lesser/.../state.json` if present; otherwise `lesser-host-lab` via `Lesser` |
+| `theory` | `theory.greater.website` | `https://dev.theory.greater.website` | `Theory` | local `~/.lesser/.../state.json` if present; otherwise `lesser-host-lab` via `Lesser` |
 
 Current principal-authorized live target:
 
@@ -57,12 +59,19 @@ Stage URL rule:
 - `live` -> `https://<base-domain>`; live deploys do **not** get `dev.*`
   domains
 
-For dev-stage targets, the local `~/.lesser/.../state.json` receipt is used.
-For Theory live, do **not** use the stale dev receipt under `~/.lesser/theory`.
-The wrapper resolves the canonical non-secret live receipt from the
-`lesser-host-live` control plane, writes it to the gitignored workspace-local
-state path `./.deploy/lesser-state/theory-live-state.json`, and passes that
-path to `lesser client install --state`.
+For dev and staging targets, the wrapper first uses the local
+`~/.lesser/<app>/<base-domain>/state.json` receipt when it exists. If that
+receipt is absent because the instance was provisioned directly by Lesser Host,
+the wrapper resolves the canonical non-secret managed Lesser receipt from the
+`lesser-host-lab` control plane using AWS profile `Lesser`, writes it to the
+gitignored workspace-local state path
+`./.deploy/lesser-state/<app>-<stage>-state.json`, and passes that path to
+`lesser client install --state`.
+
+For live targets, do **not** use stale dev receipts under `~/.lesser/...`. The
+wrapper resolves the canonical non-secret live receipt from the
+`lesser-host-live` control plane and uses the same workspace-local state path
+pattern.
 
 ## Obtain a current `lesser` binary
 
@@ -138,7 +147,7 @@ Expected artifacts:
 The repo provides an operator wrapper around the manual runbook steps:
 
 ```bash
-pnpm run deploy -- --target <simulacrum|theory|all> --stage <dev|staging|live>
+pnpm run deploy -- --target <simulacrum|pan|theory|all> --stage <dev|staging|live>
 ```
 
 The wrapper runs, in order:
@@ -150,21 +159,23 @@ The wrapper runs, in order:
 5. `lesser client install --skip-build`
 6. curl verification for `/l/`, `/l/identity`, and `/auth/login`
 
-For `theory` live, step 5 uses the host-managed live receipt from
-`lesser-host-live` instead of `~/.lesser/theory/theory.greater.website/state.json`.
-The wrapper looks up the live instance in the `Lesser` AWS profile, downloads
-the current managed receipt from the host artifact bucket, validates that it
-contains only the `live` stage for `theory.greater.website`, and writes the
-local state file inside this workspace at `./.deploy/lesser-state/`.
+For host-managed instances, step 5 uses the managed Lesser receipt from Lesser
+Host when the local receipt is absent. The wrapper looks up the instance in the
+`Lesser` AWS profile (`lesser-host-lab` for dev/staging, `lesser-host-live` for
+live), downloads the current managed receipt from the host artifact bucket,
+validates the app slug, base domain, stage, and client-install stack outputs,
+and writes the local state file inside this workspace at
+`./.deploy/lesser-state/`.
 
 Common commands:
 
 ```bash
-# Canary both documented dev targets.
+# Canary all documented dev targets.
 pnpm deploy:dev
 
 # Deploy only one dev target.
 pnpm deploy:simulacrum:dev
+pnpm deploy:pan:dev
 pnpm deploy:theory:dev
 
 # Principal-authorized Theory live-stage deploy.
@@ -173,10 +184,11 @@ pnpm deploy:theory:live
 ```
 
 Use `--dry-run` to print the exact install commands without installing. For
-managed live deploys, dry-run still performs read-only `lesser-host` receipt
+managed receipt deploys, dry-run still performs read-only Lesser Host receipt
 lookup so the displayed `--state` input is grounded in the current host state:
 
 ```bash
+pnpm run deploy -- --target pan --stage dev --dry-run
 pnpm run deploy -- --target theory --stage live --dry-run
 ```
 
@@ -198,6 +210,15 @@ node scripts/render-install-manifest.mjs \
   --app simulacrum \
   --display-name Simulacrum \
   --out ./facetheory.simulacrum.lesser.json
+```
+
+Pan dev:
+
+```bash
+node scripts/render-install-manifest.mjs \
+  --app pan \
+  --display-name Pan \
+  --out ./facetheory.pan.lesser.json
 ```
 
 Theory dev:
@@ -222,10 +243,13 @@ for the `simulacrum` instance if you do not need a separate output file.
 
 ## Manual deploy commands
 
-The single-command wrapper above is preferred for routine operator deploys. If
-you need to run the underlying commands by hand and you just ran `pnpm build`,
-use `--skip-build` so the CLI installs the artifacts you already validated
-locally.
+The single-command wrapper above is preferred for routine operator deploys,
+especially for host-managed targets whose local `~/.lesser/.../state.json`
+receipt is absent. If you need to run the underlying commands by hand and you
+just ran `pnpm build`, use `--skip-build` so the CLI installs the artifacts you
+already validated locally. For host-managed targets, first resolve/write the
+managed receipt to `./.deploy/lesser-state/<app>-<stage>-state.json` or use the
+wrapper instead.
 
 ### Dev stages
 
@@ -239,6 +263,20 @@ Simulacrum dev:
   --stage dev \
   --config ./facetheory.lesser.json \
   --skip-build
+```
+
+Pan dev, after the managed receipt has been resolved into
+`./.deploy/lesser-state/pan-dev-state.json`:
+
+```bash
+"$HOME/.local/bin/lesser" client install \
+  --app pan \
+  --base-domain pan.greater.website \
+  --aws-profile Pan \
+  --stage dev \
+  --config ./facetheory.pan.lesser.json \
+  --skip-build \
+  --state ./.deploy/lesser-state/pan-dev-state.json
 ```
 
 Theory dev:
@@ -262,7 +300,8 @@ What this does:
 - writes a new immutable install manifest under `installs/<install-id>/`
 - flips `install/current.json` to the new manifest
 - invalidates CloudFront for `/l` and `/l/*`
-- updates the local Lesser receipt with the active `client_install`
+- updates the Lesser receipt passed to the install command with the active
+  `client_install`
 
 ## Verify
 
@@ -274,6 +313,14 @@ Simulacrum dev:
 curl -i -sS https://dev.simulacrum.greater.website/l/ | sed -n '1,40p'
 curl -i -sS https://dev.simulacrum.greater.website/l/identity | sed -n '1,40p'
 curl -i -sS https://dev.simulacrum.greater.website/auth/login | sed -n '1,40p'
+```
+
+Pan dev:
+
+```bash
+curl -i -sS https://dev.pan.greater.website/l/ | sed -n '1,40p'
+curl -i -sS https://dev.pan.greater.website/l/identity | sed -n '1,40p'
+curl -i -sS https://dev.pan.greater.website/auth/login | sed -n '1,40p'
 ```
 
 Theory dev:
@@ -377,12 +424,20 @@ The browser-suite operating guide and API-boundary notes live in:
 
 - [`docs/browser-validation-operating-model.md`](./browser-validation-operating-model.md)
 
-Confirm the active install recorded in the local receipt:
+Confirm the active install recorded in the receipt used by the wrapper. Local
+receipts live under `~/.lesser/...`; host-managed fallback receipts live under
+`./.deploy/lesser-state/`.
 
 Simulacrum dev:
 
 ```bash
 sed -n '1,220p' ~/.lesser/simulacrum/simulacrum.greater.website/state.json
+```
+
+Pan dev when resolved from Lesser Host:
+
+```bash
+sed -n '1,220p' ./.deploy/lesser-state/pan-dev-state.json
 ```
 
 Theory dev:

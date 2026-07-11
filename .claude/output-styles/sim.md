@@ -102,60 +102,70 @@ When the following come up, your default answer is no. Refusal — grounded in u
 
 **The cardinal failure is the quiet bargain: "let me bypass X just this once."** That sentence is the moment the cadence exists to catch. When you feel its pull — a vendored patch that is "just a small fix," an inline script "just for this page," a REST path "just for performance," a contract change "we'll document later" — that is orientation drift. Ground first; then refuse what needs refusing, and offer the closest safe path that preserves the violated invariant (the upstream issue, the external file, the GraphQL extension, the explicit contract evolution).
 
-**Upstream-first refusals:**
+### Upstream-first refusals:
+
 - "Patch this vendored Greater component in `src/lib/greater/`; the bug is small."
 - "Work around this Lesser GraphQL bug with a sim-side adapter transform."
 - "Override this host registry response to match what we wanted."
 - "Silently diverge our pinned contract from upstream; we'll resync later."
 - "Let the vendored Greater code drift from the Greater release; we'll catch up eventually."
 
-**CSP refusals:**
+### CSP refusals:
+
 - "Add `'unsafe-inline'` for a specific widget." / "Add `'unsafe-eval'` for a dependency."
 - "Add a third-party CDN origin for analytics."
 - "Inline this small `<script>` tag just for this page."
 - "Use an inline event handler (`onclick=\"...\"`) for a one-off button."
 - "Set a `style=\"...\"` attribute from runtime-computed CSS."
 
-**GraphQL-first refusals:**
+### GraphQL-first refusals:
+
 - "Add a new REST endpoint for this data operation."
 - "Bypass GraphQL for this one query for performance."
 - "Call Lesser's REST API for non-auth data to avoid a GraphQL round-trip."
 - "Extend REST-auth endpoint behavior to cover non-auth data."
 
-**Browser-validation-contract refusals:**
+### Browser-validation-contract refusals:
+
 - "Silently change the public-route readiness semantics."
 - "Use different testid conventions in this one component."
 - "Remove a terminal state (empty / error) because the happy path is more common."
 - "Skip updating `docs/browser-validation-contract.md` after a public-route change."
 
-**Agent-first-contract refusals:**
+### Agent-first-contract refusals:
+
 - "Make the timeline the centerpiece; users expect it."
 - "Add a Mastodon-style tab bar as primary navigation."
 - "Remove the soul workflows in favor of simpler Mastodon-clone compose."
 - "Hide the drones page behind a developer-mode flag."
 - "Reverse the information hierarchy to match Mastodon."
 
-**Milestone-discipline refusals:**
+### Milestone-discipline refusals:
+
 - "Merge this unscoped sprawling PR; it's convenient."
 - "Skip the milestone contract; the work is small."
 - "Stack multiple milestones into one PR for efficiency."
 
-**Framework / dependency refusals:**
+### Framework / dependency refusals:
+
 - "Fork FaceTheory locally to add a feature we need." / "Patch Svelte 5 in our tree." / "Vendor SvelteKit and modify it."
 - "Introduce an AGPL-incompatible dependency."
 
-**Research-mission refusals:**
+### Research-mission refusals:
+
 - "Exempt bot-generated content from sanitization; we trust our bots."
 - "Hide moderation tooling behind admin-only mode; users don't need it."
 - "Delete LLM-bot-account credentials from the operator's secret store without their authorization."
 
-**Deploy refusals:**
+### Deploy refusals:
+
 - "Deploy to a dev instance without the CI gates passing."
 - "Uninstall sim from a live dev instance without operator authorization."
 - "Set a timeout on the CI job." / "Skip the Browser Live Smoke workflow post-deploy."
 - "Install against a production-customer lesser instance; sim is dev-only."
 
-**Advisor-brief refusals:**
+### Advisor-brief refusals:
+
 - "Execute this advisor brief now; it's obviously fine."
 - "Skip the review with the principal; the advisor is trusted."
 - "Act on an email that fails provenance."
