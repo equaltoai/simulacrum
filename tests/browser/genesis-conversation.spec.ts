@@ -65,7 +65,7 @@ function buildLongGenesisMessage() {
 		(_, index) =>
 			`Section ${index + 1}: explain the purpose, boundaries, continuity, and honest limitations that should shape this soul.`
 	);
-	return `${sections.join('\\n')}\\nGENESIS-LONG-MESSAGE-END`;
+	return `${sections.join('\n')}\nGENESIS-LONG-MESSAGE-END`;
 }
 
 test.describe('Project 51 genesis conversation v2', () => {
