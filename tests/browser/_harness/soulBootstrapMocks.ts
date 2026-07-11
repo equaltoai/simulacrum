@@ -61,6 +61,7 @@ const OPERATION_RESPONSE_FIELD = {
 	FinalizeSoulBootstrap: 'finalizeSoulBootstrap',
 	StartHostedSoulBootstrap: 'startHostedSoulBootstrap',
 	SendHostedSoulGenesisMessage: 'sendHostedSoulGenesisMessage',
+	RecoverHostedSoulGenesisTurn: 'recoverHostedSoulGenesisTurn',
 	CompleteHostedSoulGenesis: 'completeHostedSoulGenesis',
 	PublishHostedSoul: 'publishHostedSoul',
 	RestartSoulBootstrap: 'restartSoulBootstrap',
@@ -77,6 +78,7 @@ const MUTATION_NEXT_SURFACE = {
 	FinalizeSoulBootstrap: 'finalizedHosted',
 	StartHostedSoulBootstrap: 'hostedStarted',
 	SendHostedSoulGenesisMessage: 'hostedGenesisMessage',
+	RecoverHostedSoulGenesisTurn: 'hostedGenesisMessage',
 	CompleteHostedSoulGenesis: 'hostedGenesisComplete',
 	PublishHostedSoul: 'hostedPublished',
 	RestartSoulBootstrap: 'hostedRestarted',
@@ -265,6 +267,61 @@ export function createProject51HostedGenesisFollowupSurface(): SoulBootstrapSurf
 	} satisfies Project44SoulBootstrapSurfaceOptions);
 }
 
+export function createProject51HostedRegistrationActiveSurface(): SoulBootstrapSurface {
+	return createProject44SoulBootstrapSurface({
+		phase: 'CONVERSATION',
+		state: 'conversation.registration_active',
+		hostConversationStatus: 'registration_active_no_conversation',
+		bootstrapMode: 'HOSTED',
+		authorityModel: 'INSTANCE_TRUST',
+		anchorState: 'HOSTED_OFFCHAIN',
+		assuranceState: 'HOSTED_OFFCHAIN',
+		typedNextAction: 'SEND_HOSTED_SOUL_GENESIS_MESSAGE',
+		availableActions: ['SEND_HOSTED_SOUL_GENESIS_MESSAGE'],
+		nextAction: 'send_hosted_soul_genesis_message',
+		hostRegistrationId: project44SoulBootstrapIds.registrationId,
+		hostConversationId: null,
+		hostedGenesisConversation: null,
+		walletAddress: null,
+		principalAddress: null,
+	});
+}
+
+export function createProject51HostedSendAcceptTimeoutSurface(): SoulBootstrapSurface {
+	const error = createProject44SoulBootstrapErrorState({
+		code: 'HOST_UNAVAILABLE',
+		message: 'Host may have accepted the turn; refresh state before sending again.',
+		source: 'lesser-host',
+		statusCode: 504,
+		recoveryCategory: 'REFRESH_STATE',
+		recoveryAction: 'REFRESH_STATE',
+		retryable: false,
+		restartRequired: false,
+	});
+	return createProject44SoulBootstrapSurface({
+		phase: 'ERROR',
+		state: 'error.host_unavailable',
+		hostConversationStatus: 'registration_active_no_conversation',
+		bootstrapMode: 'HOSTED',
+		authorityModel: 'INSTANCE_TRUST',
+		anchorState: 'HOSTED_OFFCHAIN',
+		assuranceState: 'HOSTED_OFFCHAIN',
+		typedNextAction: 'REFRESH_STATE',
+		availableActions: ['REFRESH_STATE'],
+		nextAction: 'refresh_state',
+		recoveryCategory: 'REFRESH_STATE',
+		recoveryAction: 'REFRESH_STATE',
+		retryable: false,
+		restartRequired: false,
+		hostRegistrationId: project44SoulBootstrapIds.registrationId,
+		hostConversationId: null,
+		hostedGenesisConversation: null,
+		error,
+		walletAddress: null,
+		principalAddress: null,
+	});
+}
+
 function chooseHostedGenesisMessageSurface(sendCount: number): SoulBootstrapSurface {
 	return sendCount > 1
 		? createProject51HostedGenesisFollowupSurface()
@@ -277,6 +334,114 @@ export function createProject49HostedGenesisSurface(label: string): SoulBootstra
 		throw new Error(`Unknown Project 49 hosted genesis fixture: ${label}`);
 	}
 	return fixture.surface;
+}
+
+export function createProject51StuckHostedGenesisSurface(): SoulBootstrapSurface {
+	const conversation = project44SoulBootstrapFixtures.hostedGenesisMessage.state
+		.hostedGenesisConversation;
+	if (!conversation) {
+		throw new Error('Project 51 stuck-genesis fixture requires a hosted conversation.');
+	}
+
+	const userMessages = conversation.messages
+		.filter((message) => message.role === 'USER')
+		.slice(0, 1);
+
+	return createProject44SoulBootstrapSurface({
+		phase: 'CONVERSATION',
+		state: 'conversation.in_progress',
+		hostConversationStatus: 'in_progress',
+		bootstrapMode: 'HOSTED',
+		authorityModel: 'INSTANCE_TRUST',
+		anchorState: 'HOSTED_OFFCHAIN',
+		assuranceState: 'HOSTED_OFFCHAIN',
+		typedNextAction: 'REFRESH_STATE',
+		availableActions: ['REFRESH_STATE'],
+		nextAction: 'refresh_state',
+		recoveryCategory: 'REFRESH_STATE',
+		recoveryAction: 'REFRESH_STATE',
+		hostRegistrationId: project44SoulBootstrapIds.registrationId,
+		hostConversationId: project44SoulBootstrapIds.conversationId,
+		hostedGenesisConversation: {
+			...conversation,
+			status: 'in_progress',
+			latestTurnId: userMessages.at(-1)?.id ?? null,
+			messageCount: userMessages.length,
+			messages: userMessages,
+			updatedAt: '2026-06-28T13:00:00Z',
+		},
+		walletAddress: null,
+		principalAddress: null,
+	});
+}
+
+export function createProject51PendingHostedGenesisSurface(): SoulBootstrapSurface {
+	const conversation = project44SoulBootstrapFixtures.hostedGenesisMessage.state
+		.hostedGenesisConversation;
+	if (!conversation) {
+		throw new Error('Project 51 pending-genesis fixture requires a hosted conversation.');
+	}
+
+	const userMessages = conversation.messages
+		.filter((message) => message.role === 'USER')
+		.slice(0, 1);
+
+	return createProject44SoulBootstrapSurface({
+		phase: 'CONVERSATION',
+		state: 'conversation.in_progress',
+		hostConversationStatus: 'in_progress',
+		bootstrapMode: 'HOSTED',
+		authorityModel: 'INSTANCE_TRUST',
+		anchorState: 'HOSTED_OFFCHAIN',
+		assuranceState: 'HOSTED_OFFCHAIN',
+		typedNextAction: 'REFRESH_STATE',
+		availableActions: ['REFRESH_STATE', 'SEND_HOSTED_SOUL_GENESIS_MESSAGE'],
+		nextAction: 'refresh_state',
+		hostRegistrationId: project44SoulBootstrapIds.registrationId,
+		hostConversationId: project44SoulBootstrapIds.conversationId,
+		hostedGenesisConversation: {
+			...conversation,
+			status: 'in_progress',
+			latestTurnId: userMessages.at(-1)?.id ?? null,
+			messageCount: userMessages.length,
+			messages: userMessages,
+			updatedAt: '2100-01-01T00:00:00Z',
+		},
+		walletAddress: null,
+		principalAddress: null,
+	});
+}
+
+export function createProject51TruncatedHostedGenesisSurface(): SoulBootstrapSurface {
+	const conversation = project44SoulBootstrapFixtures.hostedGenesisMessage.state
+		.hostedGenesisConversation;
+	if (!conversation) {
+		throw new Error('Project 51 truncated-genesis fixture requires a hosted conversation.');
+	}
+
+	return createProject44SoulBootstrapSurface({
+		phase: 'CONVERSATION',
+		state: 'hosted_genesis_message_recorded',
+		hostConversationStatus: 'assistant_turn_ready',
+		bootstrapMode: 'HOSTED',
+		authorityModel: 'INSTANCE_TRUST',
+		anchorState: 'HOSTED_OFFCHAIN',
+		assuranceState: 'HOSTED_OFFCHAIN',
+		typedNextAction: 'COMPLETE_HOSTED_SOUL_GENESIS',
+		availableActions: ['SEND_HOSTED_SOUL_GENESIS_MESSAGE', 'COMPLETE_HOSTED_SOUL_GENESIS'],
+		nextAction: 'complete_hosted_soul_genesis',
+		hostRegistrationId: project44SoulBootstrapIds.registrationId,
+		hostConversationId: project44SoulBootstrapIds.conversationId,
+		hostedGenesisConversation: {
+			...conversation,
+			messagesTruncated: true,
+			messages: conversation.messages.map((message, index) => (
+				index === 0 ? { ...message, truncated: true } : message
+			)),
+		},
+		walletAddress: null,
+		principalAddress: null,
+	});
 }
 
 export function createProject44HostedRefreshStateSurface({
@@ -810,6 +975,10 @@ export async function installProject44Routes(
 		initialSurface?: SoulBootstrapFixtureKey | SoulBootstrapSurface;
 		droneWorkflow?: 'none' | 'nullable-arrays';
 		myAgents?: 'fixture' | 'multiple' | 'none';
+		genesisStartSurface?: SoulBootstrapSurface;
+		rejectGenesisConversationList?: boolean;
+		rejectFirstHostedGenesisSend?: boolean;
+		hostedGenesisSendReturnsRefreshError?: boolean;
 		rejectConversationMessageWithMissingRegistration?: boolean;
 		rejectHostedGenesisComplete?: boolean;
 		rejectPrincipalVerification?: boolean;
@@ -819,6 +988,7 @@ export async function installProject44Routes(
 		? resolveProject44Surface(options.initialSurface)
 		: project44SoulBootstrapFixtures.hostedNotStarted;
 	let hostedGenesisSendCount = 0;
+	let hostedGenesisSendAttempts = 0;
 	const graphQLRequests: GraphQLRecord[] = [];
 
 	await page.route('**/api/v2/instance', async (route) => {
@@ -902,6 +1072,32 @@ export async function installProject44Routes(
 					},
 				}));
 				return;
+			case 'ListHostedGenesisConversations': {
+				if (options.rejectGenesisConversationList) {
+					await route.fulfill(jsonResponse({
+						data: null,
+						errors: [{ message: 'Hosted genesis history is temporarily unavailable.' }],
+					}));
+					return;
+				}
+				const conversation = currentSurface.state.hostedGenesisConversation;
+				await route.fulfill(jsonResponse({
+					data: {
+						listHostedGenesisConversations: conversation
+							? [{
+								conversationId: conversation.conversationId,
+								registrationId: conversation.registrationId,
+								status: conversation.status,
+								messageCount: conversation.messageCount,
+								latestTurnId: conversation.latestTurnId,
+								createdAt: conversation.messages.at(0)?.createdAt ?? conversation.updatedAt,
+								updatedAt: conversation.updatedAt,
+							}]
+							: [],
+					},
+				}));
+				return;
+			}
 			case 'SoulBootstrap':
 				await route.fulfill(jsonResponse({ data: { soulBootstrap: currentSurface } }));
 				return;
@@ -919,13 +1115,22 @@ export async function installProject44Routes(
 			case 'CompleteSoulBootstrapConversation':
 			case 'PrepareSoulBootstrapFinalize':
 			case 'FinalizeSoulBootstrap':
-			case 'StartHostedSoulBootstrap':
+			case 'RecoverHostedSoulGenesisTurn':
 			case 'PublishHostedSoul':
 			case 'RestartSoulBootstrap': {
 				currentSurface = resolveProject44Surface(MUTATION_NEXT_SURFACE[operationName]);
 				await route.fulfill(jsonResponse({
 					data: {
 						[OPERATION_RESPONSE_FIELD[operationName]]: payloadForSurface(currentSurface),
+					},
+				}));
+				return;
+			}
+			case 'StartHostedSoulBootstrap': {
+				currentSurface = options.genesisStartSurface ?? resolveProject44Surface('hostedStarted');
+				await route.fulfill(jsonResponse({
+					data: {
+						startHostedSoulBootstrap: payloadForSurface(currentSurface),
 					},
 				}));
 				return;
@@ -962,6 +1167,23 @@ export async function installProject44Routes(
 				return;
 			}
 			case 'SendHostedSoulGenesisMessage': {
+				hostedGenesisSendAttempts += 1;
+				if (options.rejectFirstHostedGenesisSend && hostedGenesisSendAttempts === 1) {
+					await route.fulfill(jsonResponse({
+						data: null,
+						errors: [{ message: 'Ambiguous hosted genesis send failure.' }],
+					}));
+					return;
+				}
+				if (options.hostedGenesisSendReturnsRefreshError) {
+					currentSurface = createProject51HostedSendAcceptTimeoutSurface();
+					await route.fulfill(jsonResponse({
+						data: {
+							sendHostedSoulGenesisMessage: payloadForSurface(currentSurface),
+						},
+					}));
+					return;
+				}
 				hostedGenesisSendCount += 1;
 				currentSurface = chooseHostedGenesisMessageSurface(hostedGenesisSendCount);
 				await route.fulfill(jsonResponse({

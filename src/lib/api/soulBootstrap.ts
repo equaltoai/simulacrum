@@ -7,12 +7,15 @@ import {
 	type CompleteHostedSoulGenesisInput,
 	type CompleteSoulBootstrapConversationInput,
 	type FinalizeSoulBootstrapInput,
+	type HostedGenesisConversationSummary,
+	type HostedGenesisConversationSummaryResult,
 	type HostedSoulBootstrapClient,
 	type HostedSoulBootstrapMutationResult,
 	type HostedSoulBootstrapResult,
 	type PrepareSoulBootstrapFinalizeInput,
 	type PrepareSoulBootstrapPrincipalDeclarationInput,
 	type PublishHostedSoulInput,
+	type RecoverHostedSoulGenesisTurnInput,
 	type RestartSoulBootstrapInput,
 	type SendHostedSoulGenesisMessageInput,
 	type SendSoulBootstrapConversationMessageInput,
@@ -211,11 +214,40 @@ export function isSoulBootstrapError(error: unknown): error is SoulBootstrapClie
 }
 
 export { SoulBootstrapClientError, normalizeSoulBootstrapError };
+
+// ---------------------------------------------------------------------------
+// Project 51 — recoverHostedSoulGenesisTurn + listHostedGenesisConversations
+// ---------------------------------------------------------------------------
+//
+// Greater v0.11.8 brought adapter client methods for these operations. These
+// wrappers route through the same HostedSoulBootstrapClient as the other
+// hosted bootstrap operations.
+
+export async function recoverHostedSoulGenesisTurn({
+	input,
+	...options
+}: SoulBootstrapRequestOptions & {
+	input: RecoverHostedSoulGenesisTurnInput;
+}): Promise<HostedSoulBootstrapMutationResult> {
+	return createProject44HostedSoulBootstrapClient(options).recoverHostedSoulGenesisTurn(input);
+}
+
+export async function listHostedGenesisConversations({
+	username,
+	...options
+}: SoulBootstrapCurrentOptions): Promise<HostedGenesisConversationSummaryResult> {
+	return createProject44HostedSoulBootstrapClient(options).listHostedGenesisConversations({
+		username,
+	});
+}
+
 export type {
 	BeginSoulBootstrapInput,
 	CompleteHostedSoulGenesisInput,
 	CompleteSoulBootstrapConversationInput,
 	FinalizeSoulBootstrapInput,
+	HostedGenesisConversationSummary,
+	HostedGenesisConversationSummaryResult,
 	HostedSoulBootstrapActionableError,
 	HostedSoulBootstrapAvailableAction,
 	HostedSoulBootstrapBoundSoulEvidence,
@@ -233,6 +265,7 @@ export type {
 	PrepareSoulBootstrapFinalizeInput,
 	PrepareSoulBootstrapPrincipalDeclarationInput,
 	PublishHostedSoulInput,
+	RecoverHostedSoulGenesisTurnInput,
 	RestartSoulBootstrapInput,
 	SendHostedSoulGenesisMessageInput,
 	SendSoulBootstrapConversationMessageInput,
