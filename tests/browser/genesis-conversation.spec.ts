@@ -59,6 +59,15 @@ async function sendGenesisMessage(page: Page, content: string) {
 	await page.getByRole('button', { name: 'Send message' }).click();
 }
 
+function buildLongGenesisMessage() {
+	const sections = Array.from(
+		{ length: 30 },
+		(_, index) =>
+			`Section ${index + 1}: explain the purpose, boundaries, continuity, and honest limitations that should shape this soul.`
+	);
+	return `${sections.join('\n')}\nGENESIS-LONG-MESSAGE-END`;
+}
+
 test.describe('Project 51 genesis conversation v2', () => {
 	test('supports a multi-turn type-send-response conversation with the local mock', async ({
 		page,
@@ -90,6 +99,30 @@ test.describe('Project 51 genesis conversation v2', () => {
 			body: await page.screenshot({ fullPage: true }),
 			contentType: 'image/png',
 		});
+		expectLocalMockOnly(captured);
+	});
+
+	test('accepts a complete genesis response beyond the legacy 1,200-character cap', async ({
+		page,
+	}) => {
+		const captured = captureRequests(page);
+		await openGenesis(page);
+		await startNewConversation(page);
+
+		const longMessage = buildLongGenesisMessage();
+		expect(longMessage.length).toBeGreaterThan(1_200);
+
+		const input = page.getByLabel('Message input');
+		await expect(input).not.toHaveAttribute('maxlength');
+		await input.click();
+		await page.keyboard.insertText(longMessage);
+		await expect(input).toHaveValue(longMessage);
+		await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled();
+
+		await page.getByRole('button', { name: 'Send message' }).click();
+		await expect(page.getByTestId('genesis-conversation-transcript')).toContainText(
+			'GENESIS-LONG-MESSAGE-END'
+		);
 		expectLocalMockOnly(captured);
 	});
 
