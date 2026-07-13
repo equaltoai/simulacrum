@@ -31,6 +31,7 @@ export interface GenesisConversationMessage {
 	content: string;
 	createdAt: string;
 	status: GenesisConversationMessageStatus;
+	truncated?: boolean;
 	error?: string;
 	moments?: readonly GenesisConversationMessageMoment[];
 	workflowMetadata?: readonly GenesisConversationWorkflowMetadata[];
@@ -38,11 +39,16 @@ export interface GenesisConversationMessage {
 
 export interface GenesisConversationRecord {
 	id: string;
+	remoteConversationId: string | null;
+	registrationId: string | null;
 	activeBodyId: string | null;
 	activeDroneUsername: string | null;
 	title: string;
 	messages: readonly GenesisConversationMessage[];
+	messagesTruncated: boolean;
 	turnStatus: GenesisConversationTurnStatus;
+	canSendMessage: boolean;
+	reconciliationPending: boolean;
 	pendingAssistantMessageId: string | null;
 	createdAt: string;
 	updatedAt: string;
@@ -65,7 +71,7 @@ export interface StartGenesisConversationInput {
 }
 
 export interface SendGenesisConversationMessageInput {
-	conversationId: string;
+	conversationId?: string | null;
 	content: string;
 }
 
@@ -127,6 +133,8 @@ function initialState(): StoredGenesisState {
 function cloneConversation(conversation: StoredGenesisConversation): GenesisConversationRecord {
 	return {
 		id: conversation.id,
+		remoteConversationId: conversation.remoteConversationId ?? conversation.id,
+		registrationId: conversation.registrationId ?? null,
 		activeBodyId: conversation.activeBodyId,
 		activeDroneUsername: conversation.activeDroneUsername,
 		title: conversation.title,
@@ -137,7 +145,10 @@ function cloneConversation(conversation: StoredGenesisConversation): GenesisConv
 				? message.workflowMetadata.map((metadata) => ({ ...metadata }))
 				: undefined,
 		})),
+		messagesTruncated: conversation.messagesTruncated ?? false,
 		turnStatus: conversation.turnStatus,
+		canSendMessage: conversation.canSendMessage ?? conversation.turnStatus === 'ready',
+		reconciliationPending: conversation.reconciliationPending ?? false,
 		pendingAssistantMessageId: conversation.pendingAssistantMessageId,
 		createdAt: conversation.createdAt,
 		updatedAt: conversation.updatedAt,
@@ -307,6 +318,7 @@ function completePendingTurn(conversation: StoredGenesisConversation, nowMs: num
 	const assistant = conversation.messages.find((message) => message.id === pending.assistantMessageId);
 	if (!assistant) {
 		conversation.turnStatus = 'error';
+		conversation.canSendMessage = false;
 		conversation.pendingAssistantMessageId = null;
 		conversation.pendingTurn = null;
 		conversation.updatedAt = iso(nowMs);
@@ -318,6 +330,7 @@ function completePendingTurn(conversation: StoredGenesisConversation, nowMs: num
 	assistant.moments = assistantMomentsFor(pending);
 	assistant.workflowMetadata = assistantMetadataFor(pending);
 	conversation.turnStatus = 'ready';
+	conversation.canSendMessage = true;
 	conversation.pendingAssistantMessageId = null;
 	conversation.pendingTurn = null;
 	conversation.updatedAt = iso(nowMs);
@@ -356,6 +369,8 @@ export function createGenesisConversationMockApi({
 			const activeDroneUsername = input.activeDroneUsername?.trim() || null;
 			const conversation: StoredGenesisConversation = {
 				id,
+				remoteConversationId: id,
+				registrationId: null,
 				activeBodyId: input.activeBodyId?.trim() || null,
 				activeDroneUsername,
 				title: input.title?.trim() || 'Genesis conversation',
@@ -370,7 +385,10 @@ export function createGenesisConversationMockApi({
 						status: 'complete',
 					},
 				],
+				messagesTruncated: false,
 				turnStatus: 'ready',
+				canSendMessage: true,
+				reconciliationPending: false,
 				pendingAssistantMessageId: null,
 				pendingTurn: null,
 				createdAt,
@@ -417,9 +435,13 @@ export function createGenesisConversationMockApi({
 			}
 
 			const state = read();
-			const conversation = state.conversations[conversationId];
+			const resolvedConversationId = conversationId || state.activeConversationId;
+			if (!resolvedConversationId) {
+				throw new Error('Start or choose a genesis conversation first.');
+			}
+			const conversation = state.conversations[resolvedConversationId];
 			if (!conversation) {
-				throw new Error(`Genesis conversation ${conversationId} was not found.`);
+				throw new Error(`Genesis conversation ${resolvedConversationId} was not found.`);
 			}
 			if (conversation.pendingTurn) {
 				throw new Error('Wait for the assistant response or recover the stuck turn before sending again.');
@@ -462,6 +484,7 @@ export function createGenesisConversationMockApi({
 			};
 			conversation.pendingAssistantMessageId = assistantMessageId;
 			conversation.turnStatus = shouldStick ? 'stuck' : 'waiting';
+			conversation.canSendMessage = false;
 			conversation.updatedAt = createdAt;
 			state.activeConversationId = conversation.id;
 			write(state);
@@ -493,6 +516,7 @@ export function createGenesisConversationMockApi({
 				assistant.status = 'streaming';
 			}
 			conversation.turnStatus = 'waiting';
+			conversation.canSendMessage = false;
 			conversation.updatedAt = iso(nowMs);
 			write(state);
 			return cloneConversation(conversation);
@@ -533,6 +557,49 @@ export interface GenesisConversationGraphQLApiOptions {
 	fetch?: typeof fetch;
 	now?: () => number;
 	stuckTimeoutMs?: number;
+	operationStorage?: GenesisConversationStorage;
+	createOperationKey?: (purpose: 'start' | 'send') => string;
+}
+
+interface GenesisOperationToken {
+	key: string;
+	fingerprint: string;
+	baseline?: GenesisSendBaselineEvidence;
+}
+
+interface GenesisSendBaselineEvidence {
+	remoteConversationId: string | null;
+	registrationId: string | null;
+	messageEvidence: string;
+}
+
+function genesisOperationFingerprint(value: string): string {
+	let hash = 14695981039346656037n;
+	for (let index = 0; index < value.length; index += 1) {
+		hash ^= BigInt(value.charCodeAt(index));
+		hash = BigInt.asUintN(64, hash * 1099511628211n);
+	}
+	return `${value.length}-${hash.toString(16).padStart(16, '0')}`;
+}
+
+function createGenesisOperationKey(purpose: 'start' | 'send'): string {
+	const randomId =
+		typeof globalThis.crypto !== 'undefined' &&
+		typeof globalThis.crypto.randomUUID === 'function'
+			? globalThis.crypto.randomUUID()
+			: `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+	return `sim-genesis-${purpose}-${randomId}`;
+}
+
+function browserSessionStorage(): GenesisConversationStorage {
+	if (typeof window !== 'undefined') {
+		try {
+			if (window.sessionStorage) return window.sessionStorage;
+		} catch {
+			// Fall through to volatile storage in hardened/private contexts.
+		}
+	}
+	return createVolatileStorage();
 }
 
 /**
@@ -549,6 +616,7 @@ export function mapHostedGenesisMessage(
 		content: message.content,
 		createdAt: message.createdAt ?? new Date(0).toISOString(),
 		status: 'complete',
+		truncated: message.truncated,
 	};
 }
 
@@ -570,9 +638,6 @@ export function deriveTurnStatusFromHostedResult(
 
 	if (status === 'failed') return 'error';
 
-	const canSend = result.availableActions.includes('SEND_HOSTED_SOUL_GENESIS_MESSAGE');
-	if (canSend) return 'ready';
-
 	if (status === 'in_progress' || status === 'created') {
 		const updatedAtMs = conversation?.updatedAt
 			? Date.parse(conversation.updatedAt)
@@ -584,11 +649,15 @@ export function deriveTurnStatusFromHostedResult(
 	}
 
 	if (
-		status === 'declaration_extraction_pending' ||
-		status === 'registration_active_no_conversation'
+		status === 'declaration_extraction_pending'
 	) {
 		return 'waiting';
 	}
+
+	const canSend = result.availableActions.includes('SEND_HOSTED_SOUL_GENESIS_MESSAGE');
+	if (canSend) return 'ready';
+
+	if (status === 'registration_active_no_conversation') return 'waiting';
 
 	// assistant_turn_ready, declaration_ready, published_bound, no_registration,
 	// and any unknown status default to ready.
@@ -596,9 +665,10 @@ export function deriveTurnStatusFromHostedResult(
 }
 
 /**
- * Map a HostedSoulBootstrapResult to a GenesisConversationRecord. Returns null
- * when there is no active hosted genesis conversation. Exported for unit
- * testing.
+ * Map a HostedSoulBootstrapResult to a GenesisConversationRecord. A
+ * registration-active response without a transcript becomes an empty,
+ * send-capable first-message draft; responses without either a registration or
+ * transcript return null. Exported for unit testing.
  *
  * When the conversation is in_progress and the last transcript message is from
  * the user, a synthetic streaming assistant message is appended so the UI can
@@ -610,10 +680,54 @@ export function mapHostedResultToGenesisRecord(
 ): GenesisConversationRecord | null {
 	const conversation = result.hostedGenesisConversation;
 	const state = result.state;
-	if (!conversation || !state) return null;
+	if (!state) return null;
 
 	const nowMs = options.now?.() ?? Date.now();
 	const stuckTimeoutMs = options.stuckTimeoutMs ?? DEFAULT_STUCK_TIMEOUT_MS;
+	const registrationId = state.hostRegistrationId?.trim() || null;
+	const remoteConversationId = state.hostConversationId?.trim() || null;
+
+	if (!conversation) {
+		const canStartFirstTurn =
+			result.typedNextAction === 'SEND_HOSTED_SOUL_GENESIS_MESSAGE' &&
+			result.availableActions.includes('SEND_HOSTED_SOUL_GENESIS_MESSAGE') &&
+			Boolean(registrationId);
+		const mustPollFirstTurn =
+			result.typedNextAction === 'REFRESH_STATE' &&
+			result.availableActions.includes('REFRESH_STATE') &&
+			Boolean(registrationId);
+		if (!canStartFirstTurn && !mustPollFirstTurn) return null;
+
+		const timestamp = state.updatedAt ?? new Date(nowMs).toISOString();
+		const pendingMessageId = mustPollFirstTurn
+			? `synthetic-assistant-hosted-registration:${registrationId}`
+			: null;
+		return {
+			id: `hosted-registration:${registrationId}`,
+			remoteConversationId,
+			registrationId,
+			activeBodyId: state.bodyId ?? null,
+			activeDroneUsername: state.username ?? null,
+			title: 'Hosted genesis conversation ready',
+			messages: pendingMessageId
+				? [{
+						id: pendingMessageId,
+						role: 'assistant',
+						content: 'Waiting for Lesser to attach the accepted hosted genesis turn…',
+						createdAt: timestamp,
+						status: 'streaming',
+					}]
+				: [],
+			messagesTruncated: false,
+			turnStatus: mustPollFirstTurn ? 'waiting' : 'ready',
+			canSendMessage: canStartFirstTurn,
+			reconciliationPending: Boolean(mustPollFirstTurn && result.error),
+			pendingAssistantMessageId: pendingMessageId,
+			createdAt: timestamp,
+			updatedAt: timestamp,
+			lastPolledAt: options.lastPolledAt ?? null,
+		};
+	}
 
 	const baseMessages = conversation.messages
 		.slice()
@@ -648,11 +762,18 @@ export function mapHostedResultToGenesisRecord(
 
 	return {
 		id: conversation.conversationId,
+		remoteConversationId: conversation.conversationId,
+		registrationId: conversation.registrationId ?? registrationId,
 		activeBodyId: state.bodyId ?? null,
 		activeDroneUsername: state.username ?? null,
 		title,
 		messages,
+		messagesTruncated: conversation.messagesTruncated,
 		turnStatus,
+		canSendMessage:
+			turnStatus === 'ready' &&
+			result.availableActions.includes('SEND_HOSTED_SOUL_GENESIS_MESSAGE'),
+		reconciliationPending: false,
 		pendingAssistantMessageId,
 		createdAt: timestamp,
 		updatedAt: timestamp,
@@ -724,6 +845,8 @@ export function createGenesisConversationGraphQLApi(
 		fetch: fetchLike,
 		now = () => Date.now(),
 		stuckTimeoutMs = DEFAULT_STUCK_TIMEOUT_MS,
+		operationStorage = browserSessionStorage(),
+		createOperationKey: operationKeyFactory = createGenesisOperationKey,
 	} = options;
 
 	if (!username.trim()) {
@@ -747,6 +870,103 @@ export function createGenesisConversationGraphQLApi(
 	// recoverStuckTurn can pass them to Lesser without an extra round-trip.
 	let lastRegistrationId: string | null = null;
 	let lastConversationId: string | null = null;
+	let lastMappedRecord: GenesisConversationRecord | null = null;
+	let pendingSendReconciliation: {
+		baseline: GenesisConversationRecord;
+		baselineEvidence: GenesisSendBaselineEvidence;
+		operation: GenesisOperationToken;
+		submittedContent?: string;
+	} | null = null;
+	// Begin keys participate in Lesser's replay guard. Lesser v1.5.12 records
+	// send keys as correlation metadata but does not yet relay them to Host, so
+	// Sim must also fail closed and poll after any ambiguous send outcome rather
+	// than treating key reuse as end-to-end duplicate prevention.
+	const fallbackOperationTokens = new Map<'start' | 'send', GenesisOperationToken>();
+
+	function operationStorageKey(purpose: 'start' | 'send'): string {
+		return `simulacrum:genesis-operation:${encodeURIComponent(username)}:${purpose}`;
+	}
+
+	function readOperationToken(purpose: 'start' | 'send'): GenesisOperationToken | null {
+		const storageKey = operationStorageKey(purpose);
+		let stored: string | null = null;
+		try {
+			stored = operationStorage.getItem(storageKey);
+		} catch {
+			return fallbackOperationTokens.get(purpose) ?? null;
+		}
+		if (!stored) return fallbackOperationTokens.get(purpose) ?? null;
+		try {
+			const parsed = JSON.parse(stored) as Partial<GenesisOperationToken>;
+			const baseline = parsed.baseline;
+			const validBaseline =
+				baseline &&
+				(baseline.remoteConversationId === null ||
+					typeof baseline.remoteConversationId === 'string') &&
+				(baseline.registrationId === null || typeof baseline.registrationId === 'string') &&
+				typeof baseline.messageEvidence === 'string';
+			if (
+				typeof parsed.key === 'string' &&
+				Boolean(parsed.key.trim()) &&
+				parsed.key.length <= 128 &&
+				typeof parsed.fingerprint === 'string' &&
+				Boolean(parsed.fingerprint) &&
+				(purpose === 'start' || validBaseline)
+			) {
+				return {
+					key: parsed.key,
+					fingerprint: parsed.fingerprint,
+					baseline: validBaseline ? baseline : undefined,
+				};
+			}
+		} catch {
+			// Invalid entries are removed below before a replacement is persisted.
+		}
+		try {
+			operationStorage.removeItem(storageKey);
+		} catch {
+			// A volatile fallback is used when storage cannot be repaired.
+		}
+		return fallbackOperationTokens.get(purpose) ?? null;
+	}
+
+	function acquireOperationToken(
+		purpose: 'start' | 'send',
+		fingerprint: string,
+		baseline?: GenesisSendBaselineEvidence
+	): GenesisOperationToken {
+		const existing = readOperationToken(purpose);
+		if (existing?.fingerprint === fingerprint) return existing;
+		const generatedKey = operationKeyFactory(purpose).trim();
+		if (!generatedKey || generatedKey.length > 128) {
+			throw new Error(`Genesis ${purpose} operation key must contain 1-128 characters.`);
+		}
+		const token = { key: generatedKey, fingerprint, baseline };
+		try {
+			operationStorage.setItem(operationStorageKey(purpose), JSON.stringify(token));
+		} catch {
+			fallbackOperationTokens.set(purpose, token);
+		}
+		return token;
+	}
+
+	function completeOperationToken(
+		purpose: 'start' | 'send',
+		token: GenesisOperationToken
+	): void {
+		const storageKey = operationStorageKey(purpose);
+		try {
+			const existing = readOperationToken(purpose);
+			if (existing?.key === token.key && existing.fingerprint === token.fingerprint) {
+				operationStorage.removeItem(storageKey);
+			}
+		} catch {
+			// The fallback token is still cleared below.
+		}
+		if (fallbackOperationTokens.get(purpose)?.key === token.key) {
+			fallbackOperationTokens.delete(purpose);
+		}
+	}
 
 	function updateTrackedIds(result: HostedSoulBootstrapResult): void {
 		const conversation = result.hostedGenesisConversation;
@@ -765,7 +985,12 @@ export function createGenesisConversationGraphQLApi(
 		lastPolledAt: string | null = null
 	): GenesisConversationRecord | null {
 		updateTrackedIds(result);
-		return mapHostedResultToGenesisRecord(result, { now, stuckTimeoutMs, lastPolledAt });
+		lastMappedRecord = mapHostedResultToGenesisRecord(result, {
+			now,
+			stuckTimeoutMs,
+			lastPolledAt,
+		});
+		return lastMappedRecord;
 	}
 
 	function checkBackendError(result: HostedSoulBootstrapResult): void {
@@ -774,14 +999,126 @@ export function createGenesisConversationGraphQLApi(
 		}
 	}
 
+	function recordMessageEvidence(record: GenesisConversationRecord): string {
+		return record.messages
+			.filter((message) => !message.id.startsWith('synthetic-'))
+			.map(
+				(message) =>
+					`${message.id}:${message.role}:${message.status}:${genesisOperationFingerprint(message.content)}`
+			)
+			.join('|');
+	}
+
+	function sendBaselineEvidence(record: GenesisConversationRecord): GenesisSendBaselineEvidence {
+		return {
+			remoteConversationId: record.remoteConversationId,
+			registrationId: record.registrationId,
+			messageEvidence: recordMessageEvidence(record),
+		};
+	}
+
+	function hasAuthoritativeSendProgress(
+		candidate: GenesisConversationRecord,
+		baseline: GenesisSendBaselineEvidence
+	): boolean {
+		if (
+			candidate.remoteConversationId &&
+			candidate.remoteConversationId !== baseline.remoteConversationId
+		) {
+			return true;
+		}
+		if (candidate.turnStatus === 'error') return true;
+		if (candidate.remoteConversationId && candidate.turnStatus !== 'ready') return true;
+		return recordMessageEvidence(candidate) !== baseline.messageEvidence;
+	}
+
+	function markSendReconciliationPending(
+		record: GenesisConversationRecord,
+		operation: GenesisOperationToken,
+		submittedContent = pendingSendReconciliation?.submittedContent
+	): GenesisConversationRecord {
+		pendingSendReconciliation = {
+			baseline: pendingSendReconciliation?.baseline ?? record,
+			baselineEvidence:
+				pendingSendReconciliation?.baselineEvidence ??
+				operation.baseline ??
+				sendBaselineEvidence(record),
+			operation,
+			submittedContent,
+		};
+		const existingPending = record.messages.find(
+			(message) => message.status === 'pending' || message.status === 'streaming'
+		);
+		const pendingMessageId = existingPending?.id ?? `synthetic-reconcile-${record.id}`;
+		const hasSubmittedContent = submittedContent
+			? record.messages.some(
+					(message) => message.role === 'user' && message.content === submittedContent
+				)
+			: true;
+		const submittedMessage: GenesisConversationMessage[] =
+			submittedContent && !hasSubmittedContent
+				? [{
+						id: `synthetic-user-${operation.key}`,
+						role: 'user',
+						content: submittedContent,
+						createdAt: new Date(now()).toISOString(),
+						status: 'complete',
+					}]
+				: [];
+		const messagesWithSubmittedContent = existingPending && submittedMessage.length > 0
+			? [
+					...record.messages.slice(0, record.messages.indexOf(existingPending)),
+					...submittedMessage,
+					...record.messages.slice(record.messages.indexOf(existingPending)),
+				]
+			: [...record.messages, ...submittedMessage];
+		lastMappedRecord = {
+			...record,
+			messages: existingPending
+				? messagesWithSubmittedContent
+				: [...messagesWithSubmittedContent, {
+						id: pendingMessageId,
+						role: 'assistant',
+						content: 'Send outcome is being reconciled through Lesser before another turn.',
+						createdAt: new Date(now()).toISOString(),
+						status: 'streaming',
+					}],
+			turnStatus: 'waiting',
+			canSendMessage: false,
+			reconciliationPending: true,
+			pendingAssistantMessageId: pendingMessageId,
+			lastPolledAt: new Date(now()).toISOString(),
+		};
+		return lastMappedRecord;
+	}
+
+	function reconcilePendingSend(
+		candidate: GenesisConversationRecord | null
+	): GenesisConversationRecord | null {
+		const pending = pendingSendReconciliation;
+		if (!pending) return candidate;
+		if (candidate && hasAuthoritativeSendProgress(candidate, pending.baselineEvidence)) {
+			completeOperationToken('send', pending.operation);
+			pendingSendReconciliation = null;
+			lastMappedRecord = candidate;
+			return candidate;
+		}
+		return markSendReconciliationPending(candidate ?? pending.baseline, pending.operation);
+	}
+
 	return {
-		async startConversation(input: StartGenesisConversationInput = {}) {
+		async startConversation() {
 			const client = await createClient();
+			const current = await client.current({ username });
+			const currentRecord = mapResult(current);
+			if (current.error && current.typedNextAction !== 'REFRESH_STATE') {
+				checkBackendError(current);
+			}
+			if (currentRecord) return currentRecord;
+			const operation = acquireOperationToken('start', 'hosted-start-or-resume');
 			const startInput: StartHostedSoulBootstrapInput = {
 				username,
-				capabilities: input.activeDroneUsername
-					? [`drone:${input.activeDroneUsername}`]
-					: undefined,
+				idempotencyKey: operation.key,
 			};
 			const mutationResult = await client.startHostedSoulBootstrap(startInput);
 			checkBackendError(mutationResult);
@@ -811,8 +1148,20 @@ export function createGenesisConversationGraphQLApi(
 		async loadActiveConversation() {
 			const client = await createClient();
 			const result = await client.current({ username });
-			checkBackendError(result);
-			return mapResult(result);
+			const record = mapResult(result);
+			if (result.error && result.typedNextAction !== 'REFRESH_STATE') {
+				checkBackendError(result);
+			}
+			const pendingOperation = readOperationToken('send');
+			if (record && pendingOperation) {
+				pendingSendReconciliation = {
+					baseline: record,
+					baselineEvidence: pendingOperation.baseline ?? sendBaselineEvidence(record),
+					operation: pendingOperation,
+				};
+				return reconcilePendingSend(record);
+			}
+			return record;
 		},
 
 		async loadConversation(conversationId: string) {
@@ -835,29 +1184,99 @@ export function createGenesisConversationGraphQLApi(
 			}
 
 			const client = await createClient();
+			const baseline = lastMappedRecord;
+			const operation = acquireOperationToken(
+				'send',
+				genesisOperationFingerprint(
+					`${lastRegistrationId ?? username}\n${lastConversationId ?? conversationId ?? ''}\n${draft}`
+				),
+				baseline ? sendBaselineEvidence(baseline) : undefined
+			);
 			const sendInput: SendHostedSoulGenesisMessageInput = {
 				username,
 				message: draft,
-				conversationId: conversationId || lastConversationId || undefined,
+				conversationId: lastConversationId ?? conversationId ?? undefined,
 				registrationId: lastRegistrationId ?? undefined,
+				idempotencyKey: operation.key,
 			};
-			const mutationResult = await client.sendHostedSoulGenesisMessage(sendInput);
-			checkBackendError(mutationResult);
+			let mutationResult: HostedSoulBootstrapResult;
+			try {
+				mutationResult = await client.sendHostedSoulGenesisMessage(sendInput);
+			} catch (caught) {
+				let reconciled: GenesisConversationRecord | null = null;
+				try {
+					const current = await client.current({ username });
+					reconciled = mapResult(current, new Date(now()).toISOString());
+				} catch {
+					// The original send outcome remains ambiguous; fail closed below.
+				}
+				if (!baseline) throw caught;
+					pendingSendReconciliation = {
+						baseline,
+						baselineEvidence: operation.baseline ?? sendBaselineEvidence(baseline),
+						operation,
+						submittedContent: draft,
+					};
+					return reconcilePendingSend(reconciled ?? baseline) ??
+					markSendReconciliationPending(baseline, operation, draft);
+			}
 			const record = mapResult(mutationResult);
+			if (mutationResult.error) {
+				const mustReconcile =
+					mutationResult.typedNextAction === 'REFRESH_STATE' ||
+					mutationResult.recoveryAction === 'REFRESH_STATE';
+				if (mustReconcile && (record || baseline)) {
+					const pendingBaseline = baseline ?? record;
+					if (pendingBaseline) {
+						pendingSendReconciliation = {
+							baseline: pendingBaseline,
+							baselineEvidence:
+								operation.baseline ?? sendBaselineEvidence(pendingBaseline),
+							operation,
+							submittedContent: draft,
+						};
+						return markSendReconciliationPending(record ?? pendingBaseline, operation, draft);
+					}
+				}
+				completeOperationToken('send', operation);
+				pendingSendReconciliation = null;
+				checkBackendError(mutationResult);
+			}
 			if (!record) {
+				if (baseline) {
+					pendingSendReconciliation = {
+						baseline,
+						baselineEvidence: operation.baseline ?? sendBaselineEvidence(baseline),
+						operation,
+						submittedContent: draft,
+					};
+					return markSendReconciliationPending(baseline, operation, draft);
+				}
 				throw new Error('Message was sent but no genesis conversation was returned.');
 			}
+			completeOperationToken('send', operation);
+			pendingSendReconciliation = null;
 			return record;
 		},
 
 		async pollConversation(conversationId: string) {
 			const client = await createClient();
 			const result = await client.current({ username });
-			checkBackendError(result);
 			const record = mapResult(result, new Date(now()).toISOString());
-			if (!record) return null;
-			if (record.id !== conversationId) return null;
-			return record;
+			if (result.error && result.typedNextAction !== 'REFRESH_STATE') {
+				checkBackendError(result);
+			}
+			const reconciled = reconcilePendingSend(record);
+			if (!reconciled) return null;
+			const requestedRegistrationShell = conversationId.startsWith('hosted-registration:');
+			if (
+				!requestedRegistrationShell &&
+				reconciled.remoteConversationId &&
+				reconciled.remoteConversationId !== conversationId
+			) {
+				return null;
+			}
+			return reconciled;
 		},
 
 		async recoverStuckTurn(conversationId: string) {

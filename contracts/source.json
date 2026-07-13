@@ -1,6 +1,6 @@
 {
-  "lesserDescribe": "v1.5.7-15-gbd426cedc",
-  "lesserSha": "bd426cedcf9b85e4db456310deb1eb79e2ad44f2",
-  "sourceDir": "https://github.com/equaltoai/lesser/tree/bd426cedcf9b85e4db456310deb1eb79e2ad44f2/docs/contracts",
-  "sourceTag": "staging"
+  "lesserDescribe": "v1.5.12",
+  "lesserSha": "e206610a3375e1af272aaaef1e0e260c395c013a",
+  "sourceDir": "https://github.com/equaltoai/lesser/tree/e206610a3375e1af272aaaef1e0e260c395c013a/docs/contracts",
+  "sourceTag": "v1.5.12"
 }
