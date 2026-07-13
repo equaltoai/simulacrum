@@ -2,7 +2,6 @@
 	import { onMount, untrack } from 'svelte';
 
 	import {
-		AgentGenesisWorkspace,
 		GraduationApprovalThread,
 		IdentityNexus,
 		NexusDashboard,
@@ -24,6 +23,7 @@
 	} from '$lib/auth/session';
 
 	import DronesPage from './components/DronesPage.svelte';
+	import GenesisConversationPage from './components/GenesisConversationPage.svelte';
 	import HostedSoulBootstrapPanel from './components/HostedSoulBootstrapPanel.svelte';
 	import HostedBoundSoulActivationPanel from './components/HostedBoundSoulActivationPanel.svelte';
 	import IdentityQuarantinePanel from './components/IdentityQuarantinePanel.svelte';
@@ -78,6 +78,9 @@
 	let appState = $state<ClientAppState>(initialState);
 	let authError = $state<string | null>(null);
 	let loadError = $state<string | null>(null);
+	let authEpoch = $state(0);
+	let loadedAuthEpoch = $state(-1);
+	let liveLoadGeneration = 0;
 	let currentStatusId = $state<string | null>(initialStatusIdValue);
 	let currentProfileIdentifier = $state<string | null>(initialProfileIdentifierValue);
 	let currentProfileActorId = $state<string | null>(initialProfileActorIdValue);
@@ -91,6 +94,7 @@
 	]);
 
 	const isAuthenticated = $derived(Boolean(session?.accessToken));
+	const hasLoadedLiveState = $derived(isAuthenticated && loadedAuthEpoch === authEpoch);
 	const showAuthPreviewNotice = $derived(!isAuthenticated && currentPage.requiresAuth !== false);
 	const showBlockingLoadError = $derived(Boolean(isAuthenticated && loadError));
 	const showLegacySigningPanel = $derived(Boolean(
@@ -131,6 +135,23 @@
 		currentUserName: appState.currentUserName,
 	} satisfies AgentFaceBaseData & { agentCount: number; soulCount: number; currentUserName?: string });
 
+	const genesisConversationData = $derived({
+		...appState.faces.genesis,
+		hero: {
+			eyebrow: currentPage.eyebrow,
+			title: currentPage.title,
+			summary: currentPage.summary,
+		},
+		activeBodyId: appState.actionContext.activeAgentId,
+		activeDroneUsername: appState.actionContext.activeUsername,
+		currentUserName: appState.currentUserName,
+		liveStateReady: hasLoadedLiveState,
+		agentRoster: (appState.faces.dashboard.roster ?? []).map((entry) => ({
+			username: entry.handle?.replace(/^@/, '') ?? entry.name,
+			displayName: entry.name,
+		})),
+	});
+
 	$effect(() => {
 		if (!isAuthenticated) {
 			appState = createPreviewAppState({ page: currentPage, agentHint: currentAgentHint });
@@ -155,16 +176,35 @@
 	}
 
 	async function refreshLiveState() {
-		if (!session?.accessToken) return;
+		const accessToken = session?.accessToken;
+		if (!accessToken) {
+			loadedAuthEpoch = -1;
+			return;
+		}
+		const expectedAuthEpoch = authEpoch;
+		const loadGeneration = ++liveLoadGeneration;
 
 		loadError = null;
 
 		try {
-			appState = await loadClientAppState({
+			const nextState = await loadClientAppState({
 				page: currentPage,
 				agentHint: currentAgentHint,
 			});
+			if (
+				loadGeneration !== liveLoadGeneration ||
+				expectedAuthEpoch !== authEpoch ||
+				session?.accessToken !== accessToken
+			) return;
+			appState = nextState;
+			loadedAuthEpoch = expectedAuthEpoch;
 		} catch (error) {
+			if (
+				loadGeneration !== liveLoadGeneration ||
+				expectedAuthEpoch !== authEpoch ||
+				session?.accessToken !== accessToken
+			) return;
+			loadedAuthEpoch = -1;
 			loadError = error instanceof Error ? error.message : 'Failed to load the live Simulacrum state.';
 		}
 	}
@@ -175,6 +215,9 @@
 	}
 
 	function handleLogout() {
+		authEpoch += 1;
+		loadedAuthEpoch = -1;
+		liveLoadGeneration += 1;
 		clearAuthSession();
 		session = null;
 		loadError = null;
@@ -203,6 +246,9 @@
 		initAuthFromStorage();
 
 		const unsubscribe = authSession.subscribe((value) => {
+			authEpoch += 1;
+			loadedAuthEpoch = -1;
+			liveLoadGeneration += 1;
 			session = value;
 			if (value && currentPage.key !== 'auth-callback') {
 				void refreshLiveState();
@@ -291,7 +337,7 @@
 				{:else if currentPage.key === 'souls'}
 					<SoulRequestCenter data={appState.faces.souls} />
 				{:else if currentPage.key === 'genesis'}
-					<AgentGenesisWorkspace data={appState.faces.genesis} />
+					<GenesisConversationPage data={genesisConversationData} />
 				{:else if currentPage.key === 'approvals'}
 					<GraduationApprovalThread data={appState.faces.approvals} />
 				{:else if currentPage.key === 'identity'}
@@ -317,7 +363,7 @@
 
 			<section class="ft-shell__panels">
 				{#if isAuthenticated}
-					{#if currentPage.key === 'identity' || currentPage.key === 'genesis' || currentPage.key === 'approvals'}
+					{#if currentPage.key === 'identity' || currentPage.key === 'approvals'}
 						<section class="ft-panel" data-testid="soul-bootstrap-lane">
 							<header class="ft-panel__header">
 								<div>

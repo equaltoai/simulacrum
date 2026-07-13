@@ -37,10 +37,10 @@ const PAGE_DEFINITIONS: Record<AppPageKey, AppPageDescriptor> = {
 	genesis: {
 		key: 'genesis',
 		path: '/souls/genesis',
-		title: 'Agent Genesis Workspace',
-		eyebrow: 'Mint conversation lane',
+		title: 'Genesis Conversation',
+		eyebrow: 'Live declaration dialogue',
 		summary:
-			'Conduct the streaming mint conversation, inspect produced declarations, and keep the issuance packet legible in-instance.',
+			'Conduct a resumable multi-turn conversation that shapes a soul declaration before the contract is promoted upstream.',
 		requiresAuth: true,
 	},
 	approvals: {
