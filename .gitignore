@@ -40,3 +40,12 @@ nohup.out
 
 # Browser test artifacts
 /artifacts/browser
+
+# Local TheoryMCP agent materializations (generated from the EqualToAI namespace)
+# Keep these untracked; re-materialize from the active install manifest.
+.agents/
+.claude/
+.codex/
+.mcp/
+.mcp.json
+GEMINI.md
