@@ -11,7 +11,10 @@
 			"cookie": "0.7.2",
 			"fast-xml-parser": "5.8.0",
 			"fast-uri": "3.1.2",
-			"fast-xml-builder": "1.2.0"
+			"fast-xml-builder": "1.2.0",
+			"esbuild": "0.28.1",
+			"vite": "8.0.16",
+			"ws": "8.21.0"
 		}
 	},
 	"scripts": {
@@ -45,7 +48,7 @@
 		"svelte": "^5.55.7",
 		"svelte-check": "^4.4.6",
 		"typescript": "^5.9.3",
-		"vite": "^8.0.8",
+		"vite": "^8.0.16",
 		"yaml": "^2.9.0"
 	},
 	"dependencies": {
@@ -54,9 +57,9 @@
 		"@graphql-typed-document-node/core": "^3.2.0",
 		"@noble/hashes": "^2.0.1",
 		"@tanstack/svelte-virtual": "^3.13.23",
-		"@theory-cloud/apptheory": "https://github.com/theory-cloud/AppTheory/releases/download/v1.7.1/theory-cloud-apptheory-1.7.1.tgz",
-		"@theory-cloud/facetheory": "https://github.com/theory-cloud/FaceTheory/releases/download/v3.3.0/theory-cloud-facetheory-3.3.0.tgz",
-		"@theory-cloud/tabletheory-ts": "https://github.com/theory-cloud/TableTheory/releases/download/v1.8.3/theory-cloud-tabletheory-ts-1.8.3.tgz",
+		"@theory-cloud/apptheory": "https://github.com/theory-cloud/AppTheory/releases/download/v1.17.0/theory-cloud-apptheory-1.17.0.tgz",
+		"@theory-cloud/facetheory": "https://github.com/theory-cloud/FaceTheory/releases/download/v4.0.1/theory-cloud-facetheory-4.0.1.tgz",
+		"@theory-cloud/tabletheory-ts": "https://github.com/theory-cloud/TableTheory/releases/download/v2.0.3/theory-cloud-tabletheory-ts-2.0.3.tgz",
 		"acorn": "^8.16.0",
 		"focus-trap": "^8.0.0",
 		"graphql": "^16.13.1",
