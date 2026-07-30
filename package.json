@@ -35,7 +35,8 @@
 		"deploy:dev": "node scripts/deploy-client.mjs --target all --stage dev",
 		"deploy:simulacrum:dev": "node scripts/deploy-client.mjs --target simulacrum --stage dev",
 		"deploy:theory:dev": "node scripts/deploy-client.mjs --target theory --stage dev",
-		"deploy:theory:live": "node scripts/deploy-client.mjs --target theory --stage live"
+		"deploy:theory:live": "node scripts/deploy-client.mjs --target theory --stage live",
+		"deploy:trench:dev": "node scripts/deploy-client.mjs --target trench --stage dev"
 	},
 	"devDependencies": {
 		"@playwright/test": "^1.59.1",

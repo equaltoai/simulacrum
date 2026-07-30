@@ -43,6 +43,7 @@ Current dev-stage targets:
 | --- | --- | --- | --- | --- |
 | `simulacrum` | `simulacrum.greater.website` | `https://dev.simulacrum.greater.website` | `Sim` | `~/.lesser/simulacrum/simulacrum.greater.website/state.json` |
 | `theory` | `theory.greater.website` | `https://dev.theory.greater.website` | `Theory` | `~/.lesser/theory/theory.greater.website/state.json` |
+| `trenchcoat` | `trenchcoat.greater.website` | `https://dev.trenchcoat.greater.website` | `Trench` | `~/.lesser/trenchcoat/trenchcoat.greater.website/state.json` |
 
 Current principal-authorized live target:
 
@@ -138,7 +139,7 @@ Expected artifacts:
 The repo provides an operator wrapper around the manual runbook steps:
 
 ```bash
-pnpm run deploy -- --target <simulacrum|theory|all> --stage <dev|staging|live>
+pnpm run deploy -- --target <simulacrum|theory|trench|all> --stage <dev|staging|live>
 ```
 
 The wrapper runs, in order:
@@ -166,6 +167,7 @@ pnpm deploy:dev
 # Deploy only one dev target.
 pnpm deploy:simulacrum:dev
 pnpm deploy:theory:dev
+pnpm deploy:trench:dev
 
 # Principal-authorized Theory live-stage deploy.
 # Verifies https://theory.greater.website, never dev.theory.greater.website.

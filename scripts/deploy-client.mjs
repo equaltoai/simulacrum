@@ -32,6 +32,14 @@ const TARGETS = {
 			},
 		},
 	},
+	trench: {
+		app: 'trenchcoat',
+		baseDomain: 'trenchcoat.greater.website',
+		displayName: 'Trenchcoat',
+		profiles: {
+			dev: 'Trench',
+		},
+	},
 };
 
 const VALID_STAGES = new Set(['dev', 'staging', 'live']);
@@ -40,11 +48,12 @@ const VERIFY_PATHS = ['/l/', '/l/identity', '/auth/login'];
 function usage() {
 	return [
 		'Usage:',
-		'  pnpm run deploy -- --target <simulacrum|theory|all> --stage <dev|staging|live> [options]',
+		'  pnpm run deploy -- --target <simulacrum|theory|trench|all> --stage <dev|staging|live> [options]',
 		'',
 		'Common commands:',
 		'  pnpm deploy:dev',
 		'  pnpm run deploy -- --target theory --stage dev',
+		'  pnpm deploy:trench:dev',
 		'  pnpm deploy:theory:live',
 		'',
 		'Options:',
@@ -103,7 +112,7 @@ function resolveTargets(targetName, stage) {
 		if (stage === 'live') {
 			throw new Error('Live deploys require an explicit single --target; refusing --target all.');
 		}
-		return Object.values(TARGETS);
+		return Object.values(TARGETS).filter((target) => target.profiles[stage]);
 	}
 	const target = TARGETS[targetName];
 	if (!target) {
