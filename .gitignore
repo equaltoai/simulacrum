@@ -40,3 +40,7 @@ nohup.out
 
 # Browser test artifacts
 /artifacts/browser
+
+# Materialized agent skills
+/.agents/
+/.claude/
