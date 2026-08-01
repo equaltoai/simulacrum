@@ -44,3 +44,10 @@ nohup.out
 # Materialized agent skills
 /.agents/
 /.claude/
+
+# Materialized agent surface — namespace-rendered installs, untracked per fleet convention 2026-08-01
+/.codex/
+/.kimi-code/
+/.theorymcp/
+/GEMINI.md
+/.mcp.json
