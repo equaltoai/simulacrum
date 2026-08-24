@@ -58,7 +58,7 @@
 		"@graphql-typed-document-node/core": "^3.2.0",
 		"@noble/hashes": "^2.0.1",
 		"@tanstack/svelte-virtual": "^3.13.23",
-		"@theory-cloud/apptheory": "https://github.com/theory-cloud/AppTheory/releases/download/v4.0.0/theory-cloud-apptheory-4.0.0.tgz",
+		"@theory-cloud/apptheory": "https://github.com/theory-cloud/AppTheory/releases/download/v4.0.0/theory-cloud-apptheory-4.0.0.tgz#sha512-dnkEPAlNov7fOM5k5dxX7KYT2DeIUVEtE8l3MH9LvHw=",
 		"@theory-cloud/facetheory": "https://github.com/theory-cloud/FaceTheory/releases/download/v4.0.1/theory-cloud-facetheory-4.0.1.tgz",
 		"@theory-cloud/tabletheory-ts": "https://github.com/theory-cloud/TableTheory/releases/download/v2.0.3/theory-cloud-tabletheory-ts-2.0.3.tgz",
 		"acorn": "^8.16.0",

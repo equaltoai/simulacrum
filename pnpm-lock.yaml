@@ -33,8 +33,8 @@ importers:
         specifier: ^3.13.23
         version: 3.13.23(svelte@5.55.7)
       '@theory-cloud/apptheory':
-        specifier: https://github.com/theory-cloud/AppTheory/releases/download/v4.0.0/theory-cloud-apptheory-4.0.0.tgz
-        version: https://github.com/theory-cloud/AppTheory/releases/download/v4.0.0/theory-cloud-apptheory-4.0.0.tgz(@aws-sdk/client-dynamodb@3.1019.0)(@aws-sdk/client-kms@3.1019.0)(@aws-sdk/client-sts@3.1019.0)
+        specifier: https://github.com/theory-cloud/AppTheory/releases/download/v4.0.0/theory-cloud-apptheory-4.0.0.tgz#sha512-dnkEPAlNov7fOM5k5dxX7KYT2DeIUVEtE8l3MH9LvHw=
+        version: https://github.com/theory-cloud/AppTheory/releases/download/v4.0.0/theory-cloud-apptheory-4.0.0.tgz#sha512-dnkEPAlNov7fOM5k5dxX7KYT2DeIUVEtE8l3MH9LvHw=(@aws-sdk/client-dynamodb@3.1019.0)(@aws-sdk/client-kms@3.1019.0)(@aws-sdk/client-sts@3.1019.0)
       '@theory-cloud/facetheory':
         specifier: https://github.com/theory-cloud/FaceTheory/releases/download/v4.0.1/theory-cloud-facetheory-4.0.1.tgz
         version: https://github.com/theory-cloud/FaceTheory/releases/download/v4.0.1/theory-cloud-facetheory-4.0.1.tgz(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(svelte@5.55.7)
@@ -763,8 +763,8 @@ packages:
   '@tanstack/virtual-core@3.13.23':
     resolution: {integrity: sha512-zSz2Z2HNyLjCplANTDyl3BcdQJc2k1+yyFoKhNRmCr7V7dY8o8q5m8uFTI1/Pg1kL+Hgrz6u3Xo6eFUB7l66cg==}
 
-  '@theory-cloud/apptheory@https://github.com/theory-cloud/AppTheory/releases/download/v4.0.0/theory-cloud-apptheory-4.0.0.tgz':
-    resolution: {tarball: https://github.com/theory-cloud/AppTheory/releases/download/v4.0.0/theory-cloud-apptheory-4.0.0.tgz}
+  '@theory-cloud/apptheory@https://github.com/theory-cloud/AppTheory/releases/download/v4.0.0/theory-cloud-apptheory-4.0.0.tgz#sha512-dnkEPAlNov7fOM5k5dxX7KYT2DeIUVEtE8l3MH9LvHw=':
+    resolution: {tarball: https://github.com/theory-cloud/AppTheory/releases/download/v4.0.0/theory-cloud-apptheory-4.0.0.tgz#sha512-dnkEPAlNov7fOM5k5dxX7KYT2DeIUVEtE8l3MH9LvHw=}
     version: 4.0.0
     engines: {node: '>=20'}
 
@@ -2663,7 +2663,7 @@ snapshots:
 
   '@tanstack/virtual-core@3.13.23': {}
 
-  '@theory-cloud/apptheory@https://github.com/theory-cloud/AppTheory/releases/download/v4.0.0/theory-cloud-apptheory-4.0.0.tgz(@aws-sdk/client-dynamodb@3.1019.0)(@aws-sdk/client-kms@3.1019.0)(@aws-sdk/client-sts@3.1019.0)':
+  '@theory-cloud/apptheory@https://github.com/theory-cloud/AppTheory/releases/download/v4.0.0/theory-cloud-apptheory-4.0.0.tgz#sha512-dnkEPAlNov7fOM5k5dxX7KYT2DeIUVEtE8l3MH9LvHw=(@aws-sdk/client-dynamodb@3.1019.0)(@aws-sdk/client-kms@3.1019.0)(@aws-sdk/client-sts@3.1019.0)':
     dependencies:
       '@aws-sdk/client-apigatewaymanagementapi': 3.1019.0
       '@aws-sdk/client-bedrock-runtime': 3.1085.0
